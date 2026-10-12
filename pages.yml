@@ -1,0 +1,25 @@
+# Publica la interfaz web en GitHub Pages cada vez que subes cambios a la rama main.
+# En GitHub: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+name: Publicar en GitHub Pages
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: read, pages: write, id-token: write }
+concurrency: { group: pages, cancel-in-progress: true }
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: "${{ steps.deployment.outputs.page_url }}" }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Armar el sitio (solo la interfaz; sin SQL, pruebas ni scripts)
+        run: |
+          mkdir _site
+          cp -r index.html offline.html manifest.json service-worker.js css js assets _site/
+          rm -f _site/js/config.example.js _site/js/demo-seed.js
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,13 @@
+-- =====================================================================
+-- 005 · PRIMER ADMINISTRADOR  (EJEMPLO: copia, edita los valores y ejecútalo UNA vez)
+-- 1) En Supabase: Authentication → Users → Add user → "Create new user".
+--    Escribe el correo y una contraseña fuerte y marca "Auto Confirm User". Copia el UUID del usuario creado.
+-- 2) Ejecuta esto en el SQL Editor reemplazando los tres valores:
+-- =====================================================================
+insert into public.perfiles (id, usuario, email, nombre, rol, activo)
+values ('00000000-0000-0000-0000-000000000000',   -- ← UUID del usuario de Auth
+        'admin',                                  -- ← nombre corto (minúsculas, 3 a 30 caracteres)
+        'admin@tu-empresa.com',                   -- ← el mismo correo
+        'Administradora',
+        'ADMIN', true);
+-- A partir de aquí, la administradora crea el resto de usuarios desde la propia aplicación (Usuarios).

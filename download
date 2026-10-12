@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+supabase/.env
+supabase/.temp/
+supabase/.branches/
+*.local.js
+*.log
+.DS_Store
+dist/
