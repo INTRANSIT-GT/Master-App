@@ -192,7 +192,7 @@ const VT=[
   {k:'cierre',l:'Cerrados',f:t=>['LIQUIDADO','ACEPTADO','FACTURADO','COBRADO'].includes(t.estado),d:'Viajes en validación, facturación o cobro.'}
 ];
 VIEWS.viajes=()=>{
-  const ts=vis(),k=S.tab.viajes||'pend',cur=VT.find(x=>x.k===k),list=ts.filter(cur.f);
+  const ts=vis(),k=S.tab.viajes||'plan',cur=VT.find(x=>x.k===k)||VT[0],list=ts.filter(cur.f);
   return `<div class="inner" style="max-width:none">${pageHead('Viajes',`${list.length} ${list.length===1?'viaje':'viajes'} en esta pestaña`,hp('viajes_crear')?`<button class="btn primary" data-act="nav" data-v="nuevo">${icon('plus',18)} Nuevo viaje</button>`:'')}
     ${tabs('viajes',VT,k,ts)}<div class="tabdesc">${cur.d}</div>
     ${viajesTable(list)}</div>`;
