@@ -134,12 +134,12 @@ function loginHTML(){
 
 /* ---- Inicio del encargado ---- */
 VIEWS.inicio=()=>{
-  const u=S.user,cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean),ts=vis();
+  const u=S.user,cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean),all=vis(),ts=S.inicioProy?all.filter(t=>t.proyecto===S.inicioProy):all;
   const w={RECHAZADO:0,ENTREGADO:1,PLANIFICADO:2};
   const act=ts.filter(t=>w[t.estado]!==undefined).sort((a,b)=>w[a.estado]-w[b.estado]);
   const fix=cnt(ts,t=>t.estado==='RECHAZADO');
   return `<div class="inner">
-    <div class="hello"><h1>Bienvenido, ${esc(first(u.nombre))}</h1><div class="projline">${cls.map(p=>`<span class="pchip">Proyecto: ${esc(p.nombre.toUpperCase())}</span>`).join('')||'<span class="pchip">Sin cliente asignado</span>'}<span class="mute">Solo ves la información de tu proyecto</span></div></div>
+    <div class="hello"><h1>Bienvenido, ${esc(first(u.nombre))}</h1><div class="projline">${cls.length?comboHTML('inicioProy',S.inicioProy||'',[{id:'',nombre:'Todos mis proyectos'},...cls.map(p=>({id:p.id,nombre:p.nombre+' · '+p.cliente}))],'Buscar proyecto'):'<span class="mute">Sin cliente asignado</span>'}<span class="mute">Solo ves la información de tu proyecto</span></div></div>
     <div class="bigbtns">
       <button class="bigbtn main1" data-act="nav" data-v="nuevo"><span class="ico">${icon('plus',24)}</span><span><b>NUEVO VIAJE</b><br><span class="h">Registrar un viaje</span></span></button>
       <button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta</span></span></button>

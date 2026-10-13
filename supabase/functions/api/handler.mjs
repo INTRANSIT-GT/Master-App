@@ -80,8 +80,9 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
       if (rechazo && sinAuditoria(db) !== base) throw new Error('Operación rechazada con cambios parciales: se descarta para no guardar datos a medias.');
       if (db.evidencias.some(e => e.dataUrl)) throw new Error('Las evidencias deben estar en el almacenamiento protegido, no incrustadas.');
       await saveState(q, antes, db);                                           // si el motor rechazó, solo se guarda el registro de seguridad
-      const snap = rechazo ? null : await armarSnapshot(E, actorId, deps);
-      return { resp: rechazo ? rechazo : { ok: true, result: resultado === undefined ? null : resultado, snapshot: snap }, commit: true };
+      /* Un guardado ya consumió CPU comparando y persistiendo el estado completo. No se arma otro snapshot
+         dentro de la misma petición: con miles de viajes Superbase corta la respuesta antes de confirmar al cliente. */
+      return { resp: rechazo ? rechazo : { ok: true, result: resultado === undefined ? null : resultado }, commit: true };
     });
     if (salida.resp.ok === false && authCreado && deps.borrarUsuarioAuth) { try { await deps.borrarUsuarioAuth(authCreado); } catch (_) { /* se informa abajo */ } }
     return salida.resp;

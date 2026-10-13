@@ -62,7 +62,8 @@ if(!API.gastos)API.gastos=async()=>[];
     if(op==='enviarLiquidacion'&&typeof args[1]==='string'&&args[1].startsWith('data:'))args[1]=await subir('viajes/'+args[0],args[1]);
     if(op==='emitirFactura'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('facturas/'+args[0],args[1].archivo)});
     const r=await llamar(op,args);
-    if(r.snapshot)hidratar(r.snapshot);
+    /* La escritura y la lectura completa se separan: así el guardado no excede el límite de CPU de la Edge Function. */
+    try{await BACKEND.refrescar();}catch(e){console.warn('El cambio se guardó; no se pudo refrescar la vista todavía.',e);}
     return r.result;
   };});
   API.verificarAuditoria=async()=>(await llamar('verificarAuditoria',[])).result;
