@@ -7,7 +7,7 @@ Object.assign(ICON,{
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'
 });
-const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:''};
+const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:'',cb:null,cbq:''};
 const hp=p=>hasPerm(S.user,p);
 const vis=()=>API.listarViajes(S.user.id).slice().sort((a,b)=>b.id.localeCompare(a.id));
 const mine=t=>asignado(S.user,t);
@@ -152,6 +152,39 @@ VIEWS.inicio=()=>{
   </div>`;
 };
 
+/* ---- Selector desplegable con búsqueda (listas largas de clientes/proyectos) ---- */
+const CBOPTS={};
+function cbListHTML(flt){
+  const opts=CBOPTS[flt]||[],q=(S.cbq||'').toLowerCase(),cur=S[flt];
+  const list=opts.filter(o=>!q||String(o.nombre).toLowerCase().includes(q));
+  return list.length?list.map(o=>`<button type="button" role="option" data-act="cbPick" data-k="${flt}" data-v="${esc(o.id)}" aria-selected="${o.id===cur}">${esc(o.nombre)}</button>`).join(''):'<div class="cb-empty">Sin resultados</div>';
+}
+function comboHTML(flt,value,opts,ph){
+  CBOPTS[flt]=opts;
+  const cur=opts.find(o=>o.id===value),open=S.cb===flt;
+  return `<div class="cb" data-cb="${flt}">
+    <button type="button" class="cb-btn" data-act="cbToggle" data-k="${flt}" aria-haspopup="listbox" aria-expanded="${open}"><span>${esc(cur?cur.nombre:(ph||'Todos'))}</span><span class="cb-c">▾</span></button>
+    ${open?`<div class="cb-panel" role="listbox"><input type="text" class="cb-q" data-cbq="${flt}" placeholder="Buscar…" value="${esc(S.cbq||'')}" aria-label="Buscar opción" autocomplete="off"><div class="cb-list">${cbListHTML(flt)}</div></div>`:''}</div>`;
+}
+/* ---- Tabla de viajes: acciones fijas a la derecha al desplazar ---- */
+function accionesViaje(t){
+  const b=(act,lbl,cls)=>`<button class="btn sm ${cls||''}" data-act="${act}" data-id="${t.id}">${lbl}</button>`;
+  let a=b('detalle','Ver','ghost');
+  if(canEdit(t))a+=b('editar','Editar','');
+  if(t.estado==='PENDIENTE'&&hp('viajes_iniciar')&&mine(t))a+=b('iniciarAsk','Iniciar','primary');
+  if(t.estado==='EN_CURSO'&&hp('viajes_finalizar')&&mine(t))a+=b('finalizarAsk','Finalizar','primary');
+  if((t.estado==='PENDIENTE_LIQUIDACION'||t.estado==='PENDIENTE_CORRECCION')&&hp('liq_enviar')&&mine(t))a+=b('detalle',t.estado==='PENDIENTE_CORRECCION'?'Corregir':'Subir liquidación','primary');
+  if(t.estado==='EN_REVISION'&&hp('liq_aprobar'))a+=b('aprobarAsk','Aprobar','ok');
+  if(t.estado==='EN_REVISION'&&hp('liq_devolver'))a+=b('devolverOpen','Rechazar','fix');
+  return a;
+}
+function viajesTable(list){
+  if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
+  return `<div class="xlwrap"><table class="xl" style="min-width:1500px"><thead><tr><th class="stk">Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Piloto</th><th>Unidad · placa</th><th>Estatus</th><th>Estado</th><th class="stkR">Acciones</th></tr></thead><tbody>
+  ${list.map(t=>{const j=J(t);return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${est(t)||'<span class="mute">—</span>'}</td><td>${badge(t.estado)}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
+  </tbody></table></div>`;
+}
+
 /* ---- Viajes del encargado ---- */
 const VT=[
   {k:'pend',l:'Pendientes',f:t=>['PENDIENTE','PENDIENTE_LIQUIDACION','PENDIENTE_CORRECCION'].includes(t.estado),d:'Esperan una acción tuya: iniciar el viaje, enviar la liquidación o corregirla.'},
@@ -161,10 +194,9 @@ const VT=[
 ];
 VIEWS.viajes=()=>{
   const ts=vis(),k=S.tab.viajes||'pend',cur=VT.find(x=>x.k===k),list=ts.filter(cur.f);
-  const cls=clientesAsig(S.user).map(id=>(PROYECTOS.find(p=>p.id===id)||{}).nombre).filter(Boolean).join(', ');
-  return `<div class="inner">${pageHead('Viajes','Proyecto '+esc(cls),hp('viajes_crear')?`<button class="btn primary" data-act="nav" data-v="nuevo">${icon('plus',18)} Nuevo viaje</button>`:'')}
+  return `<div class="inner" style="max-width:none">${pageHead('Viajes',`${list.length} ${list.length===1?'viaje':'viajes'} en esta pestaña`,hp('viajes_crear')?`<button class="btn primary" data-act="nav" data-v="nuevo">${icon('plus',18)} Nuevo viaje</button>`:'')}
     ${tabs('viajes',VT,k,ts)}<div class="tabdesc">${cur.d}</div>
-    ${list.length?`<div class="cards">${list.map(tripCard).join('')}</div>`:empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.')}</div>`;
+    ${viajesTable(list)}</div>`;
 };
 
 
@@ -291,9 +323,9 @@ BODY.torre=()=>`<div class="mute" style="margin-bottom:8px">${torreList().length
 VIEWS.torre=()=>{
   const all=vis(),base=S.tProy?all.filter(t=>t.proyecto===S.tProy):all,k=S.tab.torre||'curso';
   const kp=(n,l,c)=>`<div class="kpi"><span class="n">${n}</span><span class="l"><i class="dot" style="background:var(${c})"></i>${l}</span></div>`;
-  const chips=`<div class="chips"><button class="chip" aria-pressed="${!S.tProy}" data-act="tproy" data-v="">Todos los clientes</button>${PROYECTOS.map(p=>`<button class="chip" aria-pressed="${S.tProy===p.id}" data-act="tproy" data-v="${p.id}">${esc(p.nombre)}</button>`).join('')}</div>`;
-  const aut=DB.clientes.filter(c=>c.torreEstatus).map(c=>c.nombre),no=DB.clientes.filter(c=>!c.torreEstatus).map(c=>c.nombre);
-  const rules=`<div class="rulebar"><span><b>Puedes actualizar el estatus operativo de:</b> ${esc(aut.join(', ')||'ningún cliente')}.</span><span><b>Solo consulta:</b> ${esc(no.join(', ')||'—')}.</span><span class="mute">Torre no cambia el estado del viaje ni otros datos.</span></div>`;
+  const chips=comboHTML('tProy',S.tProy,[{id:'',nombre:'Todos los clientes'},...PROYECTOS.map(p=>({id:p.id,nombre:p.nombre}))]);
+  const aut=DB.clientes.filter(c=>c.torreEstatus).map(c=>c.nombre);
+  const rules=`<div class="rulebar"><span><b>Puedes actualizar el estatus operativo de:</b> ${esc(aut.join(', ')||'ningún cliente')}.</span><span class="mute">Torre no cambia el estado del viaje ni otros datos.</span></div>`;
   return `<div class="inner" style="max-width:none">${pageHead('TORRE DE CONTROL','Hoja de viajes de todos los proyectos · el estatus se guarda solo al elegirlo',`<span class="clock" id="clock">${new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit',hour12:false})}</span>`)}
     <div class="grid g4" style="margin-bottom:16px">${kp(cnt(base,t=>t.estado==='PENDIENTE'),'Viajes pendientes','--pend')}${kp(cnt(base,t=>t.estado==='EN_CURSO'),'Viajes en curso','--cur')}${kp(cnt(base,t=>puedeEstatusTorre(t)),'Con estatus editable','--ok')}${kp(cnt(base,t=>t.estado==='PENDIENTE_LIQUIDACION'),'Pendientes de liquidación','--warn')}</div>
     ${chips}${rules}${tabs('torre',TT,k,base)}
@@ -523,7 +555,7 @@ VIEWS.resumen=()=>{
   const all=vis(),cli=S.fProy,base=cli?all.filter(t=>t.proyecto===cli):all,ger=S.user.rol==='GERENCIA';
   let ags=[];if(hp('comercial_ver'))try{ags=API.agrupaciones(S.user.id).filter(g=>g.estado==='ACTIVA'&&(!cli||g.cliente===cli));}catch(e){}
   const kp=(n,l,c,e)=>`<button class="kpi" data-act="kpi" data-v="${e}"><span class="n">${n}</span><span class="l">${c?`<i class="dot" style="background:var(${c})"></i>`:''}${l}</span></button>`;
-  const chips=`<div class="chips"><button class="chip" aria-pressed="${!cli}" data-act="fproy" data-v="">Todos los clientes</button>${PROYECTOS.map(p=>`<button class="chip" aria-pressed="${cli===p.id}" data-act="fproy" data-v="${p.id}">${esc(p.nombre)}</button>`).join('')}</div>`;
+  const chips=comboHTML('fProy',cli,[{id:'',nombre:'Todos los clientes'},...PROYECTOS.map(p=>({id:p.id,nombre:p.nombre}))]);
   let feed=[];if(hp('historial_ver'))try{feed=API.actividad(S.user.id,8);}catch(e){}
   return `<div class="inner">${pageHead(ger?'Tablero gerencial':'Resumen general',ger?'Consulta global de todos los proyectos, con su recorrido completo':'Vista global de todos los proyectos')}
     ${chips}
@@ -556,8 +588,8 @@ VIEWS.proyecto=()=>{
     ${pageHead(esc(p.nombre),`${esc(p.cliente)} · Encargado: ${esc(p.encargado)}`)}<div class="card" style="margin-bottom:16px">${statBar(pt)}</div>${estadoChips()}${tableHTML(list)}</div>`;
 };
 function estadoChips(){
-  const opts=[['','Todos'],['PENDIENTE','Pendientes'],['EN_CURSO','En curso'],['FIN','Finalizados'],['PENDIENTE_LIQUIDACION','Pend. liquidación'],['EN_REVISION','En revisión'],['PENDIENTE_CORRECCION','Por corregir'],['APROBADAS','Aprobadas'],['PENDIENTE_COMERCIAL','Pend. Comercial'],['COMERCIAL_REGISTRADA','Registrada']];
-  return `<div class="chips">${opts.map(o=>`<button class="chip" aria-pressed="${S.fEstado===o[0]}" data-act="festado" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+  const opts=[{id:'',nombre:'Todos'},{id:'PENDIENTE',nombre:'Pendientes'},{id:'EN_CURSO',nombre:'En curso'},{id:'FIN',nombre:'Finalizados'},{id:'PENDIENTE_LIQUIDACION',nombre:'Pend. liquidación'},{id:'EN_REVISION',nombre:'En revisión'},{id:'PENDIENTE_CORRECCION',nombre:'Por corregir'},{id:'APROBADAS',nombre:'Aprobadas'},{id:'PENDIENTE_COMERCIAL',nombre:'Pend. Comercial'},{id:'COMERCIAL_REGISTRADA',nombre:'Registrada'}];
+  return comboHTML('fEstado',S.fEstado,opts,'Todos los estados');
 }
 const matchEst=(t,f)=>!f||(f==='FIN'?FIN.includes(t.estado):f==='APROBADAS'?LIQ_APROBADA.includes(t.estado):t.estado===f);
 function todosList(){
@@ -571,9 +603,27 @@ VIEWS.todos=()=>`<div class="inner">${pageHead('Todos los viajes','Sin filtro de
 
 
 
+function fleTabla(h,rows){return `<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
+function flePanel(){
+  const d=S.fle;
+  const head=`<div class="row" style="align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap"><b>Flota · Fleetio</b><span class="spacer"></span>
+    <button class="btn sm" data-act="fleLoad" ${d&&d.cargando?'disabled':''}>${d&&d.cargando?'Cargando…':'Consultar'}</button>
+    ${BACKEND.modo==='supabase'&&hp('catalogos_ver')?`<button class="btn sm primary" data-act="fleSync" ${d&&d.cargando?'disabled':''}>Sincronizar con Fleetio</button>`:''}</div>`;
+  const nota=BACKEND.modo==='supabase'?'':'<div class="alertbox info">Estás en modo demostración: la sincronización con Fleetio requiere Supabase configurado.</div>';
+  if(!d)return `${nota}${head}<div class="mute">Pulsa «Consultar» para ver los mantenimientos y gastos traídos de Fleetio.</div>`;
+  if(d.err)return `${nota}${head}<div class="alertbox warn">${esc(d.err)}</div>`;
+  const fch=v=>esc(String(v||'').slice(0,10));
+  const tm=d.mant.length?fleTabla(['Fecha','Unidad','Referencia','Estado','Proveedor','Mano de obra','Repuestos','Total','Notas'],
+      d.mant.map(m=>[fch(m.fecha),esc(m.unidad),esc(m.referencia),esc(m.estado),esc(m.proveedor),m.mano_obra!=null?qfmt(m.mano_obra):'—',m.repuestos!=null?qfmt(m.repuestos):'—',m.total!=null?qfmt(m.total):'—',esc(m.notas)])):'<div class="mute">Sin mantenimientos.</div>';
+  const tg=d.gast.length?fleTabla(['Fecha','Unidad','Tipo','Proveedor','Monto','Notas'],
+      d.gast.map(g=>[fch(g.fecha),esc(g.unidad),esc(g.tipo),esc(g.proveedor),g.monto!=null?qfmt(g.monto):'—',esc(g.notas)])):'<div class="mute">Sin gastos.</div>';
+  return `${nota}${head}<div class="mute small" style="margin-bottom:10px">Mantenimientos: <b>${d.mant.length}</b> · Gastos: <b>${d.gast.length}</b></div>
+    <h3>Mantenimientos <span class="mute" style="font-weight:500">· servicio</span></h3>${tm}
+    <h3 style="margin:18px 0 8px">Gastos <span class="mute" style="font-weight:500">· egresos por unidad</span></h3>${tg}`;
+}
 VIEWS.catalogos=()=>{
-  const k=S.tab.cat||'pil';
-  const T=[{k:'pil',l:'PILOTOS',f:()=>true},{k:'flo',l:'FLOTA',f:()=>true},{k:'ori',l:'ORIGEN',f:()=>true},{k:'des',l:'DESTINOS',f:()=>true},{k:'cat',l:'CATALOGO (listas)',f:()=>true}];
+  const k0=S.tab.cat||'pil',verFle=hp('catalogos_ver')||hp('finanzas_ver'),k=(k0==='fle'&&!verFle)?'pil':k0;
+  const T=[{k:'pil',l:'PILOTOS',f:()=>true},{k:'flo',l:'FLOTA',f:()=>true},{k:'ori',l:'ORIGEN',f:()=>true},{k:'des',l:'DESTINOS',f:()=>true},{k:'cat',l:'CATALOGO (listas)',f:()=>true},...(verFle?[{k:'fle',l:'FLEETIO',f:()=>true}]:[])];
   const tb=(h,rows)=>`<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   const pn=id=>esc((PROYECTOS.find(p=>p.id===id)||{}).nombre||id);
   const body={
@@ -581,7 +631,7 @@ VIEWS.catalogos=()=>{
     flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)])),
     ori:tb(['Origen'],ORIGENES.map(o=>[esc(o.nombre)])),
     cat:`<div class="grid g2">${Object.entries({'CLIENTES':CAT.clientes,'PROYECTOS':CAT.proyectos,'TIPO DE UNIDAD':CAT.tipoUnidad,'OPL':CAT.opl,'TIPO CARGA':CAT.tipoCarga,'TIPO DE VIAJE':CAT.tipoViaje,'ESTATUS':CAT.estatus}).map(([n,a])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${a.length}</span></h3><div class="bgs">${a.map(x=>`<span class="est">${esc(x)}</span>`).join('')}</div></div>`).join('')}</div>`,
-    des:tb(['Id','Destino','Proyecto'],DESTINOS.map(d=>[d.id,esc(d.nombre),pn(d.proyecto)]))}[k];
+    des:tb(['Id','Destino','Proyecto'],DESTINOS.map(d=>[d.id,esc(d.nombre),pn(d.proyecto)])),fle:flePanel()}[k];
   return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; no se editan ni se duplican aquí')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
     <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS, FLOTA y DESTINOS son ficticios (todavía no tengo esos archivos); las listas de CATALOGO y ORIGEN sí son las reales de tu hoja. En Power Apps cada catálogo se leerá directo de su hoja (Excel/SharePoint) y el filtro por proyecto asume una columna Proyecto en PILOTOS, ORIGEN y DESTINOS.</div></div>`;
 };
@@ -1076,9 +1126,11 @@ const ACT={
   async back(){const f=S.from;if(f&&f.view&&allowed(f.view))go(f.view,f.param);else go(homeOf(S.user));},
   async proj(d){S.fEstado='';go('proyecto',d.id);},
   async kpi(d){S.fEstado=d.v;S.fProy='';S.q='';go(allowed('todos')?'todos':homeOf(S.user));},
-  async tab(d){S.tab[d.k]=d.v;S.q='';render();},
+  async tab(d){S.tab[d.k]=d.v;S.q='';render();if(d.k==='cat'&&d.v==='fle'&&!S.fle)ACT.fleLoad();},
   async tproy(d){S.tProy=d.v;render();},
   async fproy(d){S.fProy=d.v;render();},
+  async cbToggle(d){S.cb=S.cb===d.k?null:d.k;S.cbq='';render();const i=document.querySelector('.cb[data-cb="'+d.k+'"] .cb-q');if(i)i.focus();},
+  async cbPick(d){S[d.k]=d.v;S.cb=null;S.cbq='';render();},
   async festado(d){S.fEstado=d.v;render();},
   async backdrop(d,el,e){if(e.target===el){S.modal=null;render();}},
   async closeModal(){S.modal=null;render();},
@@ -1253,6 +1305,16 @@ const ACT={
     const r=await run(()=>API.cargarMem(S.user.id,filas),x=>`Tabla MEM cargada: ${x.renglones} renglones.`,true);
     if(r.ok)afterWrite();
   },
+  async fleLoad(){
+    S.fle={cargando:true,mant:[],gast:[],err:''};render();
+    try{const mant=(await API.mantenimientos(S.user.id,{limite:1000}))||[];const gast=(await API.gastos(S.user.id,{limite:1000}))||[];S.fle={cargando:false,mant,gast,err:''};}
+    catch(e){S.fle={cargando:false,mant:[],gast:[],err:e.message||'No se pudo consultar la flota.'};}
+    render();
+  },
+  async fleSync(){
+    const r=await run(()=>BACKEND.sincronizarFlota(),x=>`Fleetio: ${x.unidades} unidades, ${x.mantenimientos} mantenimientos, ${x.gastos} gastos sincronizados.`);
+    if(r.ok)ACT.fleLoad();
+  },
   /* rutas */
   async limpiarRutas(){Object.assign(S,{rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:''});render();},
   async rutaSolicitarOpen(){
@@ -1329,7 +1391,8 @@ const ACT={
 /* ---------- Eventos ---------- */
 const app=$('#app');
 app.addEventListener('click',e=>{
-  const el=e.target.closest('[data-act]');if(!el)return;
+  const el=e.target.closest('[data-act]');
+  if(!el){if(S.cb&&!e.target.closest('.cb')){S.cb=null;S.cbq='';render();}return;}
   const fn=ACT[el.dataset.act];
   if(fn)Promise.resolve().then(()=>fn(el.dataset,el,e)).catch(err=>{console.error(err);toast('Error inesperado: '+err.message,'err');render();});
 });
@@ -1378,6 +1441,7 @@ app.addEventListener('change',async e=>{
 });
 app.addEventListener('input',e=>{
   const t=e.target;
+  if(t.dataset.cbq){S.cbq=t.value;const l=document.querySelector('.cb[data-cb="'+t.dataset.cbq+'"] .cb-list');if(l)l.innerHTML=cbListHTML(t.dataset.cbq);return;}
   if(t.dataset.mf&&S.modal&&t.type!=='checkbox'&&t.tagName!=='SELECT'){S.modal.data[t.dataset.mf]=t.value;updateLive();}
   if(t.dataset.live){S[t.dataset.live]=t.value;const fn=S.view==='comercial'?(S.tab.com==='hist'?BODY.hist:S.tab.com==='tar'?BODY.tarifas:BODY.comercial):BODY[S.view];const vb=document.getElementById('vb');if(fn&&vb)vb.innerHTML=fn();}
   if(t.dataset.motivo&&S.edit)S.edit.motivo=t.value;

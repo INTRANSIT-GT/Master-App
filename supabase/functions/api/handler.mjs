@@ -7,7 +7,7 @@ import { loadState, saveState, fotografia } from './store.mjs';
 export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'enviarLiquidacion', 'aprobar', 'devolver', 'prepararFactura', 'actualizarFactura', 'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
   'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'guardarOpcionesTorre'];
-export const OPS_LECTURA = ['snapshot', 'verificarAuditoria'];
+export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
 const sinAuditoria = db => JSON.stringify({ ...db, audit: undefined, seq: undefined });
@@ -39,6 +39,16 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
       const base = sinAuditoria(db);
       let resultado = null, rechazo = null;
       if (op === 'snapshot') return { resp: { ok: true, snapshot: await armarSnapshot(E, actorId, deps) }, commit: false };
+      /* flota (Fleetio): se consultan bajo demanda, NO entran al snapshot (pueden ser miles de filas) */
+      if (op === 'mantenimientos' || op === 'gastos') {
+        if (!(E.hasPerm(A, 'catalogos_ver') || E.hasPerm(A, 'finanzas_ver'))) return { resp: falla('SIN_PERMISO', 'Tu perfil no puede consultar la flota.'), commit: false };
+        const tabla = op === 'mantenimientos' ? 'mantenimientos' : 'gastos';
+        const f = (args[0] && typeof args[0] === 'object') ? args[0] : {};
+        const lim = Math.min(Math.max(Number(f.limite) || 500, 1), 2000);
+        const unidad = f.unidad ? String(f.unidad) : '';
+        const rows = (await q(`select * from master.${tabla}${unidad ? ' where unidad=$1' : ''} order by fecha desc limit ${lim}`, unidad ? [unidad] : [])).rows;
+        return { resp: { ok: true, result: rows }, commit: false };
+      }
       if (op === 'verificarAuditoria') {
         try { resultado = E.API.verificarAuditoria(actorId); } catch (e) { if (!(e instanceof E.ApiError)) throw e; return { resp: falla(e.code, e.message), commit: false }; }
         return { resp: { ok: true, result: resultado }, commit: false };

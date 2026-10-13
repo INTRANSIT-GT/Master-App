@@ -9,8 +9,11 @@ const BACKEND={modo:'demo',sb:null,bloqueado:'',
   async iniciar(){loadAll();render();},
   async login(u,p){return API.login(u,p);},
   async logout(){if(S.user)API.logout(S.user.id);},
-  async refrescar(){}
+  async refrescar(){},
+  async sincronizarFlota(){throw new ApiError('DEMO','La sincronización con Fleetio solo funciona con Supabase configurado.');}
 };
+if(!API.mantenimientos)API.mantenimientos=async()=>[];
+if(!API.gastos)API.gastos=async()=>[];
 (function(){
   const C=MASTER_CONFIG;
   if(!(C.SUPABASE_URL&&C.SUPABASE_PUBLISHABLE_KEY))return;                       /* sin configurar → demostración */
@@ -63,6 +66,14 @@ const BACKEND={modo:'demo',sb:null,bloqueado:'',
     return r.result;
   };});
   API.verificarAuditoria=async()=>(await llamar('verificarAuditoria',[])).result;
+  API.mantenimientos=async(uid,o)=>(await llamar('mantenimientos',[o||{}])).result;
+  API.gastos=async(uid,o)=>(await llamar('gastos',[o||{}])).result;
+  BACKEND.sincronizarFlota=async()=>{
+    let r;try{r=await sb.functions.invoke('sync-flota',{body:{}});}catch(e){throw new ApiError('SIN_CONEXION','No se pudo contactar al servidor.');}
+    if(r.error){let b=null;try{b=await r.error.context.json();}catch(_){}throw new ApiError('SERVIDOR',(b&&b.message)||'No se pudo sincronizar con Fleetio.');}
+    if(!r.data||r.data.ok===false)throw new ApiError('SERVIDOR',(r.data&&r.data.message)||'No se pudo sincronizar con Fleetio.');
+    return r.data.result;
+  };
   BACKEND.refrescar=async()=>{const r=await llamar('snapshot',[]);hidratar(r.snapshot);};
   BACKEND.login=async(email,pass)=>{
     const {data,error}=await sb.auth.signInWithPassword({email:String(email||'').trim(),password:String(pass||'')});

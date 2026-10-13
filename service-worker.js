@@ -2,7 +2,7 @@
    NUNCA guarda datos operativos: las solicitudes a Supabase (otro origen) y cualquier petición que no sea
    un archivo estático de la lista van directo a la red. Sin conexión, la app abre pero avisa y no confirma operaciones.
    Para publicar una versión nueva, cambia VERSION. */
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.0.2';
 const CACHE = 'intransit-interfaz-' + VERSION;
 const ESTATICOS = [
   './', './index.html', './offline.html', './manifest.json', './css/app.css',
@@ -29,9 +29,10 @@ self.addEventListener('fetch', e => {
   }
   const clave = u.origin + u.pathname;
   if (!URLS.has(clave)) return;                                                   // lo que no es interfaz estática no se toca
-  if (SIEMPRE_RED.has(clave)) { e.respondWith(fetch(r).catch(() => caches.match(r))); return; }
-  e.respondWith(caches.match(r).then(hit => {
-    const red = fetch(r).then(resp => { if (resp && resp.ok) caches.open(CACHE).then(c => c.put(r, resp.clone())); return resp; }).catch(() => hit);
-    return hit || red;
-  }));
+  // RED PRIMERO: si hay internet, baja siempre la última versión de la interfaz;
+  // solo si falla (sin conexión) usa la copia guardada. Así los cambios se ven al recargar.
+  e.respondWith(fetch(r).then(resp => {
+    if (resp && resp.ok) caches.open(CACHE).then(c => c.put(r, resp.clone()));
+    return resp;
+  }).catch(() => caches.match(r)));
 });

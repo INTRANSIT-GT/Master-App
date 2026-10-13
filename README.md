@@ -19,7 +19,13 @@ Esta copia se está integrando **en el mismo proyecto Supabase** que la app `AP_
 
 **CI:** `.github/workflows/pruebas.yml` ya corre las pruebas en GitHub (instala Node, `npm test`, verifica `core.mjs`/`004` al día y `tests/estatico.test.mjs`) en cada push/PR. Requiere que **esta carpeta sea la raíz del repositorio**.
 
-**Pendiente de este port** (del lado de AP_VIAJES): (3) **sync Fleetio** (`flota`/`mantenimientos`/`gastos`).
+**(3) Sync con Fleetio.** Migración `006_flota_fleetio.sql` (columnas `flota.extra`, tablas `master.mantenimientos` y `master.gastos`, con RLS de solo lectura), Edge Function **`sync-flota`** (secretos de Fleetio solo en el servidor; solo ADMIN) y pantalla **Catálogos → FLEETIO**. Para activarlo:
+```
+supabase functions deploy sync-flota
+supabase secrets set FLEETIO_API_KEY=... FLEETIO_ACCOUNT_TOKEN=...
+# y ejecutar 006_flota_fleetio.sql en el SQL Editor
+```
+La unidad se engancha por `name` de Fleetio (= placa); los detalles del vehículo van a `flota.extra`. Mantenimientos y gastos se consultan bajo demanda (no entran al snapshot).
 
 ## 1. Cómo está armado
 

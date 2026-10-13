@@ -167,7 +167,7 @@ tbody tr[role=button]{cursor:pointer} tbody tr[role=button]:hover{background:var
 .fgroup{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
 .fgroup label{font-weight:700;font-size:14px}
 .fgroup .hint{font-size:12.5px;color:var(--mute)}
-input[type=text],input[type=password],input[type=date],input[type=time],select,textarea{width:100%;min-height:46px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px 12px;font:inherit}
+input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;min-height:46px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px 12px;font:inherit}
 textarea{min-height:110px;resize:vertical}
 select:disabled,input:disabled{background:var(--surface2);color:var(--ink2)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -300,6 +300,10 @@ table.pm input[type=checkbox]{width:18px;height:18px}
 .sheet{max-height:68vh}
 table.xl td.stk,table.xl th.stk{position:sticky;left:0;z-index:2;background:var(--surface);border-right:2px solid var(--line)}
 table.xl th.stk{background:var(--brand);z-index:4}
+table.xl td.stkR,table.xl th.stkR{position:sticky;right:0;z-index:2;background:var(--surface);border-left:2px solid var(--line);white-space:nowrap}
+table.xl th.stkR{background:var(--brand);color:var(--brand-ink);z-index:4}
+table.xl tbody tr:nth-child(even) td.stkR{background:var(--surface2)}
+table.xl tbody tr:hover td.stkR{background:var(--surface2)}
 table.xl td.ed{padding:3px 4px;min-width:200px;white-space:nowrap;background:var(--surface)}
 table.xl td.ro{color:var(--mute);background:var(--surface2);min-width:120px}
 .cin{width:170px;min-height:34px;padding:4px 6px;font-size:13px;border-radius:6px}
@@ -415,3 +419,17 @@ tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
 @container app (max-width:560px){.lp{min-height:310px}}
 .exportbar{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;margin-bottom:8px}.exportbtns{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 @container app (max-width:900px){.exportbtns .mute{display:none}.exportbtns{width:100%}.exportbtns .btn{flex:1}}
+
+/* ---- Selector desplegable con búsqueda (para listas largas de clientes/proyectos) ---- */
+.cb{position:relative;display:inline-block;min-width:220px;max-width:100%;margin-bottom:14px}
+.cb-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;padding:0 14px;border:1px solid var(--line);background:var(--surface);border-radius:10px;font-weight:600;color:var(--ink)}
+.cb-btn:hover{border-color:var(--brand)}
+.cb-btn[aria-expanded="true"]{border-color:var(--brand)}
+.cb-c{color:var(--mute);flex:none}
+.cb-panel{position:absolute;z-index:30;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:360px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(8,18,30,.18);padding:8px}
+.cb-q{width:100%;min-height:40px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;margin-bottom:6px}
+.cb-list{max-height:280px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.cb-list button{text-align:left;background:none;border:0;border-radius:8px;padding:9px 10px;font-weight:600;min-height:38px;color:var(--ink)}
+.cb-list button:hover{background:var(--surface2)}
+.cb-list button[aria-selected="true"]{background:var(--brand-soft);color:var(--brand)}
+.cb-empty{padding:10px;color:var(--mute)}

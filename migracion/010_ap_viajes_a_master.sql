@@ -59,7 +59,7 @@ on conflict (cliente_id) do nothing;
 --     facturador→COMERCIAL · gerente_transporte→GERENCIA · gerente_comercial→GERENCIA
 insert into master.perfiles (id, usuario, email, nombre, rol, activo, proyectos)
 select
-  au.id,                                                                                    as id,
+  au.id                                                                                    as id,
   left(regexp_replace(lower(split_part(u."USUARIO", '@', 1)), '[^a-z0-9._-]', '', 'g'), 20)
     || '_' || substr(au.id::text, 1, 8)                                                     as usuario,
   lower(u."USUARIO")                                                                        as email,
