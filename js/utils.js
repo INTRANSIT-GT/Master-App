@@ -52,7 +52,7 @@ const CAMPOS_TIEMPO=[['tIngresoPlanta','Ingreso a planta CP'],['tEsperaRampa','E
 const TKEYS=CAMPOS_TIEMPO.map(x=>x[0]);
 /* Columnas de tiempo que se calculan solas */
 const DUR=[['Espera de rampa','tEsperaRampa','tRampa'],['En rampa','tRampa','tSalidaPlanta'],['Espera de carga','tIngresoPlanta','tInicioCarga'],['Tiempo de carga','tInicioCarga','tFinCarga'],['Tiempo en tránsito','tSalida','tIngresoBodega'],['Espera de descarga','tIngresoBodega','tInicioDescarga'],['Tiempo de descarga','tInicioDescarga','tFinDescarga']];
-const GRUPOKEYS={cliente:['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto'],plan:['fechaPlan'],estatus:['estatus'],unidad:['pilotoId'],ruta:['rutaId'],tiempos:TKEYS,otros:['noDocRetorno','qViaticos']};
+const GRUPOKEYS={cliente:['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre'],plan:['fechaPlan'],estatus:['estatus'],unidad:['pilotoId'],ruta:['rutaId'],tiempos:TKEYS,otros:['noDocRetorno','qViaticos']};
 const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'No. de carga',producto:'Producto',fechaPlan:'Fecha plan',estatus:'Estatus',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
 CAMPOS_TIEMPO.forEach(([k,l])=>LBL[k]=l);
 
