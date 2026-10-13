@@ -35,8 +35,6 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
       E.setDB(db);
       const A = db.usuarios.find(u => u.id === actorId);
       if (!A || !A.activo) return { resp: falla('NO_AUTENTICADO', 'Tu cuenta no tiene un perfil activo en la aplicación.'), commit: false };
-      const antes = fotografia(db);
-      const base = sinAuditoria(db);
       let resultado = null, rechazo = null;
       if (op === 'snapshot') return { resp: { ok: true, snapshot: await armarSnapshot(E, actorId, deps) }, commit: false };
       /* flota (Fleetio): se consultan bajo demanda, NO entran al snapshot (pueden ser miles de filas) */
@@ -71,6 +69,9 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
         }
       }
       if (rechazo) return { resp: rechazo, commit: false };
+      /* fotografia() recorre TODAS las filas y las serializa: es caro, así que solo se calcula para operaciones que escriben (no en lecturas como snapshot). */
+      const antes = fotografia(db);
+      const base = sinAuditoria(db);
       try { resultado = E.API[op](actorId, ...args); }
       catch (e) {
         if (!(e instanceof E.ApiError)) throw e;
