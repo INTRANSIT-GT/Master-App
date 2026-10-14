@@ -147,7 +147,7 @@ Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo 
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos'];
 
 /* ---------- Base de datos ---------- */
-const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,rut:1,tar:1,not:1}});
+const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1}});
 function syncRefs(){
   PROYECTOS=DB.clientes.map(c=>({id:c.id,nombre:c.nombre,cliente:c.cliente,activo:c.activo!==false,
     encargado:DB.usuarios.filter(u=>u.rol==='ENCARGADO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
@@ -304,6 +304,7 @@ function redact(A,t){
   const c=Object.assign({},t);
   if(!hasPerm(A,'finanzas_ver')){delete c.costoProveedor;delete c.precioMem;delete c.ajusteCombustible;delete c.tarifaBase;}
   if(!hasPerm(A,'tarifas_ver')){delete c.tarifaCliente;delete c.tarifaId;delete c.tarifaAplicadaPor;delete c.tarifaAplicadaEn;}
+  if(!hasPerm(A,'finanzas_ver')){delete c.tarifaOpl;delete c.tarifaOplBase;delete c.ajusteOpl;delete c.precioMemOpl;}
   if(!hasPerm(A,'finanzas_ver')&&!hasPerm(A,'viajes_editar_datos'))delete c.qViaticos;
   return c;
 }
@@ -338,7 +339,7 @@ function finCalc(trips,agrs,pagos,f){
     return {id:a.id,cliente:a.cliente,nViajes:a.viajeIds.length,viajes:a.viajeIds.slice(),enviado:nn(a.importeEnviado),sinImporte:(a.viajesSinImporte||[]).length,fase:a.fase,fechaEnvio:dLoc(a.envio?a.envio.en:a.creadoEn),factura:a.numeroFactura||'',fechaFactura:a.fechaFactura||'',facturado:fact,cobrado:cob,saldo:fact==null?null:r2(fact-cob),etapa:etapaAgr(a),cobros:(a.cobros||[]).slice()};
   });
   const tripRows=T.filter(t=>FIN.includes(t.estado)).map(t=>{
-    const costo=nn(t.costoProveedor),via=nn(t.qViaticos),pp=pg('PROVEEDOR',t.id),pl=pg('PILOTO',t.id);
+    const costo=nn(t.tarifaOpl)!=null?nn(t.tarifaOpl):nn(t.costoProveedor),via=nn(t.qViaticos),pp=pg('PROVEEDOR',t.id),pl=pg('PILOTO',t.id);
     const ag=agrs.find(a=>a.estado==='ACTIVA'&&a.fase!=='PREPARADA'&&a.viajeIds.includes(t.id));
     const ingreso=ag?(ag.importesViaje&&ag.importesViaje[t.id]!=null?ag.importesViaje[t.id]:null):nn(t.tarifaCliente);
     const lp=lastPg('PROVEEDOR',t.id),ll=lastPg('PILOTO',t.id);
@@ -460,7 +461,7 @@ function factorCombustible(qPactado,pct,precio){
 /* Ajuste = factor · importe base; nunca negativo (si el diésel bajó, no se descuenta). */
 const ajusteNumerico=(qPactado,pct,base,precio)=>{const m=factorCombustible(qPactado,pct,precio)*Number(base||0);return m>0?r2(m):0;};
 const tieneCombustible=tar=>!!(tar&&tar.qDieselPactado!=null&&tar.qDieselPactado!==''&&tar.combustiblePct!=null&&tar.combustiblePct!=='');
-/* Desglose del ajuste que corresponde al viaje con una tarifa dada (base, precio MEM, factor, ajuste, total). */
+/* Desglose del ajuste del CLIENTE que corresponde al viaje con una tarifa dada (base, precio MEM, factor, ajuste, total). */
 function ajusteDelViaje(t,tar){
   tar=tar||DB.tarifas.find(x=>x.id===t.tarifaId);
   const base=tar?r2(Number(tar.importe)):nn(t.tarifaCliente);
@@ -470,20 +471,44 @@ function ajusteDelViaje(t,tar){
   const ajuste=ajusteNumerico(tar.qDieselPactado,tar.combustiblePct,base,precio);
   return {aplica:true,base,precioMem:mem?precio:'',memFecha:mem?mem.fecha:'',factor,ajuste,total:r2(base+ajuste)};
 }
+/* Desglose del ajuste del PROVEEDOR (OPL). Parámetros propios de combustible del proveedor. */
+const tieneCombustibleOpl=tar=>!!(tar&&tar.dieselPactadoOpl!=null&&tar.dieselPactadoOpl!==''&&tar.combustiblePctOpl!=null&&tar.combustiblePctOpl!=='');
+function ajusteOplDelViaje(t,tar){
+  tar=tar||DB.tarifas.find(x=>x.id===t.tarifaId);
+  const base=tar?nn(tar.importeOpl):null;
+  if(base==null)return {falta:true,aplica:false,base:null,precioMem:'',memFecha:'',factor:0,ajuste:0,total:null};
+  if(!tieneCombustibleOpl(tar))return {falta:false,aplica:false,base:r2(base),precioMem:'',memFecha:'',factor:0,ajuste:0,total:r2(base)};
+  const mem=memPrecioParaFecha(t.fechaPlan),precio=mem?mem.precio:0;
+  const factor=factorCombustible(tar.dieselPactadoOpl,tar.combustiblePctOpl,precio);
+  const ajuste=ajusteNumerico(tar.dieselPactadoOpl,tar.combustiblePctOpl,base,precio);
+  return {falta:false,aplica:true,base:r2(base),precioMem:mem?precio:'',memFecha:mem?mem.fecha:'',factor,ajuste,total:r2(base+ajuste)};
+}
 /* Aplica la tarifa vigente al viaje. El importe del cliente = base + ajuste por combustible (MEM). */
 function aplicarUna(A,t){
   if(t.estado!=='ACEPTADO'||t.agrupacionId)return {err:'Solo se aplica tarifa a viajes aceptados que aún no estén facturados.'};
   const r=tarifaPara(t);if(r.err)return r;
   const d=ajusteDelViaje(t,r.t);
+  const o=ajusteOplDelViaje(t,r.t);
   const yaFijado=t.tarifaId===r.t.id&&String(t.tarifaCliente)===String(d.total)
     &&String(t.tarifaBase==null?'':t.tarifaBase)===String(d.aplica?d.base:'')
     &&String(t.ajusteCombustible==null?'':t.ajusteCombustible)===String(d.aplica?d.ajuste:'')
-    &&String(t.precioMem==null?'':t.precioMem)===String(d.aplica?d.precioMem:'');
+    &&String(t.precioMem==null?'':t.precioMem)===String(d.aplica?d.precioMem:'')
+    &&String(t.tarifaOpl==null?'':t.tarifaOpl)===String(o.total==null?'':o.total)
+    &&String(t.tarifaOplBase==null?'':t.tarifaOplBase)===String(o.aplica?o.base:'')
+    &&String(t.ajusteOpl==null?'':t.ajusteOpl)===String(o.aplica?o.ajuste:'')
+    &&String(t.precioMemOpl==null?'':t.precioMemOpl)===String(o.aplica?o.precioMem:'');
   if(yaFijado)return {ok:true};
   auditAdd({entidad:'FINANZAS',viajeId:t.id,accion:'Tarifa aplicada',campo:LBL.tarifaCliente,anterior:(t.tarifaCliente===''||t.tarifaCliente==null)?'(vacío)':'Q '+t.tarifaCliente,nuevo:'Q '+d.total,por:A,ref:r.t.id+(d.aplica&&d.ajuste?` (base Q ${d.base} + combustible Q ${d.ajuste})`:'')});
   if(d.aplica){t.tarifaBase=d.base;t.ajusteCombustible=d.ajuste;t.precioMem=d.precioMem;}
   else{delete t.tarifaBase;delete t.ajusteCombustible;delete t.precioMem;}
   t.tarifaCliente=d.total;t.tarifaId=r.t.id;t.tarifaAplicadaPor=A.nombre;t.tarifaAplicadaEn=nowIso();
+  /* Tarifa del proveedor (OPL): importe a pagar al proveedor, con su propio ajuste por combustible. */
+  if(o.total==null){delete t.tarifaOpl;delete t.tarifaOplBase;delete t.ajusteOpl;delete t.precioMemOpl;}
+  else{
+    if(o.aplica){t.tarifaOplBase=o.base;t.ajusteOpl=o.ajuste;t.precioMemOpl=o.precioMem;}
+    else{delete t.tarifaOplBase;delete t.ajusteOpl;delete t.precioMemOpl;}
+    t.tarifaOpl=o.total;
+  }
   return {ok:true};
 }
 function validarTarifa(d,exceptId){
@@ -507,6 +532,16 @@ function validarTarifa(d,exceptId){
   const out={cliente,proyecto:d.proyecto,rutaId:d.rutaId,capacidad:d.capacidad,importe:r2(imp),vigenteDesde:d.vigenteDesde,vigenteHasta:h};
   if(qd!=null)out.qDieselPactado=r2(qd);
   if(cp!=null)out.combustiblePct=cp;
+  /* Tarifa y combustible del PROVEEDOR (OPL): opcionales, con su propio % y Q pactado. */
+  const io=d.importeOpl==null||d.importeOpl===''?null:Number(d.importeOpl);
+  if(io!=null&&!(isFinite(io)&&io>0))deny('Importe proveedor (OPL): escribe un número mayor a cero (o déjalo vacío).','VALIDACION');
+  const cpo=d.combustiblePctOpl==null||d.combustiblePctOpl===''?null:Number(d.combustiblePctOpl);
+  if(cpo!=null&&!(isFinite(cpo)&&cpo>=0&&cpo<=100))deny('% de combustible proveedor: un número entre 0 y 100 (o déjalo vacío).','VALIDACION');
+  const dpo=d.dieselPactadoOpl==null||d.dieselPactadoOpl===''?null:Number(d.dieselPactadoOpl);
+  if(dpo!=null&&!(isFinite(dpo)&&dpo>0))deny('Q diésel pactado proveedor: escribe un número mayor a cero (o déjalo vacío).','VALIDACION');
+  if(io!=null)out.importeOpl=r2(io);
+  if(cpo!=null)out.combustiblePctOpl=cpo;
+  if(dpo!=null)out.dieselPactadoOpl=r2(dpo);
   return out;
 }
 /* Campos obligatorios para ENVIAR una factura. Se usa en la interfaz (para señalar lo que falta) y de nuevo en el guardado. */
@@ -924,14 +959,9 @@ const API={
     if(!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha||''))deny('Fecha de pago no válida.','VALIDACION');
     const ref=String(d.referencia||'').trim();if(ref.length<3||ref.length>40)deny('La referencia del pago es obligatoria (3 a 40 caracteres).','VALIDACION');
     let ob,ben;
-    if(tipo==='PROVEEDOR'){
-      if(!t.opl)deny('El viaje no tiene proveedor (OPL).','VALIDACION');
-      ob=nn(t.costoProveedor);if(ob==null)deny('Primero registra el costo del proveedor: no se puede pagar un importe no definido.','SIN_IMPORTE');
-      ben=t.opl;
-    }else{
-      ob=nn(t.qViaticos);if(ob==null)deny('El viaje no tiene importe registrado para el piloto (Q viáticos).','SIN_IMPORTE');
-      ben=(PILOTOS.find(p=>p.id===t.pilotoId)||{}).nombre||t.pilotoId;
-    }
+    if(tipo==='PROVEEDOR')deny('El pago a un proveedor se hace con una ORDEN DE PAGO (Finanzas → Órdenes de pago), no viaje por viaje.','USA_ORDEN_PAGO');
+    ob=nn(t.qViaticos);if(ob==null)deny('El viaje no tiene importe registrado para el piloto (Q viáticos).','SIN_IMPORTE');
+    ben=(PILOTOS.find(p=>p.id===t.pilotoId)||{}).nombre||t.pilotoId;
     const ya=pagadoDe(tipo,t.id);
     if(ya+monto>ob+0.005)deny(`El pago excede el importe por pagar (Q ${ob}); ya pagado Q ${ya}. Saldo: Q ${r2(ob-ya)}.`,'EXCEDE_IMPORTE');
     if(DB.pagos.some(p=>!p.anulado&&p.tipo===tipo&&p.viajeId===t.id&&p.referencia.toLowerCase()===ref.toLowerCase()))deny('Ya existe un pago con esa referencia para este viaje.','DUPLICADO');
@@ -948,6 +978,89 @@ const API={
     const m=String(motivo||'').trim();if(m.length<5)deny('El motivo de la anulación es obligatorio (mínimo 5 caracteres).','VALIDACION');
     p.anulado={porId:A.id,por:A.nombre,en:nowIso(),motivo:m};
     auditAdd({entidad:'FINANZAS',viajeId:p.viajeId,accion:'Pago anulado',campo:'Pago',anterior:'Q '+p.monto,nuevo:'(anulado)',por:A,motivo:m,ref:`${p.id} · ${p.referencia}`});return p;
+  });},
+
+  /* ----- órdenes de pago a proveedores (OPL) ----- */
+  /* Viajes facturados al cliente que aún no están en una orden de pago activa, con su tarifa de OPL. */
+  viajesPorPagar(uid){const A=actor(uid);need(A,'finanzas_ver','ver lo que se debe pagar a proveedores');
+    return DB.trips.filter(t=>['FACTURADO','COBRADO'].includes(t.estado)&&t.opl)
+      .filter(t=>!DB.ordenesPago.some(o=>o.estado==='ACTIVA'&&o.viajeIds.includes(t.id)))
+      .map(t=>({id:t.id,proveedor:t.opl,cliente:t.proyecto,proyecto:t.proyectoCat,fecha:(t.fechaPlan||'').slice(0,10),
+        importe:nn(t.tarifaOpl),sinTarifa:!(nn(t.tarifaOpl)>0)}));
+  },
+  ordenesPago(uid){const A=actor(uid);if(!hasPerm(A,'finanzas_ver')&&!hasPerm(A,'pagos_registrar')&&!hasPerm(A,'comercial_ver'))deny('Tu perfil no puede ver las órdenes de pago.');
+    return JSON.parse(JSON.stringify(DB.ordenesPago));},
+  crearOrdenPago(uid,d){return exec(uid,'crearOrdenPago','',A=>{
+    need(A,'pagos_registrar','emitir órdenes de pago');
+    const prov=String((d&&d.proveedor)||'').trim();
+    const ids=(d&&Array.isArray(d.viajeIds)?d.viajeIds:[]).map(String);
+    if(!prov)deny('Selecciona el proveedor (OPL).','VALIDACION');
+    if(!ids.length)deny('Selecciona al menos un viaje para la orden de pago.','VALIDACION');
+    if(new Set(ids).size!==ids.length)deny('Hay viajes repetidos en la selección.','VALIDACION');
+    const importes={};let tot=0;
+    ids.forEach(id=>{
+      const t=DB.trips.find(x=>x.id===id);
+      if(!t)deny(`El viaje ${id} no existe.`,'NO_EXISTE');
+      if(!puedeVer(A,t))deny(`No tienes acceso al viaje ${id}.`,'DENEGADO');
+      if(t.opl!==prov)deny(`El viaje ${id} no es del proveedor ${prov}.`,'VALIDACION');
+      if(!['FACTURADO','COBRADO'].includes(t.estado))deny(`El viaje ${id} debe estar facturado al cliente antes de poder pagarse al proveedor.`,'NO_FACTURADO');
+      const imp=nn(t.tarifaOpl);
+      if(!(imp>0))deny(`El viaje ${id} no tiene tarifa de OPL (proveedor).`,'SIN_TARIFA_OPL');
+      if(DB.ordenesPago.some(o=>o.estado==='ACTIVA'&&o.viajeIds.includes(id)))deny(`El viaje ${id} ya está en una orden de pago activa.`,'YA_EN_ORDEN');
+      importes[id]=imp;tot+=imp;
+    });
+    const en=nowIso(),nOp=(Number(DB.seq.op)||0)+1;DB.seq.op=nOp;
+    const o={id:'OP-'+pad4(nOp),proveedor:prov,viajeIds:ids,fase:'EMITIDA',importe:r2(tot),importesViaje:importes,
+      fechaEmision:dLoc(en),emision:{porId:A.id,por:A.nombre,en,fecha:dLoc(en),documento:null},transferencia:null,
+      estado:'ACTIVA',creadoPorId:A.id,creadoPor:A.nombre,creadoEn:en,anulada:null,correcciones:[]};
+    DB.ordenesPago.push(o);
+    auditAdd({entidad:'PAGO',accion:'Orden de pago emitida',campo:'Importe',nuevo:'Q '+o.importe,por:A,ref:`${o.id} · ${prov} · ${ids.length} viajes`});
+    return o;
+  });},
+  adjuntarDocumentoOrden(uid,opId,doc){return exec(uid,'adjuntarDocumentoOrden','',A=>{
+    need(A,'pagos_registrar','adjuntar el documento de la orden');
+    const o=DB.ordenesPago.find(x=>x.id===opId);if(!o)deny('La orden de pago no existe.','NO_EXISTE');
+    if(o.estado!=='ACTIVA')deny('La orden está anulada.','ESTADO_INVALIDO');
+    if(!(doc&&typeof doc.path==='string'&&new RegExp('^pagos/'+opId+'/[A-Za-z0-9._-]{8,90}$').test(doc.path)))deny('La ruta del documento no corresponde a esta orden.','VALIDACION');
+    if(!ENV.storageExists(doc.path))deny('El documento no está en el almacenamiento: vuelve a subirlo.','VALIDACION');
+    o.emision=Object.assign({},o.emision,{documento:{path:doc.path,nombre:String(doc.nombre||'').slice(0,80)}});
+    auditAdd({entidad:'PAGO',accion:'Documento de la orden adjuntado',campo:'Documento',nuevo:String(doc.nombre||doc.path).slice(0,80),por:A,ref:o.id});
+    return o;
+  });},
+  /* Etapa 2: el proveedor ya facturó. Se registra la transferencia con DOS archivos esenciales. */
+  registrarTransferencia(uid,opId,d){return exec(uid,'registrarTransferencia','',A=>{
+    need(A,'pagos_registrar','registrar el pago al proveedor');
+    const o=DB.ordenesPago.find(x=>x.id===opId);if(!o)deny('La orden de pago no existe.','NO_EXISTE');
+    if(o.estado!=='ACTIVA')deny('La orden está anulada.','ESTADO_INVALIDO');
+    if(o.fase!=='EMITIDA')deny('Esta orden de pago ya está pagada.','ESTADO_INVALIDO');
+    const f=String((d&&d.fecha)||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(f))deny('Fecha de la transferencia no válida.','VALIDACION');
+    const monto=nn(d&&d.monto);if(monto==null||monto<=0)deny('El monto pagado debe ser mayor a cero.','VALIDACION');
+    const ref=String((d&&d.referencia)||'').trim();if(ref.length<3||ref.length>40)deny('La referencia de la transferencia es obligatoria (3 a 40 caracteres).','VALIDACION');
+    const archivo=(a,nombre)=>{const p=a&&a.path;
+      if(!(typeof p==='string'&&new RegExp('^pagos/'+opId+'/[A-Za-z0-9._-]{8,90}$').test(p)))deny(`Falta ${nombre}. Sin ese archivo no se cierra la orden.`,'SIN_ARCHIVO');
+      if(!ENV.storageExists(p))deny(`${nombre}: el archivo no está en el almacenamiento, vuelve a subirlo.`,'VALIDACION');
+      return {path:p,nombre:String((a&&a.nombre)||'').slice(0,80)};};
+    const ev=archivo(d&&d.evidencia,'la evidencia de la transferencia');
+    const fac=archivo(d&&d.factura,'la factura del proveedor');
+    const en=nowIso();
+    o.transferencia={porId:A.id,por:A.nombre,en,fecha:f,monto:r2(monto),referencia:ref,evidencia:ev,factura:fac};
+    o.fase='PAGADA';
+    o.viajeIds.forEach(id=>{
+      const t=getT(id),imp=nn(o.importesViaje[id]);
+      DB.pagos.push({id:'PAG-'+pad4(DB.seq.pag++),tipo:'PROVEEDOR',viajeId:t.id,beneficiario:o.proveedor,monto:r2(imp),fecha:f,referencia:ref,porId:A.id,por:A.nombre,en,anulado:null,ordenPagoId:o.id});
+    });
+    auditAdd({entidad:'PAGO',accion:'Pago al proveedor registrado (orden cerrada)',campo:'Transferencia',nuevo:'Q '+o.transferencia.monto,por:A,ref:`${o.id} · ${ref}`});
+    return o;
+  });},
+  anularOrdenPago(uid,opId,motivo){return exec(uid,'anularOrdenPago','',A=>{
+    need(A,'pagos_registrar','anular órdenes de pago');
+    const o=DB.ordenesPago.find(x=>x.id===opId);if(!o)deny('La orden de pago no existe.','NO_EXISTE');
+    if(o.estado!=='ACTIVA')deny('La orden de pago ya está anulada.','ESTADO_INVALIDO');
+    if(o.fase==='PAGADA')deny('Una orden ya pagada no se anula: revierte primero la transferencia.','ESTADO_INVALIDO');
+    const m=String(motivo||'').trim();if(m.length<5)deny('El motivo de la anulación es obligatorio (mínimo 5 caracteres).','VALIDACION');
+    o.estado='ANULADA';o.anulada={porId:A.id,por:A.nombre,en:nowIso(),motivo:m};
+    auditAdd({entidad:'PAGO',accion:'Orden de pago anulada',campo:'Estado',anterior:'ACTIVA',nuevo:'ANULADA',por:A,motivo:m,ref:o.id});
+    return o;
   });},
 
   resumenFinanciero(uid,f){
@@ -1023,7 +1136,7 @@ const API={
   });},
   viajesSinTarifa(uid){
     const A=actor(uid);need(A,'comercial_ver','ver el módulo Comercial');
-    return DB.trips.filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId&&nn(t.tarifaCliente)==null&&puedeVer(A,t)).map(t=>{const r=tarifaPara(t);return {id:t.id,cliente:t.proyecto,proyecto:t.proyectoCat,motivo:r.err||'Hay una tarifa vigente: falta aplicarla.',disponible:!r.err};});
+    return DB.trips.filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId&&(nn(t.tarifaCliente)==null||nn(t.tarifaOpl)==null)&&puedeVer(A,t)).map(t=>{const r=tarifaPara(t);const faltaOpl=nn(t.tarifaOpl)==null&&nn(t.tarifaCliente)!=null;return {id:t.id,cliente:t.proyecto,proyecto:t.proyectoCat,motivo:r.err||(faltaOpl?'Sin tarifa de proveedor (OPL) en la tarifa vigente.':'Hay una tarifa vigente: falta aplicarla.'),disponible:!r.err};});
   },
 
   /* ----- rutas ----- */

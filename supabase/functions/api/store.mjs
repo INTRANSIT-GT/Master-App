@@ -17,7 +17,8 @@ export const TABLAS = [
   S('rutas', 'rutas', ['id'], [['id', 'id', 't'], ['codigo', 'codigo', 't'], ['nombre', 'nombre', 't'], ['cliente', 'cliente_id', 't'], ['proyecto', 'proyecto', 't'], ['origenId', 'origen_id', 't'], ['destinoId', 'destino_id', 't'], ['estado', 'estado', 't'],
     ['origenProp', 'origen_prop', 't'], ['destinoProp', 'destino_prop', 't'], ['fuente', 'fuente', 't'], ['solicitadaPorId', 'solicitada_por_id', 'tn'], ['solicitadaPor', 'solicitada_por', 'tn'], ['solicitadaEn', 'solicitada_en', 'ts'],
      ['validadaPor', 'validada_por', 't'], ['validadaEn', 'validada_en', 'ts'], ['aprobacionComercial', 'aprobacion_comercial', 'j'], ['aprobacionTransporte', 'aprobacion_transporte', 'j'], ['rechazo', 'rechazo', 'j'], ['viajeRef', 'viaje_ref', 't']]),
-  S('tarifas', 'tarifas', ['id'], [['id', 'id', 't'], ['cliente', 'cliente_id', 't'], ['proyecto', 'proyecto', 't'], ['rutaId', 'ruta_id', 't'], ['capacidad', 'capacidad', 't'], ['importe', 'importe', 'n'], ['vigenteDesde', 'vigente_desde', 't'],
+  S('tarifas', 'tarifas', ['id'], [['id', 'id', 't'], ['cliente', 'cliente_id', 't'], ['proyecto', 'proyecto', 't'], ['rutaId', 'ruta_id', 't'], ['capacidad', 'capacidad', 't'], ['importe', 'importe', 'n'], ['importeOpl', 'importe_opl', 'n'],
+    ['combustiblePctOpl', 'combustible_pct_opl', 'n'], ['dieselPactadoOpl', 'diesel_pactado_opl', 'n'], ['vigenteDesde', 'vigente_desde', 't'],
     ['vigenteHasta', 'vigente_hasta', 't'], ['activa', 'activa', 'b'], ['creadoPorId', 'creado_por_id', 'tn'], ['creadoPor', 'creado_por', 'tn'], ['creadoEn', 'creado_en', 'ts'], ['modificadoPor', 'modificado_por', 't'], ['modificadoEn', 'modificado_en', 'ts']]),
   S('mem', 'mem', ['fecha'], [['fecha', 'fecha', 't'], ['precioDiesel', 'precio_diesel', 'n']], { sinExtra: true }),
   S('viajes', 'trips', ['id'], [['id', 'id', 't'], ['proyecto', 'cliente_id', 't'], ['proyectoCat', 'proyecto_cat', 't'], ['shipment', 'shipment', 't'], ['noViaje', 'no_viaje', 't'], ['opl', 'opl', 't'], ['tipoViaje', 'tipo_viaje', 't'],
@@ -30,7 +31,7 @@ export const TABLAS = [
     ['editadoPor', 'editado_por', 'tn'], ['editadoEn', 'editado_en', 'ts'], ['comentarioRevision', 'comentario_revision', 't'], ['liqIntentos', 'liq_intentos', 'i'], ['liqActualId', 'liq_actual_id', 't'], ['liqAprobadaEn', 'liq_aprobada_en', 'ts'],
     ['agrupacionId', 'agrupacion_id', 't'], ['numeroFactura', 'numero_factura', 't']],
     { partes: [
-      { tabla: 'viajes_tarifa', fk: 'viaje_id', cols: [['tarifaCliente', 'tarifa_cliente', 'n'], ['tarifaId', 'tarifa_id', 't'], ['tarifaAplicadaPor', 'tarifa_aplicada_por', 't'], ['tarifaAplicadaEn', 'tarifa_aplicada_en', 'ts']] },
+      { tabla: 'viajes_tarifa', fk: 'viaje_id', cols: [['tarifaCliente', 'tarifa_cliente', 'n'], ['tarifaId', 'tarifa_id', 't'], ['tarifaOpl', 'tarifa_opl', 'n'], ['tarifaOplBase', 'tarifa_opl_base', 'n'], ['ajusteOpl', 'ajuste_opl', 'n'], ['precioMemOpl', 'precio_mem_opl', 't'], ['tarifaAplicadaPor', 'tarifa_aplicada_por', 't'], ['tarifaAplicadaEn', 'tarifa_aplicada_en', 'ts']] },
       { tabla: 'viajes_costos', fk: 'viaje_id', cols: [['costoProveedor', 'costo_proveedor', 'n']] },
       { tabla: 'viajes_viaticos', fk: 'viaje_id', cols: [['qViaticos', 'q_viaticos', 'n']] }] }),
   S('liquidaciones', 'liquidaciones', ['id'], [['id', 'id', 't'], ['viajeId', 'viaje_id', 't'], ['ciclo', 'ciclo', 'i'], ['envioPorId', 'envio_por_id', 'tn'], ['envioPor', 'envio_por', 'tn'], ['envioEn', 'envio_en', 'ts'], ['evidenciaId', 'evidencia_id', 't'],
@@ -40,6 +41,8 @@ export const TABLAS = [
     ['importeEnviado', 'importe_enviado', 'n'], ['importesViaje', 'importes_viaje', 'jo'], ['viajesSinImporte', 'viajes_sin_importe', 'ja'], ['importeFacturado', 'importe_facturado', 'n'], ['envio', 'envio', 'j'], ['emision', 'emision', 'j'],
     ['cobros', 'cobros', 'ja'], ['estado', 'estado', 't'], ['creadoPorId', 'creado_por_id', 'tn'], ['creadoPor', 'creado_por', 'tn'], ['creadoEn', 'creado_en', 'ts'], ['anulada', 'anulada', 'j'], ['correcciones', 'correcciones', 'ja']]),
   S('pagos', 'pagos', ['id'], [['id', 'id', 't'], ['tipo', 'tipo', 't'], ['viajeId', 'viaje_id', 't'], ['beneficiario', 'beneficiario', 't'], ['monto', 'monto', 'n'], ['fecha', 'fecha', 't'], ['referencia', 'referencia', 't'], ['porId', 'por_id', 'tn'], ['por', 'por', 'tn'], ['en', 'en', 'ts'], ['anulado', 'anulado', 'j']]),
+  S('ordenes_pago', 'ordenesPago', ['id'], [['id', 'id', 't'], ['proveedor', 'proveedor', 't'], ['viajeIds', 'viaje_ids', 'a'], ['fase', 'fase', 't'], ['importe', 'importe', 'n'], ['importesViaje', 'importes_viaje', 'jo'],
+    ['fechaEmision', 'fecha_emision', 't'], ['emision', 'emision', 'j'], ['transferencia', 'transferencia', 'j'], ['estado', 'estado', 't'], ['creadoPorId', 'creado_por_id', 'tn'], ['creadoPor', 'creado_por', 'tn'], ['creadoEn', 'creado_en', 'ts'], ['anulada', 'anulada', 'j'], ['correcciones', 'correcciones', 'ja']]),
   S('notificaciones', 'notificaciones', ['id'], [['id', 'id', 't'], ['tipo', 'tipo', 't'], ['destinatarios', 'destinatarios', 'a'], ['usuarios', 'usuarios', 'a'], ['asunto', 'asunto', 't'], ['detalle', 'detalle', 'jo'], ['creadaPor', 'creada_por', 'tn'], ['creadaPorId', 'creada_por_id', 'tn'],
     ['creadaEn', 'creada_en', 'ts'], ['leidaPor', 'leida_por', 'a'], ['canal', 'canal', 't'], ['externo', 'externo', 'jo']]),
   S('auditoria', 'audit', ['id'], [['id', 'id', 't'], ['entidad', 'entidad', 't'], ['viajeId', 'viaje_id', 't'], ['accion', 'accion', 't'], ['campo', 'campo', 't'], ['anterior', 'anterior', 't'], ['nuevo', 'nuevo', 't'], ['porId', 'por_id', 't'], ['por', 'por', 't'], ['rol', 'rol', 't'],
@@ -90,7 +93,7 @@ async function leerTabla(q, tabla, cols, extra, orden) {
 const claveDe = (spec, r) => spec.key.map(k => r[k]).join('\u0001');
 
 export async function loadState(q) {
-  const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], rutas: [], tarifas: [], mem: [], notificaciones: [], config: {}, seq: {} };
+  const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], ordenesPago: [], rutas: [], tarifas: [], mem: [], notificaciones: [], config: {}, seq: {} };
   for (const spec of TABLAS) {
     const orden = spec.key.map(k => spec.cols.find(c => c[0] === k)[1]).join(', ');
     const rows = await leerTabla(q, spec.tabla, spec.cols, !spec.sinExtra, orden);

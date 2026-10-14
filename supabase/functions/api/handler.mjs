@@ -5,7 +5,7 @@ import { createEngine } from './core.mjs';
 import { loadState, saveState, fotografia } from './store.mjs';
 
 export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'actualizarFactura', 'enviarFactura', 'emitirFactura',
-  'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
+  'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
   'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre'];
 export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos'];
 const MAX_ARGS = 300 * 1024;
@@ -103,7 +103,14 @@ async function armarSnapshot(E, uid, deps) {
   if (puedeLiq) for (const t of trips) seguro(() => API.liquidaciones(uid, t.id), []).forEach(l => { const { evidencia, ...r } = l; liquidaciones.push(r); });
   const evs = puedeLiq ? DB.evidencias.filter(e => vis.has(e.viajeId)) : [];
   const agr = (has('comercial_ver') || has('finanzas_ver')) ? seguro(() => API.agrupaciones(uid), []) : [];
-  const paths = [...evs.map(e => e.path), ...agr.map(g => g.emision && g.emision.archivoPath)].filter(Boolean).slice(-400);
+  const puedeOrd = has('finanzas_ver') || has('comercial_ver') || has('pagos_registrar');
+  const ord = puedeOrd ? seguro(() => API.ordenesPago(uid), []) : [];
+  const ordPaths = [];
+  ord.forEach(o => { const em = o.emision && o.emision.documento, tr = o.transferencia;
+    if (em && em.path) ordPaths.push(em.path);
+    if (tr && tr.evidencia && tr.evidencia.path) ordPaths.push(tr.evidencia.path);
+    if (tr && tr.factura && tr.factura.path) ordPaths.push(tr.factura.path); });
+  const paths = [...evs.map(e => e.path), ...agr.map(g => g.emision && g.emision.archivoPath), ...ordPaths].filter(Boolean).slice(-400);
   const urls = paths.length ? await deps.firmar(paths) : new Map();
   evs.forEach(e => evidencias.push({ id: e.id, viajeId: e.viajeId, liqId: e.liqId, dataUrl: urls.get(e.path) || '', path: '', porId: e.porId, por: e.por, en: e.en }));
   const agrupaciones = agr.map(g => g.emision && g.emision.archivoPath ? { ...g, emision: { ...g.emision, archivo: urls.get(g.emision.archivoPath) || '', archivoPath: '' } } : g);
@@ -122,7 +129,11 @@ async function armarSnapshot(E, uid, deps) {
   return {
     yo: uid, usuarios, acceso: DB.acceso, permisos: DB.permisos, clientes, trips, liquidaciones, evidencias, agrupaciones,
     audit: [...audit.values()].sort((a, b) => a.id < b.id ? -1 : 1),
-    pagos: has('finanzas_ver') ? DB.pagos : [], rutas: has('rutas_ver') ? seguro(() => API.rutas(uid), []) : [],
+    pagos: has('finanzas_ver') ? DB.pagos : [],
+    ordenesPago: ord.map(o => { const c = JSON.parse(JSON.stringify(o));
+      if (c.emision && c.emision.documento) c.emision.documentoUrl = urls.get(c.emision.documento.path) || '';
+      if (c.transferencia) { if (c.transferencia.evidencia) c.transferencia.evidenciaUrl = urls.get(c.transferencia.evidencia.path) || ''; if (c.transferencia.factura) c.transferencia.facturaUrl = urls.get(c.transferencia.factura.path) || ''; }
+      return c; }), rutas: has('rutas_ver') ? seguro(() => API.rutas(uid), []) : [],
     tarifas: has('tarifas_ver') ? seguro(() => API.tarifas(uid), []) : [],
     mem: has('tarifas_ver') ? seguro(() => API.mem(uid), []) : [],
     notificaciones: DB.notificaciones.filter(n => A.rol === 'ADMIN' || n.destinatarios.includes(A.rol) || (n.usuarios || []).includes(A.id)),

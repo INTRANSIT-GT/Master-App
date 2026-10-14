@@ -306,6 +306,7 @@ table.xl tbody tr:nth-child(even) td.stkR{background:var(--surface2)}
 table.xl tbody tr:hover td.stkR{background:var(--surface2)}
 table.xl td.ed{padding:3px 4px;min-width:200px;white-space:nowrap;background:var(--surface)}
 table.xl td.ro{color:var(--mute);background:var(--surface2);min-width:120px}
+.acts-wrap{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .cin{width:170px;min-height:34px;padding:4px 6px;font-size:13px;border-radius:6px}
 .cin.saving{border-color:var(--brand)}.cin.saved{border-color:var(--ok)}.cin.error{border-color:var(--fix);background:var(--fix-bg)}
 .cst{display:inline-block;width:22px;text-align:center;font-weight:700}.cst.saved{color:var(--ok)}.cst.saving{color:var(--brand)}

@@ -25,7 +25,7 @@ if(!API.gastos)API.gastos=async()=>[];
   if(!(window.supabase&&window.supabase.createClient)){console.warn('No se cargó supabase-js: modo demostración');return;}
   BACKEND.modo='supabase';
   const sb=BACKEND.sb=window.supabase.createClient(C.SUPABASE_URL.trim(),k,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  const MUT=['crearViaje','editarViaje','iniciar','finalizar','torreMoverEstado','enviarLiquidacion','aprobar','devolver','aprobarShipmentDuplicado','prepararFactura','actualizarFactura','enviarFactura','emitirFactura','registrarCobro','corregirFactura','anularAgrupacion','registrarImportes','registrarPago','anularPago','crearTarifa','editarTarifa','cambiarEstadoTarifa','aplicarTarifa','aplicarTarifasPendientes','cargarMem','solicitarRuta','registrarRuta','validarRuta','rechazarRuta','aprobarRutaComercial','aprobarRutaTransporte','marcarNotificacion','setPermiso','guardarUsuario','guardarCliente','guardarReglasTorre'];
+  const MUT=['crearViaje','editarViaje','iniciar','finalizar','torreMoverEstado','enviarLiquidacion','aprobar','devolver','aprobarShipmentDuplicado','prepararFactura','actualizarFactura','enviarFactura','emitirFactura','registrarCobro','corregirFactura','anularAgrupacion','registrarImportes','registrarPago','anularPago','crearOrdenPago','adjuntarDocumentoOrden','registrarTransferencia','anularOrdenPago','crearTarifa','editarTarifa','cambiarEstadoTarifa','aplicarTarifa','aplicarTarifasPendientes','cargarMem','solicitarRuta','registrarRuta','validarRuta','rechazarRuta','aprobarRutaComercial','aprobarRutaTransporte','marcarNotificacion','setPermiso','guardarUsuario','guardarCliente','guardarReglasTorre'];
   const err=b=>{const e=new ApiError(b.code||'SERVIDOR',b.message||'Operación rechazada por el servidor.');if(b.faltantes)e.faltantes=b.faltantes;return e;};
   async function llamar(op,args){
     if(!navigator.onLine)throw new ApiError('SIN_CONEXION','Sin conexión con el servidor. La operación NO se guardó.');
@@ -42,7 +42,7 @@ if(!API.gastos)API.gastos=async()=>[];
   }
   function hidratar(sn){
     const db=blankDB();
-    ['usuarios','acceso','permisos','clientes','liquidaciones','evidencias','agrupaciones','audit','pagos','rutas','tarifas','mem','notificaciones'].forEach(k=>{db[k]=sn[k]||[];});
+    ['usuarios','acceso','permisos','clientes','liquidaciones','evidencias','agrupaciones','audit','pagos','ordenesPago','rutas','tarifas','mem','notificaciones'].forEach(k=>{db[k]=sn[k]||[];});
     db.trips=sn.trips||[];db.config=sn.config||{};
     DB=db;
     [[PILOTOS,sn.catalogos.pilotos],[FLOTA,sn.catalogos.flota],[DESTINOS,sn.catalogos.destinos]].forEach(([a,n])=>{a.length=0;a.push(...(n||[]));});
@@ -61,6 +61,15 @@ if(!API.gastos)API.gastos=async()=>[];
   MUT.forEach(op=>{API[op]=async(uid,...args)=>{
     if(op==='enviarLiquidacion'&&typeof args[1]==='string'&&args[1].startsWith('data:'))args[1]=await subir('viajes/'+args[0],args[1]);
     if(op==='emitirFactura'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('facturas/'+args[0],args[1].archivo)});
+    if(op==='adjuntarDocumentoOrden'&&args[1]&&args[1].data){
+      const up=await subir('pagos/'+args[0],args[1].data);
+      args[1]={path:up.path,nombre:String(args[1].nombre||'').slice(0,80)};
+    }
+    if(op==='registrarTransferencia'&&args[1]){
+      const d=Object.assign({},args[1]);
+      for(const k of ['evidencia','factura']) if(d[k]&&d[k].data){const b=await subir('pagos/'+args[0],d[k].data);d[k]={path:b.path,nombre:String(d[k].nombre||'').slice(0,80)};}
+      args[1]=d;
+    }
     const r=await llamar(op,args);
     /* La escritura y la lectura completa se separan: así el guardado no excede el límite de CPU de la Edge Function. */
     try{await BACKEND.refrescar();}catch(e){console.warn('El cambio se guardó; no se pudo refrescar la vista todavía.',e);}
