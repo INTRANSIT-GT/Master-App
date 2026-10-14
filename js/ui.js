@@ -406,7 +406,7 @@ function torreSheet(list){
   if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
   return `<div class="xlwrap sheet"><table class="xl" style="min-width:1500px"><thead><tr><th class="stk">Viaje</th><th>Cliente</th><th>Proyecto</th><th>Piloto</th><th>Unidad · placa</th><th>Ruta</th><th>Estado</th><th>En ruta</th><th>Estatus operativo</th><th>Fecha plan</th><th>Inicio real (salida)</th><th>Fin descarga</th></tr></thead><tbody>
   ${list.map(t=>{const j=J(t),ed=puedeEstatusTorre(t);
-    return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${rutaHTML(t)}</td><td>${badge(t.estado)}</td><td>${t.estado==='EN_CURSO'?`<span class="elapsed" style="font-size:14px" data-since="${since(t)}">${elapsed(since(t))}</span>`:'—'}</td>
+    return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${rutaHTML(t)}</td><td>${badge(t.estado)}</td><td>${t.estado==='EN_RUTA'?`<span class="elapsed" style="font-size:14px" data-since="${since(t)}">${elapsed(since(t))}</span>`:'—'}</td>
     <td class="${ed?'ed':'ro'}" style="min-width:250px">${ed?`<div class="trow"><select class="cin sel" data-status="${t.id}" aria-label="Estatus operativo del viaje ${t.id}">${estatusOpciones(t).map(o=>`<option ${o===t.estatus?'selected':''}>${esc(o)}</option>`).join('')}</select>${est(t)}<span class="cst" id="ss_${t.id}" aria-live="polite"></span></div>`:`${est(t)} <span class="mute" style="font-size:12px">${clienteDe(t).torreEstatus?'(no editable en este estado)':'solo consulta'}</span>`}</td>
     <td>${fmtL(t.fechaPlan)}</td><td>${t.tSalida?fmtL(t.tSalida):'—'}</td><td>${t.tFinDescarga?fmtL(t.tFinDescarga):'—'}</td></tr>`;}).join('')}
   </tbody></table></div>`;
@@ -501,7 +501,7 @@ VIEWS.liquidaciones=()=>{
 
 /* ---- Detalle del viaje ---- */
 function uploadBlock(t){
-  const d=S.draft[t.id],corr=t.estado==='PENDIENTE_CORRECCION';
+  const d=S.draft[t.id],corr=t.estado==='RECHAZADO';
   return `<div class="upzone"><span class="ico">${icon('camera',28)}</span>
     <div><b style="font-size:16px">Subir fotografía de liquidación</b><div class="mute" style="font-size:13.5px">Una sola foto. Asegúrate de que se lea y se vea la firma.${corr?' Los envíos anteriores se conservan en el historial.':''}</div></div>
     ${d?`<div class="preview"><img src="${d}" alt="Vista previa de la liquidación"></div>`:''}
@@ -617,7 +617,7 @@ VIEWS.detalle=()=>{
     :`${kvr('ID de viaje','<span class="num">#'+t.id+'</span>')}${kvr('No. de viaje',v(t.noViaje))}${kvr('Cliente',esc(j.cliente))}${kvr('Proyecto',v(t.proyectoCat))}${kvr('Shipment',v(t.shipment))}
         ${kvr('Tipo de viaje',v(t.tipoViaje))}${kvr('Tipo de carga',v(t.tipoCarga))}${kvr('No. de carga',v(t.noCarga))}${kvr('Producto',v(t.producto))}${kvr('OPL',v(t.opl))}
         ${kvr('Ruta',rutaHTML(t))}${kvr('Fecha plan',fmtL(t.fechaPlan))}${kvr('Estatus',t.estatus?est(t):dash)}${kvr('Estado del proceso',badge(t.estado))}
-        ${t.estado==='EN_CURSO'?kvr('Tiempo transcurrido',`<span class="elapsed" data-since="${since(t)}">${elapsed(since(t))}</span>`):''}
+        ${t.estado==='EN_RUTA'?kvr('Tiempo transcurrido',`<span class="elapsed" data-since="${since(t)}">${elapsed(since(t))}</span>`):''}
         ${kvr('No. doc retorno',v(t.noDocRetorno))}${'qViaticos' in t?kvr('Q viáticos',t.qViaticos!==''&&t.qViaticos!=null?'Q '+esc(t.qViaticos):dash):''}`;
   const horarios=rev?'':`<div class="card" style="grid-column:1/-1"><h3>Horarios del viaje</h3>
         <dl class="kv" style="grid-template-columns:repeat(2,minmax(0,170px) minmax(0,1fr));gap:8px 14px">${CAMPOS_TIEMPO.map(([k,l])=>kvr(lblT(l),t[k]?fmtL(t[k]):dash)).join('')}</dl>
@@ -652,9 +652,9 @@ VIEWS.resumen=()=>{
   return `<div class="inner">${pageHead(ger?'Tablero gerencial':'Resumen general',ger?'Consulta global de todos los proyectos, con su recorrido completo':'Vista global de todos los proyectos')}
     ${chips}
     <div class="grid g4">
-      ${kp(base.length,'Total de viajes','','')}${kp(cnt(base,t=>t.estado==='PENDIENTE'),'Pendientes','--pend','PENDIENTE')}${kp(cnt(base,t=>t.estado==='EN_CURSO'),'En curso','--cur','EN_CURSO')}${kp(cnt(base,t=>FIN.includes(t.estado)),'Finalizados','--ok','FIN')}
-      ${kp(cnt(base,t=>t.estado==='PENDIENTE_LIQUIDACION'),'Liquidaciones pendientes','--warn','PENDIENTE_LIQUIDACION')}${kp(cnt(base,t=>t.estado==='EN_REVISION'),'Liquidaciones en revisión','--rev','EN_REVISION')}${kp(cnt(base,t=>t.estado==='PENDIENTE_CORRECCION'),'Liquidaciones por corregir','--fix','PENDIENTE_CORRECCION')}${kp(cnt(base,t=>LIQ_APROBADA.includes(t.estado)),'Liquidaciones aprobadas','--ok','APROBADAS')}
-      ${kp(cnt(base,t=>t.estado==='PENDIENTE_COMERCIAL'),'Pendientes de Comercial','--com','PENDIENTE_COMERCIAL')}${kp(cnt(base,t=>t.estado==='COMERCIAL_REGISTRADA'),'Gestión comercial registrada','--ok','COMERCIAL_REGISTRADA')}
+      ${kp(base.length,'Total de viajes','','')}${kp(cnt(base,t=>t.estado==='PLANIFICADO'),'Planificados','--pend','PLANIFICADO')}${kp(cnt(base,t=>t.estado==='EN_RUTA'),'En ruta','--cur','EN_RUTA')}${kp(cnt(base,t=>FIN.includes(t.estado)),'Finalizados','--ok','FIN')}
+      ${kp(cnt(base,t=>t.estado==='ENTREGADO'),'Liquidaciones pendientes','--warn','ENTREGADO')}${kp(cnt(base,t=>t.estado==='LIQUIDADO'),'Liquidaciones en revisión','--rev','LIQUIDADO')}${kp(cnt(base,t=>t.estado==='RECHAZADO'),'Liquidaciones por corregir','--fix','RECHAZADO')}${kp(cnt(base,t=>LIQ_APROBADA.includes(t.estado)),'Liquidaciones aprobadas','--ok','APROBADAS')}
+      ${kp(cnt(base,t=>t.estado==='ACEPTADO'),'Pendientes de facturar','--com','ACEPTADO')}${kp(cnt(base,t=>t.estado==='FACTURADO'),'Facturados','--ok','FACTURADO')}
       <div class="kpi"><span class="n">${ags.length}</span><span class="l"><i class="dot" style="background:var(--com)"></i>Agrupaciones activas</span></div>
       <div class="kpi"><span class="n">${ags.filter(g=>g.numeroFactura).length}</span><span class="l"><i class="dot" style="background:var(--ok)"></i>Facturas registradas</span></div>
     </div>
@@ -1065,19 +1065,27 @@ VIEWS.modelo=()=>{
     ['ACCESO_CLIENTE','Alcance de encargados',[['IdUsuario','Búsqueda → USUARIOS',''],['Cliente','Búsqueda → CLIENTES','Un encargado solo opera sus clientes']]],
     ['PERMISOS','Matriz rol × permiso',[['Rol','Opción',''],['Permiso','Opción','22 permisos'],['Habilitado','Sí/No','Cambios auditados']]],
     ['CLIENTES','Clientes y proyectos',[['IdCliente · Nombre · Cliente','Texto','Código y nombre únicos'],['Proyectos','Lista → CATALOGO','Proyectos permitidos'],['NIT · DireccionFiscal · CorreoFacturacion · Contacto · Telefono · CreditoDias','Texto','Vacío = PENDIENTE; no se inventa'],['Activo · TorreEstatus · CreadoPor/El','—','Torre solo actualiza el estatus de los clientes marcados']]],
-    ['VIAJES (hoja VIAJES_TRANSPORTES)','Un registro por viaje, para siempre',[['ID VIAJE, CLIENTE, PROYECTO, SHIPMENT, NO. VIAJE, TIPO VIAJE, TIPO CARGA, NO. CARGA, PRODUCTO, OPL, PILOTO, ORIGEN, DESTINO, FECHA PLAN','Columnas reales',''],['Horarios (10) · ESTATUS · NO. DOC RETORNO · Q_VIATICOS','Columnas reales',''],['PLACA · TANGO · TIPO UNIDAD','Desde FLOTA','No se copian'],['Estado','Opción','9 estados; solo cambia por transiciones válidas'],['AgrupacionId · NumeroFactura','Búsqueda / Texto','Proyección de la agrupación activa'],['CreadoPor/El · Iniciado · Finalizado · Enviado · Revisado · Aprobado','Persona + fecha','Resumen; la fuente es AUDITORIA']]],
+    ['VIAJES (hoja VIAJES_TRANSPORTES)','Un registro por viaje, para siempre',[['ID VIAJE, CLIENTE, PROYECTO, SHIPMENT, NO. VIAJE, TIPO VIAJE, TIPO CARGA, NO. CARGA, PRODUCTO, OPL, PILOTO, ORIGEN, DESTINO, FECHA PLAN','Columnas reales',''],['Horarios (10) · ESTATUS · NO. DOC RETORNO · Q_VIATICOS','Columnas reales',''],['PLACA · TANGO · TIPO UNIDAD','Desde FLOTA','No se copian'],['Estado','Opción','Planificado → En ruta → Entregado → Liquidado → Aceptado/Rechazado → Facturado → Cobrado; solo cambia por transiciones válidas'],['AgrupacionId · NumeroFactura','Búsqueda / Texto','Proyección de la agrupación activa'],['CreadoPor/El · Iniciado · Finalizado · Enviado · Revisado · Aprobado','Persona + fecha','Resumen; la fuente es AUDITORIA']]],
     ['LIQUIDACIONES','Un renglón por envío (ciclo)',[['IdLiquidacion LIQ-0001','Texto (clave)',''],['IdViaje · Ciclo','Búsqueda · Número',''],['EnvioPor/El · EvidenciaId','Persona/fecha · Búsqueda',''],['Decision · Revisor · RevisionEn · Comentario','Opción · Persona · fecha · texto','Nunca se sobrescribe un ciclo anterior']]],
     ['EVIDENCIAS','Fotografías',[['IdEvidencia EVI-0001','Texto (clave)',''],['IdViaje · IdLiquidacion','Búsquedas',''],['Imagen','Archivo adjunto','Una por envío; las anteriores se conservan']]],
     ['AGRUPACIONES_COMERCIALES','Agrupación ≠ factura',[['IdAgrupacion AGR-0001','Texto (clave)','Identifica el conjunto'],['Cliente','Búsqueda → CLIENTES','Un solo cliente por agrupación'],['IdViajes','Relación 1..n → VIAJES','Sin duplicados'],['NumeroFactura','Texto único','Identifica la factura; distinto del ID de agrupación'],['Estado · Anulada{por,en,motivo} · Correcciones[]','Opción · registro','Nunca se borra la asignación anterior']]],
     ['COBROS (dentro de agrupación)','Dinero recibido',[['IdCobro COB-0001','Texto (clave)',''],['IdAgrupacion · Monto · Fecha · Referencia','—','Referencia obligatoria; no puede exceder lo facturado']]],
     ['PAGOS','Pagos a proveedores y pilotos',[['IdPago PAG-0001','Texto (clave)',''],['Tipo · IdViaje · Beneficiario','PROVEEDOR / PILOTO','Proveedor = OPL del viaje; piloto = piloto del viaje'],['Monto · Fecha · Referencia','—','No puede exceder el importe por pagar'],['Anulado{por,en,motivo}','registro','Los pagos no se borran']]],
-    ['RUTAS','Catálogo y solicitudes',[['IdRuta R-0001 · Codigo · Nombre','Texto','Código único entre rutas asignadas'],['Cliente · Proyecto','Búsquedas','Una ruta pertenece a un cliente y proyecto'],['IdOrigen · IdDestino','Búsquedas → ORIGEN / DESTINOS','Se completan SOLO al asignar la ruta'],['Estado','ASIGNADA · NO_ASIGNADA · RECHAZADA','Una ruta NO ASIGNADA no recibe tarifa ni se factura'],['Solicitada por/el · Validada por/el · Rechazo','—','Trazabilidad']]],
+    ['RUTAS','Catálogo y solicitudes',[['IdRuta R-0001 · Codigo · Nombre','Texto','Código único entre rutas asignadas'],['Cliente · Proyecto','Búsquedas','Una ruta pertenece a un cliente y proyecto'],['IdOrigen · IdDestino','Búsquedas → ORIGEN / DESTINOS','Se completan SOLO al asignar la ruta'],['Estado','PENDIENTE · EN_TARIFACION · PENDIENTE_APROBACION · ACTIVA · RECHAZADA','Se activa con la aprobación de Gerencia Comercial y de Transporte'],['Solicitada por/el · Validada por/el · Rechazo','—','Trazabilidad']]],
     ['TARIFAS','Tarifas con vigencia',[['IdTarifa TAR-0001','Texto (clave)',''],['Cliente · Proyecto · IdRuta · Capacidad','Búsquedas','Combinación a la que aplica'],['Importe · VigenteDesde · VigenteHasta','Moneda · fechas','No se solapan dos tarifas activas iguales'],['Activa · CreadaPor/El · ModificadaPor/El','—','Se desactiva, no se borra; el viaje conserva su importe histórico']]],
     ['FACTURAS (AGRUPACIONES_COMERCIALES)','Preparada → Enviada → Emitida',[['IdAgrupacion · Modalidad','INDIVIDUAL / AGRUPADA','Agrupar es opcional'],['Fase','PREPARADA · ENVIADA · EMITIDA','Emitida exige evidencia'],['NumeroFactura · FechaFactura','Texto · fecha','Obligatorios para enviar'],['Envio{por,en,resultado} · Emision{por,fecha,importe,evidencia,archivo}','registros',''],['Cobros[] · Anulada · Correcciones[]','registros','']]],
     ['NOTIFICACIONES','Avisos dentro de la aplicación',[['IdNotificacion · Tipo · Asunto · Detalle','—','Ruta pendiente, asignada o rechazada'],['Destinatarios (roles) · Usuarios · LeidaPor','—','Comercial y Gerencia reciben las rutas pendientes'],['Externo{enviado:false,motivo}','—','Correo o Teams requieren un servicio configurado']]],
     ['AUDITORIA','Solo agregar',[['IdEvento · IdViaje · Entidad · Accion · Campo','Texto',''],['ValorAnterior · ValorNuevo','Texto',''],['IdUsuario · Rol · FechaHora · Motivo · Ref','—',''],['Prev · Hash','Texto','Cadena de huellas para detectar alteraciones']]]
   ];
-  const E=[['PENDIENTE','Encargado inicia','EN_CURSO'],['EN_CURSO','Encargado finaliza','FINALIZADO → PENDIENTE_LIQUIDACION (automático)'],['PENDIENTE_LIQUIDACION','Encargado envía evidencia','EN_REVISION'],['EN_REVISION','Mar aprueba o devuelve','APROBADA → PENDIENTE_COMERCIAL (auto) · o PENDIENTE_CORRECCION'],['PENDIENTE_CORRECCION','Encargado corrige y reenvía','EN_REVISION'],['PENDIENTE_COMERCIAL','Alejandra agrupa','COMERCIAL_REGISTRADA'],['COMERCIAL_REGISTRADA','Anulación autorizada (admin)','PENDIENTE_COMERCIAL']];
+  const E=[
+    ['PLANIFICADO','Operaciones inicia el viaje','EN_RUTA'],
+    ['EN_RUTA','Operaciones confirma la entrega','ENTREGADO'],
+    ['ENTREGADO','Operaciones envía la evidencia (fotografía)','LIQUIDADO'],
+    ['LIQUIDADO','Liquidaciones acepta o rechaza con comentario','ACEPTADO · o RECHAZADO'],
+    ['RECHAZADO','Operaciones corrige y vuelve a liquidar','LIQUIDADO'],
+    ['ACEPTADO','Comercial factura (individual o agrupada)','FACTURADO'],
+    ['FACTURADO','Contabilidad registra el cobro','COBRADO']
+  ];
   return `<div class="inner">${pageHead('Modelo de datos','Cómo se relaciona la información y cómo se mapea a SharePoint o Dataverse')}
     <div class="alertbox info" style="margin-bottom:16px"><b>Regla:</b> un único registro por viaje durante todo su ciclo de vida. Las tablas VIAJES, LIQUIDACIONES, EVIDENCIAS, AGRUPACIONES_COMERCIALES y AUDITORIA se relacionan por IdViaje; nada se borra, todo cambio es un evento nuevo.</div>
     <div class="grid g2">${T.map(t=>`<div class="card"><h3>${t[0]}</h3><div class="mute" style="margin:-8px 0 10px;font-size:13px">${t[1]}</div><div class="scrollx"><table style="font-size:13px"><thead><tr><th>Campo</th><th>Tipo sugerido</th><th>Nota</th></tr></thead><tbody>${t[2].map(r=>`<tr><td><code>${r[0]}</code></td><td>${r[1]}</td><td class="mute">${r[2]}</td></tr>`).join('')}</tbody></table></div></div>`).join('')}</div>
@@ -1105,7 +1113,7 @@ function fieldM(f,data){
   if(f.type==='textarea')return `${W}${lab}<textarea id="${id}" data-mf="${f.k}" placeholder="${esc(f.ph||'')}">${esc(val)}</textarea>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   if(f.type==='select'){const op=f.optsFn?f.optsFn(data):f.opts;return `${W}${lab}<select id="${id}" data-mf="${f.k}"><option value="">${esc(f.ph||'Selecciona')}</option>${op.map(o=>`<option value="${esc(o.id)}" ${o.id===val?'selected':''}>${esc(o.nombre)}</option>`).join('')}</select></div>`;}
   if(f.type==='check')return `<div class="fgroup"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-mf="${f.k}" ${val?'checked':''}> ${f.label}</label></div>`;
-  if(f.type==='checks')return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><div class="chips">${f.opts.map(o=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mfm="${f.k}" value="${esc(o.id)}" ${(val||[]).includes(o.id)?'checked':''}> ${esc(o.nombre)}</label>`).join('')}</div></div>`;
+  if(f.type==='checks'){const op=f.optsFn?f.optsFn(data):(f.opts||[]);return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><div class="chips">${op.length?op.map(o=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mfm="${f.k}" value="${esc(o.id)}" ${(val||[]).includes(o.id)?'checked':''}> ${esc(o.nombre)}</label>`).join(''):'<span class="mute">Primero elige el cliente para ver sus proyectos</span>'}</div></div>`;}
   if(f.type==='file')return `${W}${lab}<input type="file" id="${id}" data-mfile="${f.k}" accept="image/*,application/pdf">${val?`<span class="hint">✓ Archivo cargado</span>`:''}</div>`;
   return `${W}${lab}<input type="${f.type||'text'}" id="${id}" data-mf="${f.k}" value="${esc(val)}" autocomplete="off" ${f.ro?'readonly':''} ${f.type==='number'?'step="any" min="0" inputmode="decimal"':''}>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
 }
@@ -1477,10 +1485,10 @@ const ACT={
       fields:[{k:'nombre',label:'Nombre completo',req:1},{k:'usuario',label:'Usuario (nombre corto)',req:1},{k:'email',label:BACKEND.modo==='supabase'?'Correo con el que ingresa':'Correo (opcional)',type:'email',req:BACKEND.modo==='supabase'&&!u,ro:BACKEND.modo==='supabase'&&!!u},{k:'clave',label:u?(BACKEND.modo==='supabase'?'(la contraseña se cambia desde Supabase Auth)':'Nueva contraseña (opcional)'):(BACKEND.modo==='supabase'?'Contraseña inicial (mínimo 8 caracteres)':'Contraseña'),type:'password',req:!u,ro:BACKEND.modo==='supabase'&&!!u},
         {k:'rol',label:'Rol',type:'select',req:1,opts:Object.keys(ROLES).map(r=>({id:r,nombre:ROLES[r].label}))},
         {k:'clientes',label:'Clientes asignados (encargado de proyecto)',type:'checks',opts:DB.clientes.map(c=>({id:c.id,nombre:c.nombre}))},
-        {k:'proyectos',label:'Proyectos asignados (si eliges alguno, solo verá los viajes y rutas de esos proyectos)',type:'checks',opts:CAT.proyectos.map(p=>({id:p,nombre:p}))},
+        {k:'proyectos',label:'Proyectos asignados (si eliges alguno, solo verá los viajes y rutas de esos proyectos)',type:'checks',optsFn:x=>{const set=new Set();(x.clientes||[]).forEach(c=>(PROYECTOS_X[c]||[]).forEach(p=>set.add(p)));const list=set.size?[...set]:CAT.proyectos;return list.map(p=>({id:p,nombre:p}));}},
         {k:'activo',label:'Usuario activo',type:'check'}],
       data:u?{nombre:u.nombre,usuario:u.usuario,email:u.email||'',clave:'',rol:u.rol,clientes:clientesAsig(u).slice(),proyectos:(u.proyectos||[]).slice(),activo:u.activo}:{nombre:'',usuario:'',email:'',clave:'',rol:'ENCARGADO',clientes:[],proyectos:[],activo:true},
-      ok:'GUARDAR',act:'usuarioSave',id:d.id});
+      rerender:['clientes'],ok:'GUARDAR',act:'usuarioSave',id:d.id});
   },
   async usuarioSave(d){const m=S.modal.data;const r=await run(()=>API.guardarUsuario(S.user.id,{id:d.id||'',nombre:m.nombre,usuario:m.usuario,email:m.email,clave:m.clave,rol:m.rol,clientes:m.clientes,proyectos:m.proyectos,activo:m.activo}),'Usuario guardado.',true);if(r.ok)afterWrite();},
   async verificarAud(){try{S.verif=await API.verificarAuditoria(S.user.id);}catch(e){toast(e.message,'err');}render();}
@@ -1522,7 +1530,9 @@ app.addEventListener('change',async e=>{
   if(t.dataset.mf&&S.modal){const k=t.dataset.mf;S.modal.data[k]=t.type==='checkbox'?t.checked:t.value;
     if(S.modal.rerender&&S.modal.rerender.includes(k)){if(k==='cliente'){S.modal.data.proyecto='';S.modal.data.rutaId='';S.modal.data.destinoId='';}if(k==='proyecto')S.modal.data.rutaId='';render();return;}
     updateLive();return;}
-  if(t.dataset.mfm&&S.modal){const k=t.dataset.mfm,a=S.modal.data[k]||[];S.modal.data[k]=t.checked?[...new Set([...a,t.value])]:a.filter(x=>x!==t.value);return;}
+  if(t.dataset.mfm&&S.modal){const k=t.dataset.mfm,a=S.modal.data[k]||[];S.modal.data[k]=t.checked?[...new Set([...a,t.value])]:a.filter(x=>x!==t.value);
+    if(S.modal.rerender&&S.modal.rerender.includes(k)){if(k==='clientes'&&S.modal.data.proyectos){const valid=new Set();(S.modal.data.clientes||[]).forEach(c=>(PROYECTOS_X[c]||[]).forEach(p=>valid.add(p)));if(valid.size)S.modal.data.proyectos=S.modal.data.proyectos.filter(p=>valid.has(p));}render();return;}
+    return;}
   if(t.dataset.sel){const id=t.dataset.sel;S.sel=t.checked?[...new Set([...S.sel,id])]:S.sel.filter(x=>x!==id);$('#vb').innerHTML=BODY.comercial();return;}
   if(t.dataset.selall){
     const pend=comFiltered().filter(x=>x.estado==='ACEPTADO');
