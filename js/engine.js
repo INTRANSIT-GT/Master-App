@@ -32,11 +32,11 @@ DESTINOS.push({id:'D-K1',nombre:'Distribuidora Central · Mixco',proyecto:'COCAC
 const ESTADOS={
   PLANIFICADO:{l:'Planificado',c:'#8C9BAB'},
   EN_RUTA:{l:'En ruta',c:'#0088FF'},
-  ENTREGADO:{l:'Entregado',c:'#36B37E'},
+  ENTREGADO:{l:'Entregado',c:'#00B8D9'},
   LIQUIDADO:{l:'Liquidado',c:'#00875A'},
   ACEPTADO:{l:'Aceptado',c:'#36B37E'},
   RECHAZADO:{l:'Rechazado',c:'#FF5630'},
-  FACTURADO:{l:'Facturado',c:'#172B4D'},
+  FACTURADO:{l:'Facturado',c:'#038F77'},
   COBRADO:{l:'Cobrado',c:'#053B2C'}
 };
 /* Todo lo que ya terminó su recorrido */

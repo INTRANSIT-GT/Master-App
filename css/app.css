@@ -328,12 +328,15 @@ tr.dim td{color:var(--mute)}
 /* Estado del proceso (una sola tabla: ESTADOS en engine.js) */
 .st-PLANIFICADO{--tone:#8C9BAB}
 .st-EN_RUTA{--tone:#0088FF}
-.st-ENTREGADO{--tone:#36B37E}
+.st-ENTREGADO{--tone:#00B8D9}
 .st-LIQUIDADO{--tone:#00875A}
 .st-ACEPTADO{--tone:#36B37E}
 .st-RECHAZADO{--tone:#FF5630}
-.st-FACTURADO{--tone:#172B4D}
+.st-FACTURADO{--tone:#038F77}
 .st-COBRADO{--tone:#053B2C}
+/* Facturado: relleno sólido con letras blancas (marca cierre/archivado) */
+.badge.st-FACTURADO,.est.st-FACTURADO,.stc.st-FACTURADO{background:#038F77;border-color:#038F77;color:#fff}
+.badge.st-FACTURADO::before,.est.st-FACTURADO::before,.stc.st-FACTURADO::before{background:#fff}
 .bell{position:relative;background:none;border:1px solid var(--line);border-radius:999px;width:44px;height:44px;display:grid;place-items:center;color:var(--ink)}
 .bcount{position:absolute;top:-4px;right:-4px;background:#EC220F;color:#fff;border-radius:999px;font-size:11px;font-weight:700;min-width:18px;height:18px;display:grid;place-items:center;padding:0 4px}
 .zoomwrap{max-height:68vh;overflow:auto;border-radius:8px;background:#f2f2f2}
