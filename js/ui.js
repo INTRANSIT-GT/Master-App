@@ -43,7 +43,11 @@ const badge=e=>{
 };
 const rutaChip=e=>chip(TONO_RUTA[e]||'neutral',{PENDIENTE:'PENDIENTE',EN_TARIFACION:'EN TARIFACIÓN',PENDIENTE_APROBACION:'PENDIENTE APROBACIÓN',ACTIVA:'ACTIVA',RECHAZADA:'RECHAZADA'}[e]||e);
 const vroute=j=>`<div class="vroute"><span class="d o"></span><span>${esc(j.origen)}</span><span class="d t"></span><span>${esc(j.destino)}</span></div>`;
-const src=s=>`<span class="src">${s}</span>`;
+/* ---- Perfil «Encargado de proyecto»: los ajustes de esta versión SOLO se aplican a este rol; los demás perfiles ven exactamente lo mismo que antes ---- */
+const esEnc=()=>!!S.user&&S.user.rol==='ENCARGADO';
+const lblT=l=>esEnc()?String(l).replace(/ (CP|CG)$/,''):l;                                   /* «Ingreso a planta CP» → «Ingreso a planta» · «Ingreso a bodega CG» → «Ingreso a bodega» */
+const sinPerfil=m=>esEnc()?String(m).replace(/Tu perfil \([^)]*\) no puede /,'No puedes ').replace(/\btu perfil\b/gi,'tu usuario'):m;
+const src=s=>(esEnc()&&(s==='CATALOGO'||s==='PERFIL'))?'':`<span class="src">${s}</span>`;
 const pageHead=(t,sub,right)=>`<div class="pagehead"><div><h1>${t}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div>${right?`<div class="right">${right}</div>`:''}</div>`;
 const empty=(t,s)=>`<div class="empty"><b>${t}</b>${s||''}</div>`;
 function tabs(key,list,active,ts){
@@ -74,7 +78,7 @@ function statBar(ts){
 const matchE=(t,f)=>!f||(f==='FIN'?FIN.includes(t.estado):t.estado===f);
 function histHTML(evs){
   if(!evs.length)return `<div class="mute">Sin eventos registrados.</div>`;
-  return `<ul class="tl">${evs.map(h=>`<li><b>${esc(h.accion)}</b>${h.campo?` <span class="mute">· ${esc(h.campo)}</span>`:''}${h.campo&&(h.anterior||h.nuevo)?`<div>${esc(h.anterior||'(vacío)')} → <b>${esc(h.nuevo||'(vacío)')}</b></div>`:''}<div class="by">${esc(h.por)} · ${esc(rolL(h.rol))} · ${fmtDT(h.en)}</div>${h.motivo?`<div class="nt">“${esc(h.motivo)}”</div>`:''}${h.ref?`<div class="by">Ref. ${esc(h.ref)}</div>`:''}</li>`).join('')}</ul>`;
+  return `<ul class="tl">${evs.map(h=>`<li><b>${esc(h.accion)}</b>${h.campo?` <span class="mute">· ${esc(lblT(h.campo))}</span>`:''}${h.campo&&(h.anterior||h.nuevo)?`<div>${esc(h.anterior||'(vacío)')} → <b>${esc(h.nuevo||'(vacío)')}</b></div>`:''}<div class="by">${esc(h.por)} · ${esc(rolL(h.rol))} · ${fmtDT(h.en)}</div>${h.motivo?`<div class="nt">“${esc(h.motivo)}”</div>`:''}${h.ref?`<div class="by">Ref. ${esc(h.ref)}</div>`:''}</li>`).join('')}</ul>`;
 }
 
 /* ---------- Notas de arquitectura (Power Apps) ---------- */
@@ -151,14 +155,14 @@ VIEWS.inicio=()=>{
 };
 
 /* ---- Selector desplegable con búsqueda (listas largas de clientes/proyectos) ---- */
-const CBOPTS={};
+const CBOPTS={},CBVAL={};
 function cbListHTML(flt){
-  const opts=CBOPTS[flt]||[],q=(S.cbq||'').toLowerCase(),cur=S[flt];
+  const opts=CBOPTS[flt]||[],q=(S.cbq||'').toLowerCase(),cur=String(flt).startsWith('m:')?CBVAL[flt]:S[flt];
   const list=opts.filter(o=>!q||String(o.nombre).toLowerCase().includes(q));
   return list.length?list.map(o=>`<button type="button" role="option" data-act="cbPick" data-k="${flt}" data-v="${esc(o.id)}" aria-selected="${o.id===cur}">${esc(o.nombre)}</button>`).join(''):'<div class="cb-empty">Sin resultados</div>';
 }
 function comboHTML(flt,value,opts,ph){
-  CBOPTS[flt]=opts;
+  CBOPTS[flt]=opts;if(String(flt).startsWith('m:'))CBVAL[flt]=value;
   const cur=opts.find(o=>o.id===value),open=S.cb===flt;
   return `<div class="cb" data-cb="${flt}">
     <button type="button" class="cb-btn" data-act="cbToggle" data-k="${flt}" aria-haspopup="listbox" aria-expanded="${open}"><span>${esc(cur?cur.nombre:(ph||'Todos'))}</span><span class="cb-c">▾</span></button>
@@ -202,16 +206,75 @@ VIEWS.viajes=()=>{
 const curModel=()=>S.edit?S.edit.data:S.form;
 function initForm(){
   const d=new Date();d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
-    const m={proyecto:(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',
+    const m={proyecto:esEnc()?(clientesAsig(S.user).length===1?clientesAsig(S.user)[0]:''):(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',
     fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),estatus:'EN ESPERA',pilotoId:'',rutaId:'',rutaRef:'',noDocRetorno:'',qViaticos:'',savedId:null,err:''};
   TKEYS.forEach(k=>m[k]='');
-  const pc=PROYECTOS_X[m.proyecto];if(pc&&pc.length===1)m.proyectoCat=pc[0];
+  const pc=esEnc()?(m.proyecto?proyectosAsig(S.user,m.proyecto):[]):PROYECTOS_X[m.proyecto];if(pc&&pc.length===1)m.proyectoCat=pc[0];
   return m;
 }
 function toModel(t){
   const m={proyecto:t.proyecto,fechaPlanD:planD(t),fechaPlanT:planT(t),err:''};
   ['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','estatus','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
   return m;
+}
+
+/* ---- Encargado de proyecto · Proyecto y Ruta del formulario: solo datos reales, sin repetidos, con mensajes claros ---- */
+const FALTA='__falta__';
+const normTxt=x=>String(x==null?'':x).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+const rutaEtiqueta=r=>String(r.nombre||'').trim()||String(r.codigo||'').trim()||r.id;
+function catalogoFalla(){
+  if(BACKEND.modo==='supabase'){
+    if(!navigator.onLine)return 'Sin conexión con el servidor: no se pueden cargar los proyectos ni las rutas.';
+    if(!BACKEND.conectado)return 'No se pudieron cargar los datos desde el servidor.';
+  }
+  return '';
+}
+const REINTENTAR=' <button type="button" class="linkbtn" data-act="reintentarCatalogos">Reintentar</button>';
+const claveRuta=r=>r.cliente+'|'+r.proyecto+'|'+normTxt(rutaEtiqueta(r));
+/* Rutas activas que el usuario puede elegir. Se puede empezar por la ruta; al elegirla se completan cliente y proyecto.
+   Cada ruta se muestra UNA vez (los registros repetidos se agrupan sin borrar nada) y conserva sus combinaciones origen/destino. */
+function rutasGrupos(M){
+  const A=S.user,clis=M.proyecto?[M.proyecto]:clientesAsig(A);
+  const rs=catalogoFalla()?[]:DB.rutas.filter(r=>r.estado==='ACTIVA'&&clis.includes(r.cliente)&&(!M.proyectoCat||r.proyecto===M.proyectoCat)&&rutaVisible(A,r));
+  const actual=(M.rutaId&&M.rutaId!=='NO_ASIGNADA')?DB.rutas.find(x=>x.id===M.rutaId):null;
+  const filas=(actual&&!rs.some(r=>r.id===actual.id))?[...rs,actual]:rs;
+  const mapa=new Map();
+  filas.forEach(r=>{const k=claveRuta(r);if(!mapa.has(k))mapa.set(k,{key:k,cliente:r.cliente,proyecto:r.proyecto,nombre:rutaEtiqueta(r),filas:[]});mapa.get(k).filas.push(r);});
+  const grupos=[...mapa.values()].map(g=>{
+    const vistos=new Map();
+    g.filas.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id))).forEach(r=>{const o=r.origenId||FALTA,d=r.destinoId||FALTA;if(!vistos.has(o+'|'+d))vistos.set(o+'|'+d,{o,d,id:r.id});});
+    return {key:g.key,cliente:g.cliente,proyecto:g.proyecto,nombre:g.nombre,combos:[...vistos.values()]};
+  });
+  const veces={};grupos.forEach(g=>{const n=normTxt(g.nombre);veces[n]=(veces[n]||0)+1;});
+  grupos.forEach(g=>{g.etiqueta=veces[normTxt(g.nombre)]>1?`${g.nombre} · ${(PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente} / ${g.proyecto}`:g.nombre;});
+  return grupos.sort((a,b)=>a.etiqueta.localeCompare(b.etiqueta,'es'));
+}
+function estadoRuta(M){
+  const grupos=rutasGrupos(M),actual=(M.rutaId&&M.rutaId!=='NO_ASIGNADA')?DB.rutas.find(x=>x.id===M.rutaId):null;
+  const key=M.rutaGrupo||(actual?claveRuta(actual):''),g=grupos.find(x=>x.key===key)||null;
+  if(!g)return {grupos,g:null};
+  const os=[...new Set(g.combos.map(c=>c.o))];
+  let o=(M.rutaO&&os.includes(M.rutaO))?M.rutaO:(os.length===1?os[0]:'');
+  if(!o&&actual){const c=g.combos.find(x=>x.id===actual.id);if(c)o=c.o;}
+  const ds=[...new Set(g.combos.filter(c=>!o||c.o===o).map(c=>c.d))];
+  let d=(M.rutaD&&ds.includes(M.rutaD))?M.rutaD:(ds.length===1?ds[0]:'');
+  if(!d&&actual){const c=g.combos.find(x=>x.id===actual.id&&x.o===o);if(c)d=c.d;}
+  const combo=(o&&d)?(g.combos.find(c=>c.o===o&&c.d===d)||null):null;
+  return {grupos,g,os,o,ds,d,combo};
+}
+function resolverRuta(M){const e=estadoRuta(M);M.rutaId=e.combo?e.combo.id:'';}
+function aplicarCampo(M,k,v){
+  M[k]=v;if('err' in M)M.err='';
+  const limpiaRuta=()=>{M.rutaId='';M.rutaRef='';M.rutaGrupo='';M.rutaO='';M.rutaD='';};
+  if(k==='proyecto'){M.proyectoCat='';M.pilotoId='';limpiaRuta();const pc=M.proyecto?proyectosAsig(S.user,M.proyecto):[];if(pc.length===1)M.proyectoCat=pc[0];}
+  if(k==='proyectoCat')limpiaRuta();
+  if(k==='rutaGrupo'){
+    M.rutaO='';M.rutaD='';
+    if(v==='NO_ASIGNADA')M.rutaId='NO_ASIGNADA';
+    else{M.rutaRef='';const g=rutasGrupos(M).find(x=>x.key===v);if(g){if(M.proyecto!==g.cliente){M.proyecto=g.cliente;M.pilotoId='';}M.proyectoCat=g.proyecto;}resolverRuta(M);}   /* cliente y proyecto salen de la ruta elegida */
+  }
+  if(k==='rutaO'||k==='rutaD')resolverRuta(M);
+  if(k==='pilotoId'&&v)S.flash=true;
 }
 function autoCard(M){
   const P=PILOTOS.find(p=>p.id===M.pilotoId),U=P&&P.unidad?FLOTA.find(x=>x.unidad===P.unidad):null;
@@ -235,15 +298,22 @@ function fieldsHTML(M,groups,dis){
   const txt=(k,l,o={})=>`<div class="fgroup">${lab(k,l,o.req,o.src)}<input type="${o.type||'text'}" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${o.num?'inputmode="decimal" min="0"':''} ${d}>${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;
   const sel=(k,l,arr,o={})=>{const op=arr.map(x=>typeof x==='string'?{id:x,nombre:x}:x);
     return `<div class="fgroup">${lab(k,l,o.req,o.src)}<select id="m_${k}" data-m="${k}" ${d||o.dis?'disabled':''}><option value="">${o.ph||'Selecciona'}</option>${op.map(x=>`<option value="${esc(x.id)}" ${x.id===M[k]?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select>${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;};
+  const fcombo=(k,l,opts,val,o={})=>`<div class="fgroup">${lab(k,l,o.req,o.src)}${(d||o.dis)?`<div class="cb"><button type="button" class="cb-btn" disabled><span>${esc(o.ph||'Selecciona')}</span><span class="cb-c">▾</span></button></div>`:comboHTML('m:'+k,val,opts,o.ph||'Selecciona')}${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;
   const pr=PROYECTOS.find(p=>p.id===M.proyecto);
   let h='';
   if(has('cliente')){
     const clis=clientesAsig(S.user),locked=S.edit||clis.length===1;
-    const cli=locked?`<div class="locked">${icon('lock',16)}<span class="pchip sm">${esc(pr?pr.nombre:'—')}</span><span>${esc(pr?pr.cliente:'')}</span><span class="mute" style="margin-left:auto;font-size:12.5px">${S.edit?'no editable':'según tu perfil'}</span></div>`
+    const cli=locked?`<div class="locked">${icon('lock',16)}<span class="pchip sm">${esc(pr?pr.nombre:'—')}</span><span>${esc(pr?pr.cliente:'')}</span><span class="mute" style="margin-left:auto;font-size:12.5px">${S.edit?'no editable':(esEnc()?'':'según tu perfil')}</span></div>`
       :`<select id="m_proyecto" data-m="proyecto" ${d}><option value="">Selecciona el cliente</option>${PROYECTOS.filter(p=>clis.includes(p.id)&&p.activo!==false).map(p=>`<option value="${p.id}" ${p.id===M.proyecto?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>`;
     h+=`<div class="card fsec"><h3>Cliente y datos del viaje</h3>
       <div class="fgroup"><label>Cliente ${src('PERFIL')}</label>${cli}</div>
-      <div class="row2">${sel('proyectoCat','Proyecto',PROYECTOS_X[M.proyecto]||[],{req:1,src:'CATALOGO',dis:!ready,ph:ready?'Selecciona el proyecto':'Primero elige el cliente'})}${txt('shipment','No. de Transporte')}</div>
+      <div class="row2">${esEnc()?(()=>{
+        const falla=catalogoFalla(),aut=ready?proyectosAsig(S.user,M.proyecto):[],po=aut.slice();
+        if(M.proyectoCat&&!po.includes(M.proyectoCat))po.push(M.proyectoCat);
+        const sin=ready&&!falla&&!po.length;
+        return sel('proyectoCat','Proyecto',po.map(x=>({id:x,nombre:x})),{req:1,dis:!ready||!!falla||sin,ph:!ready?'Primero elige el cliente':(falla?'No disponible':(sin?'Sin proyectos disponibles':'Selecciona el proyecto')),
+          hint:falla?esc(falla)+REINTENTAR:(sin?'Este cliente no tiene proyectos registrados o autorizados para tu usuario. Pide a la administradora que los agregue en Clientes.':'')});
+      })():sel('proyectoCat','Proyecto',PROYECTOS_X[M.proyecto]||[],{req:1,src:'CATALOGO',dis:!ready,ph:ready?'Selecciona el proyecto':'Primero elige el cliente'})}${txt('shipment','No. de Transporte')}</div>
       <div class="row2">${txt('noViaje','No. de viaje')}${sel('opl','OPL',CAT.opl,{src:'CATALOGO'})}</div>
       <div class="row2">${sel('tipoViaje','Tipo de viaje',CAT.tipoViaje,{src:'CATALOGO'})}${sel('tipoCarga','Tipo de carga',CAT.tipoCarga,{src:'CATALOGO'})}</div>
       <div class="row2">${txt('placaArrastre','Placa del equipo de arrastre')}${txt('noCarga','No. de carga',{type:'number',num:1,hint:'Cantidad, según el tipo de carga'})}</div>
@@ -260,7 +330,7 @@ function fieldsHTML(M,groups,dis){
       ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?'Selecciona un piloto':'Primero elige el cliente'})}
       ${autoCard(M)}</div>`;
   }
-  if(has('ruta')){
+  if(has('ruta')&&!esEnc()){
     const rs=(ready&&M.proyectoCat)?API.rutasParaViaje(S.user.id,M.proyecto,M.proyectoCat):[];
     const pend=M.rutaId==='NO_ASIGNADA',R=(!pend&&M.rutaId)?DB.rutas.find(x=>x.id===M.rutaId):null;
     const opts=rs.map(r=>({id:r.id,nombre:`${r.codigo} · ${nombreOrigen(r.origenId)} → ${nombreDestino(r.destinoId)}`})).concat(S.edit||!hp('rutas_solicitar')?[]:[{id:'NO_ASIGNADA',nombre:'NUEVA RUTA · requiere validación, tarifa y doble aprobación'}]);
@@ -269,9 +339,31 @@ function fieldsHTML(M,groups,dis){
       ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
       <div class="${R?'auto'+(S.flash?' flash':''):'auto empty2'}">${R?`<div class="ah">${icon('check',18)} Origen y destino tomados de la ruta · no se escriben a mano</div><div class="cells"><div class="cell"><small>Código ${src('RUTAS')}</small><b>${esc(R.codigo)}</b></div><div class="cell"><small>Origen ${src('RUTAS')}</small><b>${esc(nombreOrigen(R.origenId))}</b></div><div class="cell"><small>Destino ${src('RUTAS')}</small><b>${esc(nombreDestino(R.destinoId))}</b></div></div>`:(pend?'Origen y destino: pendientes de asignar.':'Elige la ruta: el origen y el destino se completan solos.')}</div></div>`;
   }
+  if(has('ruta')&&esEnc()){
+    const falla=catalogoFalla(),listo=!falla;
+    const pend=M.rutaId==='NO_ASIGNADA'||M.rutaGrupo==='NO_ASIGNADA',R=estadoRuta(M),puedeNueva=!S.edit&&hp('rutas_solicitar'),elegido=ready&&!!M.proyectoCat,puedeNuevaAqui=puedeNueva&&elegido;
+    const opts=R.grupos.map(g=>({id:g.key,nombre:g.etiqueta})).concat(puedeNuevaAqui?[{id:'NO_ASIGNADA',nombre:'NUEVA RUTA · requiere validación, tarifa y doble aprobación'}]:[]);
+    const val=pend?'NO_ASIGNADA':(R.g?R.g.key:''),sinRutas=listo&&!R.grupos.length;
+    const nomO=id=>id===FALTA?'Sin registrar':nombreOrigen(id),nomD=id=>id===FALTA?'Sin registrar':nombreDestino(id);
+    const campoOD=(rot,vals,cur,key,fn)=>{
+      if(vals.length>1)return `<div class="fgroup"><label for="m_${key}">${rot} <span class="mute">*</span> ${src('RUTAS')}</label><select id="m_${key}" data-m="${key}" ${d?'disabled':''}><option value="">Selecciona ${rot==='Origen'?'el origen':'el destino'}</option>${vals.map(x=>`<option value="${esc(x)}" ${x===cur?'selected':''}>${esc(fn(x))}</option>`).join('')}</select><span class="hint">Esta ruta tiene ${vals.length} opciones de ${rot.toLowerCase()}.</span></div>`;
+      const v=vals[0];
+      return `<div class="fgroup"><label>${rot} ${src('RUTAS')}</label><div class="locked">${v===FALTA?`<span class="warnl"><b>No registrado en la ruta</b></span>`:esc(fn(v))}</div>${v===FALTA?`<span class="hint">Falta este dato en el registro de la ruta; no se inventa. Avisa a Comercial o a la administradora para completarlo.</span>`:''}</div>`;
+    };
+    let od;
+    if(pend)od=`<div class="auto empty2">Origen y destino: pendientes de asignar.</div>`;
+    else if(R.g)od=`<div class="row2">${campoOD('Origen',R.os,R.o,'rutaO',nomO)}${campoOD('Destino',R.ds,R.d,'rutaD',nomD)}</div>`;
+    else od=`<div class="auto empty2">Elige la ruta: el origen y el destino se completan solos.</div>`;
+    h+=`<div class="card fsec"><h3>Ruta</h3>
+      ${falla?`<div class="alertbox" role="alert" style="margin-bottom:10px"><b>${esc(falla)}</b>${REINTENTAR}</div>`:''}
+      ${fcombo('rutaGrupo','Ruta',opts,val,{req:1,src:'RUTAS',dis:!listo,ph:listo?'Selecciona la ruta':'No disponible',hint:(listo&&R.grupos.length&&!elegido&&!R.g)?'Puedes elegir la ruta primero: el cliente y el proyecto se completan solos.':''})}
+      ${sinRutas?`<div class="alertbox info" style="margin-bottom:10px">${elegido?`No hay rutas activas para ${esc(M.proyectoCat)}.${puedeNuevaAqui?' Puedes solicitar una nueva con la opción «NUEVA RUTA».':' Pide a Comercial que active una ruta para este proyecto.'}`:'No hay rutas activas disponibles para tu usuario. Pide a Comercial que active una ruta, o elige primero el cliente y el proyecto para solicitar una nueva.'}</div>`:''}
+      ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
+      ${od}</div>`;
+  }
   if(has('tiempos')){
     h+=`<div class="card fsec"><h3>Horarios del viaje</h3><div class="lead">Llena cada hora cuando ocurra: toca “Ahora” o escríbela. Puedes dejarlas vacías al registrar el viaje y completarlas después. Los tiempos de abajo se calculan solos.</div>
-      <div class="tgrid">${CAMPOS_TIEMPO.map(([k,l])=>`<div class="fgroup"><label for="m_${k}">${l}</label><div class="trow"><input type="datetime-local" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${d}><button type="button" class="btn sm" data-act="ahora" data-k="${k}" ${d}>Ahora</button><button type="button" class="btn ghost sm" data-act="limpiar" data-k="${k}" aria-label="Borrar ${l}" ${d}>×</button></div></div>`).join('')}</div>
+      <div class="tgrid">${CAMPOS_TIEMPO.map(([k,l])=>`<div class="fgroup"><label for="m_${k}">${lblT(l)}</label><div class="trow"><input type="datetime-local" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${d}><button type="button" class="btn sm" data-act="ahora" data-k="${k}" ${d}>Ahora</button><button type="button" class="btn ghost sm" data-act="limpiar" data-k="${k}" aria-label="Borrar ${lblT(l)}" ${d}>×</button></div></div>`).join('')}</div>
       <h3 style="margin-top:8px;font-size:14px">Tiempos calculados</h3>${dursHTML(M)}</div>`;
   }
   if(has('otros')){
@@ -356,7 +448,7 @@ async function statusSave(id,el){
 const rutaHTML=t=>{
   const r=DB.rutas.find(x=>x.id===t.rutaId);
   if(!r)return '<span class="mute">—</span>';
-  if(['EN_TARIFACION','PENDIENTE_APROBACION','ACTIVA'].includes(r.estado))return `${rutaChip(r.estado)} ${esc(r.codigo)} · ${esc(nombreOrigen(r.origenId))} → ${esc(nombreDestino(r.destinoId))}`;
+  if(['EN_TARIFACION','PENDIENTE_APROBACION','ACTIVA'].includes(r.estado))return `${rutaChip(r.estado)} ${esEnc()?'':esc(r.codigo)+' · '}${esc(nombreOrigen(r.origenId))} → ${esc(nombreDestino(r.destinoId))}`;
   return `${rutaChip(r.estado)} <span class="mute">${esc(r.nombre)}</span>`;
 };
 function liqsOf(t){try{return API.liquidaciones(S.user.id,t.id);}catch(e){return [];}}
@@ -450,7 +542,7 @@ function editView(t){
   const E=S.edit,soloT=!canEditD(t);
   return `<div class="inner form" style="max-width:860px">
     <button class="btn ghost sm" data-act="editCancel" style="margin-bottom:12px">${icon('back',16)} Cancelar edición</button>
-    ${pageHead('Editar viaje #'+t.id,soloT?'Puedes actualizar la fecha plan y los horarios. El estado, el estatus y los demás datos son de solo lectura para tu perfil.':'Actualiza datos, fechas y horarios del viaje.')}
+    ${pageHead('Editar viaje #'+t.id,soloT?'Puedes actualizar la fecha plan y los horarios. El estado, el estatus y los demás datos son de solo lectura'+(esEnc()?'.':' para tu perfil.'):'Actualiza datos, fechas y horarios del viaje.')}
     ${E.data.err?`<div class="alertbox" style="margin-bottom:16px" role="alert"><b>${esc(E.data.err)}</b></div>`:''}
     ${fieldsHTML(E.data,editGroups(t),false)}
     <div class="card fsec"><h3>Motivo del cambio</h3><div class="fgroup"><label for="m_motivo">Motivo (opcional; queda en el historial junto al valor anterior)</label><textarea id="m_motivo" data-motivo="1" style="min-height:70px">${esc(E.motivo||'')}</textarea></div></div>
@@ -528,7 +620,7 @@ VIEWS.detalle=()=>{
         ${t.estado==='EN_CURSO'?kvr('Tiempo transcurrido',`<span class="elapsed" data-since="${since(t)}">${elapsed(since(t))}</span>`):''}
         ${kvr('No. doc retorno',v(t.noDocRetorno))}${'qViaticos' in t?kvr('Q viáticos',t.qViaticos!==''&&t.qViaticos!=null?'Q '+esc(t.qViaticos):dash):''}`;
   const horarios=rev?'':`<div class="card" style="grid-column:1/-1"><h3>Horarios del viaje</h3>
-        <dl class="kv" style="grid-template-columns:repeat(2,minmax(0,170px) minmax(0,1fr));gap:8px 14px">${CAMPOS_TIEMPO.map(([k,l])=>kvr(l,t[k]?fmtL(t[k]):dash)).join('')}</dl>
+        <dl class="kv" style="grid-template-columns:repeat(2,minmax(0,170px) minmax(0,1fr));gap:8px 14px">${CAMPOS_TIEMPO.map(([k,l])=>kvr(lblT(l),t[k]?fmtL(t[k]):dash)).join('')}</dl>
         ${hp('comercial_agrupar')?'<div class="mute" style="margin-top:8px;font-size:13px">Datos del viaje: solo lectura para tu perfil.</div>':`<h3 style="margin:14px 0 0;font-size:14px">Tiempos calculados</h3><div id="durs_box">${dursHTML(t)}</div>`}</div>`;
   return `<div class="inner">
     <button class="btn ghost sm" data-act="back" style="margin-bottom:12px">${icon('back',16)} ${esc(fromLbl)}</button>
@@ -546,7 +638,7 @@ VIEWS.detalle=()=>{
       ${verLiq?`<div class="card" style="grid-column:1/-1"><h3>Liquidación · historial de envíos</h3>${liqHTML}</div>`:''}
        ${hp('comercial_ver')&&(agrs.length||t.estado==='ACEPTADO')?`<div class="card" style="grid-column:1/-1"><h3>Facturación</h3>${agrs.length?`<div class="tablewrap scrollx"><table><thead><tr><th>ID de agrupación</th><th>Estado</th><th>N° de factura</th><th>Viajes asociados</th><th>Creada por</th></tr></thead><tbody>${agrs.map(g=>`<tr><td><b>${g.id}</b></td><td>${g.estado==='ACTIVA'?`<span class="badge st-FACTURADO">${ETAPA_L[etapaAgr(g)]}</span>`:'<span class="badge st-RECHAZADO">Anulada</span>'}</td><td>${g.numeroFactura?esc(g.numeroFactura):'<span class="mute">pendiente</span>'}</td><td>${g.viajeIds.map(i=>'#'+i).join(', ')}</td><td>${esc(g.creadoPor)} · ${fmtDT(g.creadoEn)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="mute">Aún sin factura preparada.</div>'}</div>`:''}
       ${sinHist?'':`<div class="card" style="grid-column:1/-1"><h3>${rev?'Decisiones e historial':'Trazabilidad e historial'}</h3>${rev?'':`<dl class="kv">${tr('Creó',t.creadoPor,t.creadoEn)}${tr('Inició',t.iniciadoPor,t.iniciadoEn)}${tr('Finalizó',t.finalizadoPor,t.finalizadoEn)}${tr('Envió liquidación',t.enviadoPor,t.enviadoEn)}${tr('Revisó',t.revisadoPor,t.revisadoEn)}${tr('Aprobó',t.aprobadoPor,t.aprobadoEn)}${t.editadoPor?tr('Última edición',t.editadoPor,t.editadoEn):''}</dl>`}
-        ${hist?`<details style="margin-top:12px" ${rev?'':'open'}><summary>Historial (${hist.length} eventos)</summary><div style="margin-top:10px">${histHTML(hist)}</div></details>`:'<div class="mute" style="margin-top:10px">Tu perfil no tiene acceso al historial completo.</div>'}</div>`}
+        ${hist?`<details style="margin-top:12px" ${rev?'':'open'}><summary>Historial (${hist.length} eventos)</summary><div style="margin-top:10px">${histHTML(hist)}</div></details>`:'<div class="mute" style="margin-top:10px">'+(esEnc()?'No tienes':'Tu perfil no tiene')+' acceso al historial completo.</div>'}</div>`}
     </div></div>`;
 };
 
@@ -817,8 +909,8 @@ BODY.rutas=()=>{
     &&(!fr||(r.codigo+' '+r.nombre).toLowerCase().includes(fr))&&(!fo||String(txtO(r)).toLowerCase().includes(fo))&&(!fd||String(txtD(r)).toLowerCase().includes(fd))
     &&(!q||(r.codigo+' '+r.nombre+' '+r.cliente+' '+r.proyecto+' '+txtO(r)+' '+txtD(r)).toLowerCase().includes(q))).sort((a,b)=>({PENDIENTE:0,EN_TARIFACION:1,PENDIENTE_APROBACION:2,ACTIVA:3,RECHAZADA:4}[a.estado]-{PENDIENTE:0,EN_TARIFACION:1,PENDIENTE_APROBACION:2,ACTIVA:3,RECHAZADA:4}[b.estado])||a.cliente.localeCompare(b.cliente)||a.codigo.localeCompare(b.codigo));
   const val=hp('rutas_validar')||hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte');
-  return rows.length?`<div class="mute" style="margin-bottom:8px">${rows.length} ${rows.length===1?'ruta':'rutas'}</div><div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr><th>Código</th><th>Ruta</th><th>Cliente</th><th>Proyecto</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Solicitada por · fecha</th><th>Validada por · fecha</th><th>Viajes</th>${val?'<th>Acciones</th>':''}</tr></thead><tbody>
-  ${rows.map(r=>`<tr class="${r.estado==='ACTIVA'?'':'warnrow'}"><td>${r.codigo?`<b>${esc(r.codigo)}</b>`:'<span class="mute">sin código</span>'}</td><td style="white-space:normal;min-width:220px">${esc(r.nombre)}</td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)}</td><td>${esc(r.proyecto)}</td>
+  return rows.length?`<div class="mute" style="margin-bottom:8px">${rows.length} ${rows.length===1?'ruta':'rutas'}</div><div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr>${esEnc()?'':'<th>Código</th>'}<th>Ruta</th><th>Cliente</th><th>Proyecto</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Solicitada por · fecha</th><th>Validada por · fecha</th><th>Viajes</th>${val?'<th>Acciones</th>':''}</tr></thead><tbody>
+  ${rows.map(r=>`<tr class="${r.estado==='ACTIVA'?'':'warnrow'}">${esEnc()?'':`<td>${r.codigo?`<b>${esc(r.codigo)}</b>`:'<span class="mute">sin código</span>'}</td>`}<td style="white-space:normal;min-width:220px">${esc(r.nombre)}</td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)}</td><td>${esc(r.proyecto)}</td>
   <td style="white-space:normal;min-width:150px">${r.origenId?esc(nombreOrigen(r.origenId)):(r.origenProp?`${esc(r.origenProp)} <span class="mute">(propuesto)</span>`:'<span class="mute">pendiente</span>')}</td><td style="white-space:normal;min-width:170px">${r.destinoId?esc(nombreDestino(r.destinoId)):(r.destinoProp?`${esc(r.destinoProp)} <span class="mute">(propuesto)</span>`:'<span class="mute">pendiente</span>')}</td>
   <td>${rutaChip(r.estado)}${r.rechazo?`<br><span class="mute" style="font-size:12px">“${esc(r.rechazo.motivo)}”</span>`:''}${r.aprobacionComercial?'<br><span class="mute">Comercial ✓</span>':''}${r.aprobacionTransporte?'<br><span class="mute">Transporte ✓</span>':''}</td><td>${esc(r.solicitadaPor)}<br><span class="mute">${fmtDT(r.solicitadaEn)}${r.fuente==='VIAJE'?' · desde un viaje':''}</span></td><td>${r.validadaPor?`${esc(r.validadaPor)}<br><span class="mute">${fmtDT(r.validadaEn)}</span>`:'—'}</td><td>${r.viajes||0}</td>
   ${val?`<td style="white-space:nowrap">${r.estado==='PENDIENTE'&&hp('rutas_validar')?`<button class="btn sm primary" data-act="rutaValidarOpen" data-id="${r.id}">Validar</button> <button class="btn sm fix" data-act="rutaRechazarOpen" data-id="${r.id}">Rechazar</button>`:''}${r.estado==='PENDIENTE_APROBACION'&&hp('rutas_aprobar_comercial')&&!r.aprobacionComercial?`<button class="btn sm ok" data-act="rutaAprobarComOpen" data-id="${r.id}">Aprobar Comercial</button>`:''}${r.estado==='PENDIENTE_APROBACION'&&hp('rutas_aprobar_transporte')&&!r.aprobacionTransporte?`<button class="btn sm ok" data-act="rutaAprobarTraOpen" data-id="${r.id}">Aprobar Transporte</button>`:''}</td>`:''}</tr>`).join('')}
@@ -1047,7 +1139,7 @@ function headerHTML(){
   const u=S.user;
   return `<header class="top"><div class="brand"><span class="isotile"><img src="${ISOLOGO}" alt="In Transit"></span><span>Control de viajes<small>In Transit · innovative outsourcing</small></span></div><span class="spacer"></span>${(BACKEND.modo==='demo'&&!SIN_DEMO)?'<span class="demotag" title="Los datos son de demostración y viven solo en este navegador">Modo demostración</span>':''}
     <button class="bell" data-act="notifOpen" aria-label="Notificaciones${notifData().filter(n=>!n.leida).length?' ('+notifData().filter(n=>!n.leida).length+' sin leer)':''}">${icon('bell',20)}${notifData().filter(n=>!n.leida).length?`<span class="bcount">${notifData().filter(n=>!n.leida).length}</span>`:''}</button>
-    <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(ROLES[u.rol].label)}${(u.rol!=='ADMIN'&&clientesAsig(u).length)?' · '+esc(clientesAsig(u).join(', ')):''}</span></span></button></header>`;
+    <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(ROLES[u.rol].label)}${(!esEnc()&&u.rol!=='ADMIN'&&clientesAsig(u).length)?' · '+esc(clientesAsig(u).join(', ')):''}</span></span></button></header>`;
 }
 function navHTML(){
   const items=navItems();
@@ -1071,7 +1163,7 @@ function toast(msg,type){
 }
 function go(view,param){
   if(!S.user){S.view='login';render();return;}
-  if(!allowed(view)){toast('Tu perfil no tiene acceso a esa pantalla.','err');view=homeOf(S.user);param=null;}
+  if(!allowed(view)){toast(esEnc()?'No tienes acceso a esa pantalla.':'Tu perfil no tiene acceso a esa pantalla.','err');view=homeOf(S.user);param=null;}
   if(view==='detalle')S.from={view:S.view,param:S.param};
   if(view==='nuevo'&&S.view!=='nuevo')S.form=null;
   S.view=view;S.param=param||null;S.menu=false;S.modal=null;S.edit=null;S._lv=null;
@@ -1085,7 +1177,7 @@ function go(view,param){
 async function run(fn,ok,modalErr){
   try{const r=await fn();if(ok)toast(typeof ok==='function'?ok(r):ok);return {ok:true,r};}
   catch(e){
-    if(e instanceof ApiError){if(modalErr&&S.modal){S.modal.err=e.message;}else toast(e.message,'err');}
+    if(e instanceof ApiError){if(modalErr&&S.modal){S.modal.err=sinPerfil(e.message);}else toast(sinPerfil(e.message),'err');}
     else{console.error(e);toast('Error inesperado: '+e.message,'err');}
     render();return {ok:false};
   }
@@ -1130,7 +1222,8 @@ const ACT={
   async tproy(d){S.tProy=d.v;render();},
   async fproy(d){S.fProy=d.v;render();},
   async cbToggle(d){S.cb=S.cb===d.k?null:d.k;S.cbq='';render();const i=document.querySelector('.cb[data-cb="'+d.k+'"] .cb-q');if(i)i.focus();},
-  async cbPick(d){S[d.k]=d.v;S.cb=null;S.cbq='';render();},
+  async cbPick(d){if(String(d.k).startsWith('m:')){const M=curModel();if(M)aplicarCampo(M,d.k.slice(2),d.v);}else S[d.k]=d.v;S.cb=null;S.cbq='';render();},
+  async reintentarCatalogos(){try{await BACKEND.refrescar();toast('Datos actualizados desde el servidor.');}catch(e){toast(e.message||'No se pudo actualizar desde el servidor.','err');}render();},
   async festado(d){S.fEstado=d.v;render();},
   async backdrop(d,el,e){if(e.target===el){S.modal=null;render();}},
   async closeModal(){S.modal=null;render();},
@@ -1160,7 +1253,7 @@ const ACT={
     const d={cliente:f.proyecto,fechaPlan:f.fechaPlanD&&f.fechaPlanT?f.fechaPlanD+'T'+f.fechaPlanT:'',rutaRef:f.rutaRef||''};
     [...DATA_KEYS,...TKEYS].forEach(k=>{d[k]=f[k];});
     try{const t=await API.crearViaje(S.user.id,d);f.savedId=t.id;render();topScroll();toast(f.rutaId==='NO_ASIGNADA'?`Viaje #${t.id} guardado con ruta NO ASIGNADA. Se avisó a Comercial y Gerencia dentro de la aplicación.`:`Viaje #${t.id} guardado.`);}
-    catch(e){f.err=e.message;render();topScroll();}
+    catch(e){f.err=sinPerfil(e.message);render();topScroll();}
   },
   async otro(){S.form=initForm();render();},
   async terminar(){
@@ -1418,6 +1511,7 @@ app.addEventListener('change',async e=>{
   if(t.dataset.photo){const f=t.files&&t.files[0];if(!f)return;const d=await readPhoto(f);if(d){S.draft[t.dataset.photo]=d;render();}return;}
   if(t.dataset.m){
     const M=curModel();if(!M)return;
+    if(esEnc()){aplicarCampo(M,t.dataset.m,t.value);if(t.tagName==='SELECT'||t.type==='datetime-local')render();return;}
     const k=t.dataset.m;M[k]=t.value;if('err' in M)M.err='';
     if(k==='proyecto'){M.proyectoCat='';M.pilotoId='';M.rutaId='';M.rutaRef='';const pc=PROYECTOS_X[M.proyecto];if(pc&&pc.length===1)M.proyectoCat=pc[0];}
     if(k==='proyectoCat'){M.rutaId='';M.rutaRef='';}

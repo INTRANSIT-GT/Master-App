@@ -2,7 +2,7 @@
   "name": "master-app-transportes",
   "version": "1.0.0",
   "private": true,
-  "description": "Master App de Transportes \u00b7 In Transit (PWA + Supabase)",
+  "description": "Master App de Transportes · In Transit (PWA + Supabase)",
   "type": "module",
   "scripts": {
     "build:core": "node scripts/build-core.mjs && node scripts/gen-sql-permisos.mjs",
@@ -10,7 +10,9 @@
     "serve": "npx --yes http-server . -p 8080 -c-1",
     "test:cliente": "node tests/cliente-supabase.test.mjs",
     "test": "npm run test:servidor && npm run test:cliente && npm run test:exportar",
-    "test:exportar": "node tests/exportar.test.mjs"
+    "test:exportar": "node tests/exportar.test.mjs",
+    "test:encargado": "node tests/encargado.test.mjs",
+    "test:visual": "node tests/prueba-visual.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",

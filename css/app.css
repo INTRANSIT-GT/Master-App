@@ -433,3 +433,9 @@ tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
 .cb-list button:hover{background:var(--surface2)}
 .cb-list button[aria-selected="true"]{background:var(--brand-soft);color:var(--brand)}
 .cb-empty{padding:10px;color:var(--mute)}
+
+/* Desplegable con búsqueda dentro de formularios (Encargado de proyecto) */
+.fsec .fgroup .cb{display:block;margin-bottom:0;min-width:0}
+.fsec .fgroup .cb-panel{left:0;right:0;width:auto;min-width:0;max-width:none}
+.fsec .cb-btn:disabled{opacity:.6;cursor:not-allowed;background:var(--surface2)}
+.fsec .cb-btn span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
