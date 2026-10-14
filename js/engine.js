@@ -50,7 +50,7 @@ const EDGES={
   LIQUIDADO:['ACEPTADO','RECHAZADO'],
   RECHAZADO:['LIQUIDADO'],
   ACEPTADO:['FACTURADO'],
-  FACTURADO:['COBRADO']
+  FACTURADO:['COBRADO','ACEPTADO']   /* COBRADO al cobrar; ACEPTADO solo al anular la factura (revierte la asignación) */
 };
 
 /* ---------- Permisos ---------- */

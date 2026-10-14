@@ -63,9 +63,9 @@ const enc = (t, v) => {
     case 'ts': return v == null || v === '' ? null : String(v);
     case 'u': return String(v);
     case 'a': return Array.isArray(v) ? v.map(String) : [];   // el driver lo envía como arreglo de Postgres (text[])
-    case 'j': return v == null ? null : JSON.stringify(v);
-    case 'jo': return JSON.stringify(v == null ? {} : v);
-    case 'ja': return JSON.stringify(v == null ? [] : v);
+    case 'j': return v == null ? null : v;                    // objeto/arreglo/escalar real: el driver lo serializa a jsonb
+    case 'jo': return v == null ? {} : v;
+    case 'ja': return v == null ? [] : v;
   }
   throw new Error('tipo ' + t);
 };
@@ -143,7 +143,7 @@ function filas(spec, rec) {
   if (!spec.sinExtra) {
     const extra = {};
     for (const k of Object.keys(rec)) if (!conocidos.has(k) && !(spec.sinDataUrl && k === 'dataUrl')) extra[k] = rec[k];
-    principal.extra = JSON.stringify(extra);
+    principal.extra = extra;
   }
   return { principal, partes, texto: JSON.stringify([principal, partes]) };
 }

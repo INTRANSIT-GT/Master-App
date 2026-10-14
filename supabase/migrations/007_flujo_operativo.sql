@@ -51,7 +51,7 @@ create unique index if not exists uq_ruta_codigo on master.rutas (codigo) where 
 
 delete from master.transiciones_estado;
 insert into master.transiciones_estado(desde,hasta) values
- ('PLANIFICADO','EN_RUTA'),('EN_RUTA','ENTREGADO'),('ENTREGADO','LIQUIDADO'),('LIQUIDADO','ACEPTADO'),('LIQUIDADO','RECHAZADO'),('RECHAZADO','LIQUIDADO'),('ACEPTADO','FACTURADO'),('FACTURADO','COBRADO');
+ ('PLANIFICADO','EN_RUTA'),('EN_RUTA','ENTREGADO'),('ENTREGADO','LIQUIDADO'),('LIQUIDADO','ACEPTADO'),('LIQUIDADO','RECHAZADO'),('RECHAZADO','LIQUIDADO'),('ACEPTADO','FACTURADO'),('FACTURADO','COBRADO'),('FACTURADO','ACEPTADO');
 alter table master.viajes enable trigger trg_viajes_transicion;
 
 commit;
