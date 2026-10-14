@@ -62,7 +62,7 @@ const enc = (t, v) => {
     case 'b': return !!v;
     case 'ts': return v == null || v === '' ? null : String(v);
     case 'u': return String(v);
-    case 'a': return JSON.stringify(Array.isArray(v) ? v.map(String) : []);
+    case 'a': return Array.isArray(v) ? v.map(String) : [];   // el driver lo envía como arreglo de Postgres (text[])
     case 'j': return v == null ? null : JSON.stringify(v);
     case 'jo': return JSON.stringify(v == null ? {} : v);
     case 'ja': return JSON.stringify(v == null ? [] : v);
@@ -80,7 +80,7 @@ const dec = (t, v) => {
     default: return v == null ? null : (typeof v === 'string' ? JSON.parse(v) : v);   // j, jo, ja
   }
 };
-const ph = (t, i) => ({ a: `(select coalesce(array_agg(x),'{}'::text[]) from jsonb_array_elements_text($${i}::jsonb) x)`, j: `$${i}::jsonb`, jo: `$${i}::jsonb`, ja: `$${i}::jsonb`,
+const ph = (t, i) => ({ a: `$${i}::text[]`, j: `$${i}::jsonb`, jo: `$${i}::jsonb`, ja: `$${i}::jsonb`,
   ts: `$${i}::timestamptz`, n: `$${i}::numeric`, i: `$${i}::int`, b: `$${i}::boolean`, u: `$${i}::uuid` }[t] || `$${i}`);
 
 async function leerTabla(q, tabla, cols, extra, orden) {

@@ -185,7 +185,11 @@ const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],t
 function syncRefs(){
   PROYECTOS=DB.clientes.map(c=>({id:c.id,nombre:c.nombre,cliente:c.cliente,activo:c.activo!==false,
     encargado:DB.usuarios.filter(u=>u.rol==='ENCARGADO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
-  PROYECTOS_X={};DB.clientes.forEach(c=>{PROYECTOS_X[c.id]=c.proyectos;if(!CAT.clientes.includes(c.cliente))CAT.clientes.push(c.cliente);});
+  PROYECTOS_X={};DB.clientes.forEach(c=>{PROYECTOS_X[c.id]=c.proyectos||[];if(!CAT.clientes.includes(c.cliente))CAT.clientes.push(c.cliente);});
+  /* El catálogo de proyectos se completa con los proyectos reales que ya existen en los datos:
+     así los selectores y la validación no quedan limitados a la lista de ejemplo. */
+  DB.clientes.forEach(c=>(c.proyectos||[]).forEach(p=>{if(p&&!CAT.proyectos.includes(p))CAT.proyectos.push(p);}));
+  DB.trips.forEach(t=>{if(t.proyectoCat&&!CAT.proyectos.includes(t.proyectoCat))CAT.proyectos.push(t.proyectoCat);});
 }
 
 
@@ -1101,7 +1105,9 @@ const API={
     if(DB.usuarios.some(u=>u.usuario===usuario&&u.id!==d.id))deny('Ese usuario ya existe.','VALIDACION');
     const clientes=(d.clientes||[]).filter(c=>DB.clientes.some(x=>x.id===c));
     if(d.rol==='ENCARGADO'&&!clientes.length)deny('Este perfil necesita al menos un cliente asignado.','VALIDACION');
-    const proys=(d.proyectos||[]).filter(p=>clientes.some(c=>proyectosDe(c).includes(p)));
+    /* Se acepta el proyecto si pertenece a alguno de los clientes elegidos; si el cliente todavía no
+       tiene proyectos definidos, no se descarta lo que la administradora marcó (no se pierde en silencio). */
+    const proys=(d.proyectos||[]).filter(p=>clientes.some(c=>{const cp=proyectosDe(c);return !cp.length||cp.includes(p);}));
     let u=d.id?DB.usuarios.find(x=>x.id===d.id):null;
     if(d.id&&!u)deny('Usuario no encontrado.','NO_EXISTE');
     const activo=d.activo!==false;
