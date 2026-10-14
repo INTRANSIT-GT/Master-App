@@ -128,13 +128,13 @@ const PERMS=[
 ];
 const PERM_KEYS=PERMS.map(p=>p[0]);
 const ROLES={
-  ADMIN:{label:'Administradora',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','rutas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
+  ADMIN:{label:'Administradora',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
   ENCARGADO:{label:'Encargado de proyecto',home:'inicio',nav:['inicio','nuevo','viajes','liquidaciones','rutas'],alcance:'Solo los clientes y proyectos que tiene asignados (viajes, rutas y solicitudes)'},
   TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Todos los proyectos · avanza el estado de los viajes de Coca-Cola y Frito Lay'},
   LIQUIDACIONES:{label:'Revisión de liquidaciones',home:'liquidaciones',nav:['liquidaciones'],alcance:'Todos los proyectos · solo liquidaciones'},
   COMERCIAL:{label:'Facturación',home:'comercial',nav:['comercial','rutas'],alcance:'Viajes aceptados · facturas y tarifas'},
   GERENCIA_COMERCIAL:{label:'Gerencia Comercial',home:'rutas',nav:['viajes','comercial','rutas'],alcance:'Aprueba rutas, tarifas y consulta la facturación'},
-  CONTABILIDAD:{label:'Contabilidad',home:'comercial',nav:['comercial'],alcance:'Registra depósitos y cobros de facturas emitidas'},
+  CONTABILIDAD:{label:'Contabilidad',home:'comercial',nav:['comercial','opl'],alcance:'Registra depósitos y cobros de facturas emitidas'},
   GERENCIA_TRANSPORTE:{label:'Gerencia de Transporte',home:'viajes',nav:['viajes','rutas','liquidaciones'],alcance:'Aprueba rutas, duplicados de Shipment y consulta operativa'}
 };
 const PERM_DEFAULT={
@@ -166,8 +166,8 @@ const PROHIBIDO={
 };
 /* Permisos que no se pueden quitar (evita bloquearse a sí misma) */
 const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']};
-const VIEW_PERM={proyectos:'tablero_ver',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
-const NAVLBL={proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
+const VIEW_PERM={proyectos:'tablero_ver',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'finanzas_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
+const NAVLBL={proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
 
 /* Campos editables */
 const DATA_KEYS=['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
@@ -1095,13 +1095,19 @@ const API={
   editarTarifa(uid,id,d){return exec(uid,'editarTarifa','',A=>{
     need(A,'tarifas_editar','editar tarifas');
     const t=DB.tarifas.find(x=>x.id===id);if(!t)deny('La tarifa no existe.','NO_EXISTE');
+    const pick=k=>k in d?d[k]:t[k];
     const v=validarTarifa(Object.assign({},t,{importe:d.importe,vigenteDesde:d.vigenteDesde,vigenteHasta:d.vigenteHasta,
-      qDieselPactado:('qDieselPactado' in d?d.qDieselPactado:t.qDieselPactado),
-      combustiblePct:('combustiblePct' in d?d.combustiblePct:t.combustiblePct)}),t.id);
+      qDieselPactado:pick('qDieselPactado'),
+      combustiblePct:pick('combustiblePct'),
+      importeOpl:pick('importeOpl'),
+      dieselPactadoOpl:pick('dieselPactadoOpl'),
+      combustiblePctOpl:pick('combustiblePctOpl')}),t.id);
     const ch=[['importe','Importe',x=>'Q '+x],['vigenteDesde','Vigente desde',x=>x],['vigenteHasta','Vigente hasta',x=>x||'(sin fin)'],
-      ['qDieselPactado','Q diésel pactado',x=>x===''||x==null?'(vacío)':'Q '+x],['combustiblePct','% de combustible',x=>x===''||x==null?'(vacío)':x+'%']];
+      ['qDieselPactado','Q diésel pactado',x=>x===''||x==null?'(vacío)':'Q '+x],['combustiblePct','% de combustible',x=>x===''||x==null?'(vacío)':x+'%'],
+      ['importeOpl','Importe proveedor (OPL)',x=>x===''||x==null?'(vacío)':'Q '+x],['dieselPactadoOpl','Q diésel pactado proveedor',x=>x===''||x==null?'(vacío)':'Q '+x],['combustiblePctOpl','% de combustible proveedor',x=>x===''||x==null?'(vacío)':x+'%']];
     let n=0;
     ch.forEach(([k,l,f])=>{const nv=v[k]===undefined?'':v[k];if(String(t[k]==null?'':t[k])!==String(nv==null?'':nv)){auditAdd({entidad:'TARIFA',accion:'Tarifa modificada',campo:l,anterior:f(t[k]),nuevo:f(nv),por:A,motivo:String(d.motivo||'').trim(),ref:t.id});t[k]=nv;n++;}});
+    ['importeOpl','dieselPactadoOpl','combustiblePctOpl'].forEach(k=>{if(t[k]==null||t[k]==='')delete t[k];});
     if(n){t.modificadoPor=A.nombre;t.modificadoEn=nowIso();}
     return t;
   });},

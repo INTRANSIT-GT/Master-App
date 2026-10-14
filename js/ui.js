@@ -7,7 +7,7 @@ Object.assign(ICON,{
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'
 });
-const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:'',cb:null,cbq:''};
+const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:'',cb:null,cbq:'',opSoloOpl:false,opSel:{}};
 const hp=p=>hasPerm(S.user,p);
 const vis=()=>API.listarViajes(S.user.id).slice().sort((a,b)=>b.id.localeCompare(a.id));
 const mine=t=>asignado(S.user,t);
@@ -92,6 +92,7 @@ const ARCH={
   usuarios:{s:'scr_Usuarios',d:'USUARIOS · ACCESO_CLIENTE · PERMISOS',f:'LookUp(PERMISOS; Rol=gblRol && Permiso="liq_aprobar").Habilitado',n:'Solo el rol con permisos_gestionar puede cambiar la matriz; cada cambio queda en AUDITORIA.'},
   auditoria:{s:'scr_Auditoria',d:'AUDITORIA',f:'SortByColumns(AUDITORIA; "FechaHora"; Descending)',n:'La tabla debe ser de solo agregar (sin permiso de editar/eliminar para nadie).'},
   finanzas:{s:'scr_Finanzas',d:'VIAJES · AGRUPACIONES_COMERCIALES · COBROS · PAGOS',f:'finCalc(VIAJES; AGRUPACIONES; PAGOS; filtros)',n:'Cada factura se suma una sola vez; un dato faltante nunca se toma como cero. Cálculo y permisos deben ejecutarse en el servidor.'},
+  opl:{s:'scr_OPL',d:'TARIFAS · VIAJES · ÓRDENES_PAGO',f:'Filter(TARIFAS; Proyecto in gblProyectosAsignados)',n:'Solo el proceso del proveedor (OPL): no expone la tarifa de cobro al cliente.'},
   rutas:{s:'scr_Rutas',d:'RUTAS · NOTIFICACIONES',f:'Filter(RUTAS; Cliente in gblClientesAsignados && Proyecto in gblProyectosAsignados)',n:'Las notificaciones requieren un flujo de Power Automate (correo/Teams) para salir de la aplicación.'},
   modelo:{s:'scr_Modelo',d:'—',f:'',n:'Pantalla de documentación.'}
 };
@@ -950,6 +951,74 @@ function ordenPagoPDF(o){
   return doc.output('datauristring');
 }
 const FINTABS=[{k:'res',l:'Resumen financiero'},{k:'prov',l:'Proveedores'},{k:'ord',l:'Órdenes de pago'},{k:'fact',l:'Facturación e ingresos'},{k:'pil',l:'Pilotos'}];
+/* ---- Órdenes de pago a proveedores (OPL): piezas reutilizadas por Finanzas y por la sección OPL ---- */
+function opSelIds(porPagar){const sel=S.opSel||{};return Object.keys(sel).filter(id=>sel[id]&&porPagar.some(r=>r.id===id));}
+function opSelBar(selIds,porPagar,canPay){
+  if(!canPay||!selIds.length)return'';
+  const imp=selIds.reduce((s,id)=>s+((porPagar.find(r=>r.id===id)||{}).importe||0),0);
+  const provs=[...new Set(selIds.map(id=>(porPagar.find(r=>r.id===id)||{}).proveedor).filter(Boolean))];
+  const unProv=provs.length===1?provs[0]:'';
+  return `<div class="selbar"><b>${selIds.length} viaje(s) seleccionado(s)</b><span>· Proveedor: <b>${esc(unProv||'—')}</b> · Total: <b>${qfmt(r2(imp))}</b></span><span class="spacer"></span>${unProv?`<button class="btn primary" data-act="opEmitir">EMITIR ORDEN DE PAGO</button>`:'<span class="warnl">Selecciona viajes de un solo proveedor</span>'}<button class="btn sm ghost" data-act="opClear">Limpiar</button></div>`;
+}
+function opSelTable(porPagar,prov,sel){
+  if(!prov)return `<div class="alertbox info">Elige un <b>proveedor (OPL)</b> en el filtro de arriba para ver los viajes ya facturados al cliente que se le pueden pagar.</div>`;
+  const elig=porPagar.filter(r=>r.proveedor===prov),list=elig.slice(0,500);
+  if(!list.length)return `<div class="mute">No hay viajes por pagar de ${esc(prov)} (facturados al cliente, con tarifa OPL, sin orden activa).</div>`;
+  return `<div class="xlwrap"><table class="xl" style="min-width:900px"><thead><tr><th></th><th>Viaje</th><th>Cliente · proyecto</th><th>Fecha plan</th><th>Importe a pagar</th></tr></thead><tbody>
+    ${list.map(r=>`<tr><td><input type="checkbox" data-act="opTog" data-id="${r.id}" ${sel[r.id]?'checked':''}></td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)} · ${esc(r.proyecto)}</td><td>${fmtDate(r.fecha)}</td><td style="text-align:right">${r.sinTarifa?'<span class="warnl">sin tarifa OPL</span>':qfmt(r.importe)}</td></tr>`).join('')}
+    </tbody></table></div>${elig.length>list.length?`<div class="mute">Mostrando 500 de ${elig.length} viajes por pagar de ${esc(prov)}.</div>`:''}`;
+}
+function opOrdenesTable(ordenes,canPay){
+  if(!ordenes.length)return `<div class="mute">Aún no hay órdenes de pago.</div>`;
+  return `<div class="xlwrap"><table class="xl" style="min-width:1250px"><thead><tr><th>Orden</th><th>Proveedor</th><th>Viajes</th><th>Importe</th><th>Estado</th><th>Emitida</th><th>Documento</th><th>Pago · evidencia · factura del proveedor</th>${canPay?'<th class="stkR">Acciones</th>':''}</tr></thead><tbody>
+    ${ordenes.slice().reverse().map(o=>{const pag=o.fase==='PAGADA';return `<tr class="${o.estado==='ANULADA'?'dim':''}"><td><b>${o.id}</b></td><td>${esc(o.proveedor)}</td><td>${o.viajeIds.slice(0,6).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${o.viajeIds.length>6?' <span class="mute">…</span>':''} <b class="mute">[${o.viajeIds.length}]</b></td><td style="text-align:right">${qfmt(o.importe)}</td><td>${chip(o.estado==='ANULADA'?'neutral':(pag?'done':'progress'),o.estado==='ANULADA'?'Anulada':(pag?'Pagada':'Emitida'))}</td><td>${o.fechaEmision?fmtDate(o.fechaEmision):'—'}</td>
+    <td>${o.emision&&o.emision.documentoUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.emision.documentoUrl)}">Ver documento</button>`:(o.emision?'<span class="mute">sin documento</span>':'—')}</td>
+    <td>${pag&&o.transferencia?`${fmtDate(o.transferencia.fecha)} · ${qfmt(o.transferencia.monto)} · ${esc(o.transferencia.referencia)}${o.transferencia.evidenciaUrl||o.transferencia.facturaUrl?'<br>':''}${o.transferencia.evidenciaUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.transferencia.evidenciaUrl)}">Evidencia</button> `:''}${o.transferencia.facturaUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.transferencia.facturaUrl)}">Factura proveedor</button>`:''}`:'<span class="mute">Pendiente de pago</span>'}${o.anulada?`<br><span class="mute">Anulada por ${esc(o.anulada.por)} · “${esc(o.anulada.motivo)}”</span>`:''}</td>
+    ${canPay?`<td class="stkR"><div class="acts-wrap">${o.estado==='ANULADA'?'<span class="mute">—</span>':(o.fase==='EMITIDA'?`<button class="btn sm ok" data-act="opTransferOpen" data-id="${o.id}">Registrar pago</button><button class="btn sm fix" data-act="opAnularOpen" data-id="${o.id}">Anular</button>`:'<span class="mute">Pagada</span>')}</div></td>`:''}</tr>`;}).join('')}
+    </tbody></table></div>`;
+}
+/* ---- Sección OPL (proveedores): todo el proceso del operador logístico, sin exponer el cobro al cliente ---- */
+const OPLTABS=[{k:'prov',l:'Proveedores (OPL)'},{k:'tar',l:'Tarifas OPL'},{k:'pagar',l:'Viajes por pagar'},{k:'ord',l:'Órdenes de pago'}];
+VIEWS.opl=()=>{
+  const k=OPLTABS.some(t=>t.k===S.tab.opl)?S.tab.opl:'prov',prov=S.fProv;
+  const canPay=hp('pagos_registrar'),canTar=hp('tarifas_editar');
+  let R=null,err='';try{R=API.resumenFinanciero(S.user.id,{proveedor:prov,cliente:S.fCli,proyecto:S.fPcat});}catch(e){err=e.message;}
+  if(!R)return `<div class="inner">${empty('Sin acceso al proceso OPL',esc(err))}</div>`;
+  let porPagar=[],ordenes=[];try{porPagar=API.viajesPorPagar(S.user.id);}catch(e){}try{ordenes=API.ordenesPago(S.user.id);}catch(e){}
+  const filt=`<div class="lfilters" style="grid-template-columns:repeat(auto-fit,minmax(155px,1fr))">
+    <select data-flt="fProv" aria-label="Proveedor (OPL)"><option value="">Todos los proveedores (OPL)</option>${CAT.opl.map(p=>`<option ${prov===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
+    <select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>
+    <select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>
+    <div class="mute" style="font-size:12.5px;margin:-4px 0 12px">Sección del proveedor (OPL): aquí se gestiona <b>todo lo que se paga al proveedor</b>. No se muestra la tarifa de cobro al cliente.</div>`;
+  let body='';
+  if(k==='prov'){
+    const rows=R.tripRows.filter(r=>r.proveedor&&(!S.fCli||r.cliente===S.fCli)&&(!S.fPcat||r.proyecto===S.fPcat));
+    const by={};rows.forEach(r=>{const p=by[r.proveedor]=by[r.proveedor]||{n:0,por:0,pag:0,sal:0,sin:0};p.n++;if(r.costo==null)p.sin++;else{p.por+=r.costo;p.sal+=r.saldoProv;}p.pag+=r.pagadoProv;});
+    const activas=ordenes.filter(o=>o.estado==='ACTIVA');
+    body=`<h2 style="margin-bottom:10px">Saldo por proveedor (OPL)</h2>${miniTable(['Proveedor','Viajes finalizados','Por pagar','Pagado','Saldo pendiente','Viajes por pagar','Órdenes activas','Sin costo'],Object.keys(by).sort().map(p=>{const pp=porPagar.filter(r=>r.proveedor===p).length,no=activas.filter(o=>o.proveedor===p).length;return [esc(p),by[p].n,qfmt(r2(by[p].por)),qfmt(r2(by[p].pag)),`<b>${qfmt(r2(by[p].sal))}</b>`,pp||'—',no||'—',by[p].sin||'—'];}))}
+      <div class="mute" style="margin-top:8px;font-size:13px">«Por pagar» es el costo registrado del proveedor (tarifa OPL). «Viajes por pagar» son los viajes ya facturados al cliente que aún no están en una orden.</div>`;
+  }else if(k==='tar'){
+    const conOpl=t=>t.importeOpl!=null&&t.importeOpl!=='';
+    const todas=tarData().filter(t=>(!S.fCli||t.cliente===S.fCli)&&(!S.fPcat||t.proyecto===S.fPcat));
+    const rows=todas.filter(t=>!S.opSoloOpl||conOpl(t)).sort((a,b)=>a.cliente.localeCompare(b.cliente)||rutaTxt(a.rutaId).localeCompare(rutaTxt(b.rutaId))||b.vigenteDesde.localeCompare(a.vigenteDesde));
+    const sinOpl=todas.filter(t=>!conOpl(t)).length;
+    body=`<div class="chips"><button class="chip" aria-pressed="${!!S.opSoloOpl}" data-act="opSoloOpl">Solo con tarifa OPL</button></div>
+      ${sinOpl&&!S.opSoloOpl?`<div class="alertbox" style="margin:10px 0"><b>${sinOpl} tarifa(s) sin importe de proveedor (OPL).</b> Defínelo con «Editar OPL»: sin importe OPL no se puede pagar al proveedor.</div>`:''}
+      ${rows.length?`<div class="mute" style="margin:6px 0 8px">${rows.length} tarifas · solo importes del proveedor</div><div class="xlwrap"><table class="xl" style="min-width:1250px"><thead><tr><th>ID</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Capacidad</th><th>Importe proveedor (OPL)</th><th>% comb. prov.</th><th>Q diésel prov.</th><th>Vigente desde</th><th>Vigente hasta</th><th>Estado</th>${canTar?'<th>Acciones</th>':''}</tr></thead><tbody>
+      ${rows.map(t=>`<tr class="${t.activa?'':'dim'}"><td><b>${t.id}</b></td><td>${esc((PROYECTOS.find(p=>p.id===t.cliente)||{}).cliente||t.cliente)}</td><td>${esc(t.proyecto)}</td><td style="white-space:normal;min-width:220px">${esc(rutaTxt(t.rutaId))}</td><td>${esc(t.capacidad)}</td><td style="text-align:right">${conOpl(t)?`<b>${qfmt(t.importeOpl)}</b>`:'<span class="warnl">sin tarifa OPL</span>'}</td><td style="text-align:right">${t.combustiblePctOpl!=null&&t.combustiblePctOpl!==''?esc(t.combustiblePctOpl)+'%':'<span class="mute">—</span>'}</td><td style="text-align:right">${t.dieselPactadoOpl!=null&&t.dieselPactadoOpl!==''?esc(t.dieselPactadoOpl):'<span class="mute">—</span>'}</td><td>${fmtDate(t.vigenteDesde)}</td><td>${t.vigenteHasta?fmtDate(t.vigenteHasta):'<span class="mute">sin fin</span>'}</td><td>${chip(t.activa?'done':'neutral',t.activa?'Activa':'Inactiva')}</td>${canTar?`<td><button class="btn sm" data-act="tarifaOpenOpl" data-id="${t.id}">Editar OPL</button></td>`:''}</tr>`).join('')}
+      </tbody></table></div>`:empty('No hay tarifas con estos filtros','Crea la tarifa en Facturación → Tarifas y define aquí el importe del proveedor.')}
+      <div class="mute" style="margin-top:8px;font-size:13px">Las tarifas de cobro al cliente se administran en <b>Facturación → Tarifas</b>. Aquí solo se edita el importe y el combustible del proveedor (OPL).</div>`;
+  }else if(k==='pagar'){
+    const sel=S.opSel||{},selIds=opSelIds(porPagar);
+    body=`<h2 style="margin-bottom:6px">Emitir orden de pago (etapa 1)</h2>
+      <div class="mute" style="font-size:13px;margin-bottom:10px">Solo viajes <b>facturados al cliente</b> y con <b>tarifa OPL</b>. Se agrupan por proveedor; al emitir se genera el documento de la orden.</div>
+      ${opSelBar(selIds,porPagar,canPay)}${opSelTable(porPagar,prov,sel)}`;
+  }else{
+    body=opOrdenesTable(prov?ordenes.filter(o=>o.proveedor===prov):ordenes,canPay)+
+      `<div class="alertbox info" style="margin-top:14px"><b>Ciclo de la orden:</b> Emitida → Pagada. Al emitir se genera el documento de la orden; al pagar se exigen la <b>evidencia de la transferencia</b> y la <b>factura del proveedor</b>.</div>`;
+  }
+  return `<div class="inner" style="max-width:1500px">${pageHead('OPL · Proveedores','Proceso completo del operador logístico: tarifa de proveedor, viajes por pagar y órdenes de pago')}${tabs('opl',OPLTABS,k,null)}<div style="height:12px"></div>${filt}${body}</div>`;
+};
 const finFilters=()=>({desde:S.fDesde,hasta:S.fHasta,cliente:S.fCli,proyecto:S.fPcat,proveedor:S.fProv});
 const PAGO_L={SIN_IMPORTE:'Sin importe registrado',PENDIENTE:'Pendiente',PARCIAL:'Pago parcial',PAGADO:'Pagado'};
 const PAGO_C={SIN_IMPORTE:'st-PENDIENTE',PENDIENTE:'st-PENDIENTE_LIQUIDACION',PARCIAL:'st-EN_CURSO',PAGADO:'st-APROBADA'};
@@ -1025,26 +1094,11 @@ VIEWS.finanzas=()=>{
       <div class="mute" style="margin-top:8px;font-size:13px">Totales del periodo: enviado ${qfmt(M.enviado)} · facturado ${qfmt(M.facturado)} · cobrado ${qfmt(M.cobrado)} · pendiente de cobro ${M.pendCobro==null?'no calculable':qfmt(M.pendCobro)}.</div>`;
   }else if(k==='ord'){
     let porPagar=[],ordenes=[];try{porPagar=API.viajesPorPagar(S.user.id);}catch(e){}try{ordenes=API.ordenesPago(S.user.id);}catch(e){}
-    const porProv=S.fProv,elig=porPagar.filter(r=>!porProv||r.proveedor===porProv),sel=S.opSel||{};
-    const selIds=Object.keys(sel).filter(id=>sel[id]&&porPagar.some(r=>r.id===id));
-    const selImp=selIds.reduce((s,id)=>s+((porPagar.find(r=>r.id===id)||{}).importe||0),0);
-    const provsSel=[...new Set(selIds.map(id=>(porPagar.find(r=>r.id===id)||{}).proveedor).filter(Boolean))];
-    const unProv=provsSel.length===1?provsSel[0]:'';
-    const list=porProv?elig.slice(0,500):[];
-    const selTable=porProv?(list.length?`<div class="xlwrap"><table class="xl" style="min-width:900px"><thead><tr><th></th><th>Viaje</th><th>Cliente · proyecto</th><th>Fecha plan</th><th>Importe a pagar</th></tr></thead><tbody>
-      ${list.map(r=>`<tr><td><input type="checkbox" data-act="opTog" data-id="${r.id}" ${sel[r.id]?'checked':''}></td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)} · ${esc(r.proyecto)}</td><td>${fmtDate(r.fecha)}</td><td style="text-align:right">${r.sinTarifa?'<span class="warnl">sin tarifa OPL</span>':qfmt(r.importe)}</td></tr>`).join('')}
-      </tbody></table></div>${elig.length>list.length?`<div class="mute">Mostrando 500 de ${elig.length} viajes por pagar de ${esc(porProv)}.</div>`:''}`:`<div class="mute">No hay viajes por pagar de ${esc(porProv)} (facturados al cliente sin orden activa).</div>`):`<div class="alertbox info">Elige un <b>proveedor</b> arriba para ver los viajes ya facturados al cliente que se le pueden pagar.</div>`;
-    const ordTable=ordenes.length?`<div class="xlwrap"><table class="xl" style="min-width:1250px"><thead><tr><th>Orden</th><th>Proveedor</th><th>Viajes</th><th>Importe</th><th>Estado</th><th>Emitida</th><th>Documento</th><th>Pago · evidencia · factura del proveedor</th>${canPay?'<th class="stkR">Acciones</th>':''}</tr></thead><tbody>
-      ${ordenes.slice().reverse().map(o=>{const pag=o.fase==='PAGADA';return `<tr class="${o.estado==='ANULADA'?'dim':''}"><td><b>${o.id}</b></td><td>${esc(o.proveedor)}</td><td>${o.viajeIds.slice(0,6).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${o.viajeIds.length>6?' <span class="mute">…</span>':''} <b class="mute">[${o.viajeIds.length}]</b></td><td style="text-align:right">${qfmt(o.importe)}</td><td>${chip(o.estado==='ANULADA'?'neutral':(pag?'done':'progress'),o.estado==='ANULADA'?'Anulada':(pag?'Pagada':'Emitida'))}</td><td>${o.fechaEmision?fmtDate(o.fechaEmision):'—'}</td>
-      <td>${o.emision&&o.emision.documentoUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.emision.documentoUrl)}">Ver documento</button>`:(o.emision?'<span class="mute">sin documento</span>':'—')}</td>
-      <td>${pag&&o.transferencia?`${fmtDate(o.transferencia.fecha)} · ${qfmt(o.transferencia.monto)} · ${esc(o.transferencia.referencia)}${o.transferencia.evidenciaUrl||o.transferencia.facturaUrl?'<br>':''}${o.transferencia.evidenciaUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.transferencia.evidenciaUrl)}">Evidencia</button> `:''}${o.transferencia.facturaUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.transferencia.facturaUrl)}">Factura proveedor</button>`:''}`:'<span class="mute">Pendiente de pago</span>'}${o.anulada?`<br><span class="mute">Anulada por ${esc(o.anulada.por)} · “${esc(o.anulada.motivo)}”</span>`:''}</td>
-      ${canPay?`<td class="stkR"><div class="acts-wrap">${o.estado==='ANULADA'?'<span class="mute">—</span>':(o.fase==='EMITIDA'?`<button class="btn sm ok" data-act="opTransferOpen" data-id="${o.id}">Registrar pago</button><button class="btn sm fix" data-act="opAnularOpen" data-id="${o.id}">Anular</button>`:'<span class="mute">Pagada</span>')}</div></td>`:''}</tr>`;}).join('')}
-      </tbody></table></div>`:`<div class="mute">Aún no hay órdenes de pago.</div>`;
+    const selIds=opSelIds(porPagar);
     body=`<h2 style="margin-bottom:6px">Etapa 1 · Emitir orden de pago</h2>
       <div class="mute" style="font-size:13px;margin-bottom:10px">Solo viajes <b>facturados al cliente</b> y con <b>tarifa de OPL</b>. Se agrupan por proveedor; al emitir se genera el documento de la orden.</div>
-      ${canPay&&selIds.length?`<div class="selbar"><b>${selIds.length} viaje(s) seleccionado(s)</b><span>· Proveedor: <b>${esc(unProv||'—')}</b> · Total: <b>${qfmt(r2(selImp))}</b></span><span class="spacer"></span>${unProv?`<button class="btn primary" data-act="opEmitir">EMITIR ORDEN DE PAGO</button>`:'<span class="warnl">Selecciona viajes de un solo proveedor</span>'}<button class="btn sm ghost" data-act="opClear">Limpiar</button></div>`:''}
-      ${selTable}
-      <h2 style="margin:22px 0 10px">Órdenes de pago</h2>${ordTable}
+      ${opSelBar(selIds,porPagar,canPay)}${opSelTable(porPagar,S.fProv,S.opSel||{})}
+      <h2 style="margin:22px 0 10px">Órdenes de pago</h2>${opOrdenesTable(ordenes,canPay)}
       <div class="alertbox info" style="margin-top:14px"><b>Etapa 2 · Registrar el pago:</b> cuando el proveedor factura, se registra la transferencia con <b>dos archivos esenciales</b>: la evidencia de la transferencia y la factura del proveedor. Con ambos la orden queda <b>Pagada</b>.</div>`;
   }else{
     const rows=R.tripRows.sort((a,b)=>a.pilotoId.localeCompare(b.pilotoId)||a.id.localeCompare(b.id));
@@ -1411,6 +1465,14 @@ const ACT={
   /* tarifas */
   async aplicarTarifaViaje(d){const r=await run(()=>API.aplicarTarifa(S.user.id,d.id),x=>`Tarifa aplicada al viaje #${d.id}: ${qfmt(x.importe)}.`);render();},
   async aplicarTarifasTodas(){const r=await run(()=>API.aplicarTarifasPendientes(S.user.id,[]),x=>`Tarifas aplicadas: ${x.aplicadas.length}. Sin tarifa válida (requieren revisión): ${x.sinTarifa.length}.`);render();},
+  /* OPL: tarifa del proveedor y filtros de la sección */
+  async opSoloOpl(){S.opSoloOpl=!S.opSoloOpl;render();},
+  async tarifaOpenOpl(d){const t=DB.tarifas.find(x=>x.id===d.id);if(!t)return;
+    formM({title:`Tarifa del proveedor (OPL) · ${t.id}`,text:`${esc((PROYECTOS.find(p=>p.id===t.cliente)||{}).cliente)} · ${esc(t.proyecto)} · ${esc(rutaTxt(t.rutaId))} · ${esc(t.capacidad)}.<br>Solo se define lo que se <b>paga al proveedor</b>; el importe de cobro al cliente no se cambia desde aquí.`,
+      fields:[{k:'importeOpl',label:'Importe proveedor / OPL (Q)',type:'number'},{k:'dieselPactadoOpl',label:'Q diésel pactado proveedor (opcional)',type:'number'},{k:'combustiblePctOpl',label:'% de combustible proveedor (opcional · 0 a 100)',type:'number'},{k:'motivo',label:'Motivo del cambio (opcional)',type:'textarea'}],
+      data:{importeOpl:t.importeOpl==null?'':t.importeOpl,dieselPactadoOpl:t.dieselPactadoOpl==null?'':t.dieselPactadoOpl,combustiblePctOpl:t.combustiblePctOpl==null?'':t.combustiblePctOpl,motivo:''},ok:'GUARDAR TARIFA OPL',act:'tarifaSaveOpl',id:t.id});},
+  async tarifaSaveOpl(d){const t=DB.tarifas.find(x=>x.id===d.id);if(!t)return;const m=S.modal.data;
+    const r=await run(()=>API.editarTarifa(S.user.id,d.id,{importe:t.importe,vigenteDesde:t.vigenteDesde,vigenteHasta:t.vigenteHasta,qDieselPactado:t.qDieselPactado==null?'':t.qDieselPactado,combustiblePct:t.combustiblePct==null?'':t.combustiblePct,importeOpl:m.importeOpl,dieselPactadoOpl:m.dieselPactadoOpl,combustiblePctOpl:m.combustiblePctOpl,motivo:m.motivo}),`Tarifa OPL de ${d.id} actualizada.`,true);if(r.ok)afterWrite();},
   async tarifaOpen(d){
     const t=d.id?DB.tarifas.find(x=>x.id===d.id):null;
     if(t){
