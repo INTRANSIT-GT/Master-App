@@ -25,7 +25,7 @@ T('V8 Rutas de ejemplo: «CP → Mayorista Escuintla» está repetida 3 veces en
 /* guardar un viaje de punta a punta con la ruta elegida (datos locales de ejemplo) */
 botones.find(b => /Pedro/.test(b.textContent)).click();
 const antes = ev('DB.trips.length');
-const r = ev(`(()=>{try{const t=API.crearViaje(S.user.id,{cliente:'COLGATE',proyectoCat:'COLGATE',rutaId:'R-0004',pilotoId:'P-2',fechaPlan:'2031-05-05T08:00',estatus:'EN ESPERA',shipment:'SHP-PRUEBA',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'P',placaArrastre:'PA-9'});return JSON.stringify({id:t.id,ruta:DB.trips.find(x=>x.id===t.id).rutaId});}catch(e){return JSON.stringify({err:e.message});}})()`);
+const r = ev(`(()=>{try{const t=API.crearViaje(S.user.id,{cliente:'COLGATE',proyectoCat:'COLGATE',rutaId:'R-0004',pilotoId:'P-2',fechaPlan:'2031-05-05T08:00',shipment:'SHP-PRUEBA',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'P',placaArrastre:'PA-9'});return JSON.stringify({id:t.id,ruta:DB.trips.find(x=>x.id===t.id).rutaId});}catch(e){return JSON.stringify({err:e.message});}})()`);
 const rr = JSON.parse(r);
 T('V9 El encargado guarda un viaje con la ruta elegida y la ruta queda registrada', !rr.err && rr.ruta === 'R-0004' && ev('DB.trips.length') === antes + 1, rr);
 T('V10 Al consultar de nuevo el viaje, la ruta se conserva', ev(`DB.trips.find(x=>x.id==='${rr.id}').rutaId`) === 'R-0004');

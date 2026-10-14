@@ -31,7 +31,7 @@
   DESTINOS.length=0;DESTINOS.push({id:'D-1',nombre:'Mayorista Escuintla',proyecto:'COLGATE'},{id:'D-2',nombre:'Distribuidora Los Andes',proyecto:'COLGATE'},{id:'D-3',nombre:'Centro de Distribución Norte',proyecto:'CMI'});
   syncRefs();
   /* algunos viajes de ejemplo, creados por el propio motor */
-  const b={cliente:'COLGATE',proyectoCat:'COLGATE',pilotoId:'P-1',estatus:'EN ESPERA',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'Producto de ejemplo',placaArrastre:'PA-1001'};
+  const b={cliente:'COLGATE',proyectoCat:'COLGATE',pilotoId:'P-1',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'Producto de ejemplo',placaArrastre:'PA-1001'};
   const nuevo=(extra)=>{try{return API.crearViaje('U-ADMIN',Object.assign({},b,extra)).id;}catch(e){console.warn('Dato de ejemplo no creado:',e.message);return null;}};
   const v=[nuevo({rutaId:'R-0001',fechaPlan:'2031-03-01T08:00',shipment:'SHP-48201'}),nuevo({rutaId:'R-0004',pilotoId:'P-2',fechaPlan:'2031-03-02T08:00',shipment:'SHP-48202',tipoCarga:'CAJAS'}),
            nuevo({rutaId:'R-0006',fechaPlan:'2031-03-03T08:00',shipment:'SHP-48203',tipoCarga:'TARIMAS',noCarga:'12'}),nuevo({rutaId:'R-0008',proyectoCat:'LV',pilotoId:'P-2',fechaPlan:'2031-03-04T08:00',shipment:'SHP-48204'})];

@@ -10,7 +10,7 @@ const fmtDate=s=>{if(!s)return'—';const [y,m,d]=s.split('-');return `${d}/${m}
 const fmtL=v=>v?`${fmtDate(v.slice(0,10))} ${v.slice(11,16)}`:'—';
 const CAMPOS_TIEMPO=[['tIngresoPlanta','Ingreso a planta CP'],['tEsperaRampa','Espera en rampa'],['tRampa','Ingreso a rampa'],['tInicioCarga','Inicio de carga'],['tFinCarga','Fin de carga'],['tSalidaPlanta','Salida de planta'],['tSalida','Fecha y hora de salida'],['tIngresoBodega','Ingreso a bodega CG'],['tInicioDescarga','Inicio de descarga'],['tFinDescarga','Fin de descarga']];
 const TKEYS=CAMPOS_TIEMPO.map(x=>x[0]);
-const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'No. de carga',producto:'Producto',fechaPlan:'Fecha plan',estatus:'Estatus',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
+const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'No. de carga',producto:'Producto',fechaPlan:'Fecha plan',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
 CAMPOS_TIEMPO.forEach(([k,l])=>LBL[k]=l);
 const CAT={
   clientes:['CMI','COLGATE','FRITO LAY','COCA-COLA'],
@@ -19,7 +19,6 @@ const CAT={
   opl:['J&J','GRIJALVA','GTL','CATALAN','BATRES','INTRANSIT','TRANS. CHAVELITA','TRANS. GAEL','TRANS. MILITO JCR','TRANS. REGALO DE DIOS','TRANS. STEFANI','TRANS. FERS','TRANS. HERNANDEZ','TRANS. NUEVO MUNDO','TRANS. REYNOSO','TRANS. XICARA','DIEGO CHICHICASTENANGO'],
   tipoCarga:['KG','CAJAS','TARIMAS'],
   tipoViaje:['ONE WAY','ROUD TRIP','MAYOREO','DETALLE','NA'],
-  estatus:['COMPLETADO','EN CAMINO','CANCELADO','LIQUIDADO','EN ESPERA','CARGADO','PROCESO DE CARGA','DISPONIBLE','ESPERA CON CLIENTE','ESPERA DE DESCARGA','PENDIENTE LIQUIDAR','ESPERANDO CALIDAD','NO DISPONIBLE','NO SALIO A RUTA','NO ENTREGADO','DEVOLUCION','REPROGRAMADO','RETORNO','EN RAMPA','ESPERANDO CUSTODIO'],
   origen:['PET','SRG','VN','Z18','ATA','CHIM','CHIQ','EMB','GTY','ABASA','CENTRAL','INTRANSIT PETAPA','INTRANSIT Z11','SEREGUA','LP','LV','MZT','CMI DELTA BARCENAS','PLANTA INHSA','PLANTA MODERNOS','CG','CP','MALACATAN','XELA','OMNIA','HUEHUE','SANTA CATARINA']
 };
 /* Supuesto: qué PROYECTO del catálogo corresponde a cada cliente (confirmar) */
@@ -61,14 +60,14 @@ DESTINOS.push({id:'D-K1',nombre:'Distribuidora Central · Mixco',proyecto:'COCAC
 
 /* ---------- Estados y transiciones ---------- */
 const ESTADOS={
-  PLANIFICADO:{l:'Planificado',c:'--pend'},
-  EN_RUTA:{l:'En ruta',c:'--cur'},
-  ENTREGADO:{l:'Entregado',c:'--warn'},
-  LIQUIDADO:{l:'Liquidado',c:'--rev'},
-  ACEPTADO:{l:'Aceptado',c:'--ok'},
-  RECHAZADO:{l:'Rechazado',c:'--fix'},
-  FACTURADO:{l:'Facturado',c:'--com'},
-  COBRADO:{l:'Cobrado',c:'--ok'}
+  PLANIFICADO:{l:'Planificado',c:'#8C9BAB'},
+  EN_RUTA:{l:'En ruta',c:'#0088FF'},
+  ENTREGADO:{l:'Entregado',c:'#36B37E'},
+  LIQUIDADO:{l:'Liquidado',c:'#00875A'},
+  ACEPTADO:{l:'Aceptado',c:'#36B37E'},
+  RECHAZADO:{l:'Rechazado',c:'#FF5630'},
+  FACTURADO:{l:'Facturado',c:'#172B4D'},
+  COBRADO:{l:'Cobrado',c:'#053B2C'}
 };
 /* Todo lo que ya terminó su recorrido */
 const FIN=['ENTREGADO','LIQUIDADO','ACEPTADO','RECHAZADO','FACTURADO','COBRADO'];
@@ -114,7 +113,7 @@ const PERMS=[
   ['costos_registrar','Registrar costo a proveedor por viaje','Finanzas'],
   ['cobros_registrar','Registrar cobros de facturas','Finanzas'],
   ['pagos_registrar','Registrar y anular pagos a proveedores y pilotos','Finanzas'],
-  ['viajes_estatus_torre','Actualizar el estatus operativo autorizado (Torre)','Estados'],
+  ['viajes_estatus_torre','Avanzar el estado del viaje de los clientes autorizados (Torre)','Estados'],
   ['facturas_emitir','Marcar una factura como emitida (con evidencia)','Comercial'],
   ['tarifas_ver','Consultar tarifas','Tarifas'],
   ['tarifas_crear','Crear tarifas','Tarifas'],
@@ -131,7 +130,7 @@ const PERM_KEYS=PERMS.map(p=>p[0]);
 const ROLES={
   ADMIN:{label:'Administradora',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','rutas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
   ENCARGADO:{label:'Encargado de proyecto',home:'inicio',nav:['inicio','nuevo','viajes','liquidaciones','rutas'],alcance:'Solo los clientes y proyectos que tiene asignados (viajes, rutas y solicitudes)'},
-  TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Todos los proyectos · solo el estatus operativo de Coca-Cola y Frito Lay'},
+  TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Todos los proyectos · avanza el estado de los viajes de Coca-Cola y Frito Lay'},
   LIQUIDACIONES:{label:'Revisión de liquidaciones',home:'liquidaciones',nav:['liquidaciones'],alcance:'Todos los proyectos · solo liquidaciones'},
   COMERCIAL:{label:'Facturación',home:'comercial',nav:['comercial','rutas'],alcance:'Viajes aceptados · facturas y tarifas'},
   GERENCIA_COMERCIAL:{label:'Gerencia Comercial',home:'rutas',nav:['viajes','comercial','rutas'],alcance:'Aprueba rutas, tarifas y consulta la facturación'},
@@ -165,23 +164,20 @@ const PROHIBIDO={
   CONTABILIDAD:[...OPERATIVOS,'viajes_editar_tiempos','liq_aprobar','liq_devolver',...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre'],
   GERENCIA_TRANSPORTE:['permisos_gestionar','usuarios_gestionar','clientes_gestionar','liq_aprobar','liq_devolver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_aprobar_comercial']
 };
-/* Estatus operativos que nunca se delegan a Torre de Control (implican cierre, cancelación o liquidación) */
-const ESTATUS_VEDADOS=['LIQUIDADO','PENDIENTE LIQUIDAR','COMPLETADO','CANCELADO','DEVOLUCION','NO ENTREGADO'];
-const TORRE_ESTATUS_DEFECTO=['EN ESPERA','PROCESO DE CARGA','CARGADO','EN RAMPA','ESPERANDO CALIDAD','ESPERANDO CUSTODIO','EN CAMINO','ESPERA CON CLIENTE','ESPERA DE DESCARGA','RETORNO','REPROGRAMADO','NO SALIO A RUTA'];
 /* Permisos que no se pueden quitar (evita bloquearse a sí misma) */
 const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']};
 const VIEW_PERM={proyectos:'tablero_ver',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
 const NAVLBL={proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
 
 /* Campos editables */
-const DATA_KEYS=['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','estatus','pilotoId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
+const DATA_KEYS=['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origenId:'Origen',destinoId:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos'});
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos'];
 
 /* ---------- Base de datos ---------- */
-const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{torreEstatus:[]},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,rut:1,tar:1,not:1}});
+const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,rut:1,tar:1,not:1}});
 function syncRefs(){
   PROYECTOS=DB.clientes.map(c=>({id:c.id,nombre:c.nombre,cliente:c.cliente,activo:c.activo!==false,
     encargado:DB.usuarios.filter(u=>u.rol==='ENCARGADO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
@@ -270,7 +266,6 @@ function valKey(cliente,k,v){
     case 'opl':if(!vacio&&!CAT.opl.includes(v))return 'OPL no válido.';break;
     case 'tipoViaje':if(!vacio&&!CAT.tipoViaje.includes(v))return 'Tipo de viaje no válido.';break;
     case 'tipoCarga':if(!vacio&&!CAT.tipoCarga.includes(v))return 'Tipo de carga no válido.';break;
-    case 'estatus':if(vacio||!CAT.estatus.includes(v))return 'Estatus no válido (usa el catálogo).';break;
     case 'noCarga':case 'qViaticos':if(!vacio&&!(isFinite(Number(v))&&Number(v)>=0))return `${LBL[k]}: escribe un número válido (0 o mayor).`;break;
     case 'shipment':case 'noViaje':case 'producto':case 'noDocRetorno':case 'placaArrastre':if(String(v).length>60)return `${LBL[k]}: máximo 60 caracteres.`;break;
     case 'pilotoId':{const P=PILOTOS.find(p=>p.id===v);if(!P)return 'Piloto no válido.';if(P.proyecto!==cliente)return 'El piloto no pertenece a este cliente.';if(!P.unidad)return `${P.nombre} no tiene unidad asignada.`;break;}
@@ -585,7 +580,6 @@ const API={
     const keys=[...DATA_KEYS,...TIEMPO_KEYS,'rutaRef'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origenId'||k==='destinoId'?'El origen y el destino se completan solos a partir de la ruta: no se escriben a mano.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
-    if(!v.estatus)v.estatus='EN ESPERA';
     if(!v.rutaId)deny('Falta Ruta.','VALIDACION');
     keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
     let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
@@ -615,12 +609,6 @@ const API={
         if(!esAsig)deny('Solo el encargado del cliente puede editar fechas y horas.','CAMPO_NO_AUTORIZADO');
         if(!todos&&!esDueno(A,t))deny('Solo puedes editar los viajes que registraste tú (o los que no tienen responsable asignado).','SIN_PROPIEDAD');
         if(['FACTURADO','COBRADO'].includes(t.estado))deny('El viaje ya fue facturado: sus fechas y horas ya no se pueden modificar.','ESTADO_BLOQUEADO');
-      }else if(k==='estatus'&&!(hasPerm(A,'viajes_editar_datos')&&esAsig)&&hasPerm(A,'viajes_estatus_torre')){
-        /* Torre de Control: solo el estatus operativo, solo Coca-Cola y Frito Lay, solo opciones autorizadas */
-        if(ks.length>1)deny('Torre de Control solo puede actualizar el estatus operativo.','CAMPO_NO_AUTORIZADO');
-        if(!cl.torreEstatus)deny(`Torre de Control solo actualiza el estatus de los clientes autorizados (Coca-Cola y Frito Lay). ${cl.cliente||t.proyecto} es solo consulta.`,'CLIENTE_NO_AUTORIZADO');
-        if(!['PLANIFICADO','EN_RUTA'].includes(t.estado))deny(`El viaje está en "${ESTADOS[t.estado].l}": su estatus operativo ya no lo cambia Torre de Control.`,'ESTADO_BLOQUEADO');
-        if(!DB.config.torreEstatus.includes(String(cambios[k]).trim()))deny('Ese estatus no está autorizado para Torre de Control.','ESTATUS_NO_AUTORIZADO');
       }else if(DATA_KEYS.includes(k)){
         need(A,'viajes_editar_datos','editar datos distintos de fechas y horas');
         if(!esAsig)deny('Solo puedes editar viajes de tus clientes asignados.');
@@ -633,7 +621,7 @@ const API={
       const nv=typeof cambios[k]==='string'?cambios[k].trim():cambios[k];
       const ov=t[k]==null?'':t[k];
       if(String(nv==null?'':nv)===String(ov))return;
-      if(['proyectoCat','fechaPlan','pilotoId','rutaId','estatus'].includes(k)&&(nv===''||nv==null))deny(`${LBL[k]} es obligatorio.`,'VALIDACION');
+      if(['proyectoCat','fechaPlan','pilotoId','rutaId'].includes(k)&&(nv===''||nv==null))deny(`${LBL[k]} es obligatorio.`,'VALIDACION');
       if(k!=='rutaId'){const m=valKey(t.proyecto,k,nv);if(m)deny(m,'VALIDACION');}
       dif.push([k,ov,nv==null?'':nv]);
     });
@@ -664,7 +652,6 @@ const API={
     if(!t.unidadId)deny('No se puede pasar a En ruta: falta la unidad.','FALTAN_CAMPOS');
     moveEstado(t,'EN_RUTA',A,'Viaje enviado a ruta');
     t.iniciadoPor=A.nombre;t.iniciadoEn=nowIso();
-    setAuto(t,'estatus','EN CAMINO',A,'Automático al iniciar el viaje');
     if(!t.tSalida)setAuto(t,'tSalida',nowLoc(),A,'Automático al iniciar el viaje');
     return t;
   });},
@@ -676,7 +663,29 @@ const API={
     requerido(t,TKEYS,'Entregado');
     moveEstado(t,'ENTREGADO',A,'Viaje entregado');
     t.finalizadoPor=A.nombre;t.finalizadoEn=nowIso();
-    setAuto(t,'estatus','PENDIENTE LIQUIDAR',A,'Automático al entregar el viaje');
+    return t;
+  });},
+
+  /* Torre de Control: avanza el estado (solo En ruta / Entregado) de los viajes de los clientes autorizados */
+  torreMoverEstado(uid,id,nuevo){return exec(uid,'torreMoverEstado',id,A=>{
+    need(A,'viajes_estatus_torre','avanzar el estado del viaje');
+    const t=getT(id);if(!puedeVer(A,t))deny('No tienes acceso a este viaje.');
+    const cl=DB.clientes.find(x=>x.id===t.proyecto)||{};
+    if(!cl.torreEstatus)deny(`Torre de Control solo avanza el estado de los clientes autorizados (Coca-Cola y Frito Lay). ${cl.cliente||t.proyecto} es solo consulta.`,'CLIENTE_NO_AUTORIZADO');
+    const objetivo=String(nuevo||'');
+    if(!['EN_RUTA','ENTREGADO'].includes(objetivo))deny('Torre de Control solo puede avanzar el viaje a En ruta o Entregado.','ESTADO_NO_AUTORIZADO');
+    if(!(EDGES[t.estado]||[]).includes(objetivo))deny(`Torre de Control no puede pasar de "${ESTADOS[t.estado].l}" a "${ESTADOS[objetivo].l}".`,'TRANSICION_INVALIDA');
+    if(objetivo==='EN_RUTA'){
+      requerido(t,['shipment','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','placaArrastre'],'En ruta');
+      if(!t.unidadId)deny('No se puede pasar a En ruta: falta la unidad.','FALTAN_CAMPOS');
+      moveEstado(t,'EN_RUTA',A,'Viaje enviado a ruta (Torre de Control)');
+      t.iniciadoPor=A.nombre;t.iniciadoEn=nowIso();
+      if(!t.tSalida)setAuto(t,'tSalida',nowLoc(),A,'Automático al iniciar el viaje');
+    }else{
+      requerido(t,TKEYS,'Entregado');
+      moveEstado(t,'ENTREGADO',A,'Viaje entregado (Torre de Control)');
+      t.finalizadoPor=A.nombre;t.finalizadoEn=nowIso();
+    }
     return t;
   });},
 
@@ -716,7 +725,6 @@ const API={
     lq.decision='APROBADA';lq.revisorId=A.id;lq.revisor=A.nombre;lq.revisionEn=nowIso();
     t.liqAprobadaEn=lq.revisionEn;t.aprobadoPor=A.nombre;t.aprobadoEn=lq.revisionEn;
     moveEstado(t,'ACEPTADO',A,'Viaje aceptado para facturación','',lq.id);
-    setAuto(t,'estatus','LIQUIDADO',A,'Automático al aceptar la liquidación');
     return t;
   });},
 
@@ -1134,20 +1142,8 @@ const API={
     need(A,'clientes_gestionar','administrar las reglas de Torre de Control');
     const c=DB.clientes.find(x=>x.id===(d&&d.cliente));if(!c)deny('Cliente no válido.','VALIDACION');
     const v=!!d.torreEstatus;if(!!c.torreEstatus===v)return c;
-    auditAdd({entidad:'CLIENTE',accion:'Torre de Control: actualización de estatus '+(v?'autorizada':'retirada'),campo:'Torre actualiza estatus',anterior:c.torreEstatus?'Sí':'No',nuevo:v?'Sí':'No',por:A,ref:c.id});
+    auditAdd({entidad:'CLIENTE',accion:'Torre de Control: autorización '+(v?'otorgada':'retirada'),campo:'Torre avanza el estado',anterior:c.torreEstatus?'Sí':'No',nuevo:v?'Sí':'No',por:A,ref:c.id});
     c.torreEstatus=v;return c;
-  });},
-  guardarOpcionesTorre(uid,d){return exec(uid,'guardarOpcionesTorre','',A=>{
-    need(A,'clientes_gestionar','administrar las reglas de Torre de Control');
-    const op=(d&&d.opciones)||[];
-    if(!op.length)deny('Autoriza al menos un estatus.','VALIDACION');
-    if(op.some(x=>!CAT.estatus.includes(x)))deny('Solo se pueden autorizar estatus del catálogo.','VALIDACION');
-    const veda=op.filter(x=>ESTATUS_VEDADOS.includes(x));
-    if(veda.length)deny(`Estos estatus no pueden delegarse a Torre de Control: ${veda.join(', ')}.`,'ESTATUS_VEDADO');
-    const nuevos=CAT.estatus.filter(x=>op.includes(x)),antes=DB.config.torreEstatus;
-    if(antes.join()===nuevos.join())return nuevos;
-    auditAdd({entidad:'CLIENTE',accion:'Torre de Control: estatus autorizados modificados',campo:'Estatus autorizados',anterior:antes.join(', '),nuevo:nuevos.join(', '),por:A});
-    DB.config.torreEstatus=nuevos;return nuevos;
   });},
 
   guardarCliente(uid,d){return exec(uid,'guardarCliente','',A=>{
@@ -1191,6 +1187,6 @@ const API={
    SIEMBRA: datos de demostración creados con la propia API (mismas reglas)
    ===================================================================== */
 
-return {API,ApiError,ROLES,PERMS,PERM_KEYS,PERM_DEFAULT,PROHIBIDO,ENV,TORRE_ESTATUS_DEFECTO,CAT,PILOTOS,FLOTA,DESTINOS,ORIGENES,hasPerm,blankDB,syncRefs,
+return {API,ApiError,ROLES,PERMS,PERM_KEYS,PERM_DEFAULT,PROHIBIDO,ENV,CAT,PILOTOS,FLOTA,DESTINOS,ORIGENES,hasPerm,blankDB,syncRefs,
   getDB:()=>DB, setDB:d=>{DB=d;syncRefs();}};
 }

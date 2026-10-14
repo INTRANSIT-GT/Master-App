@@ -26,7 +26,7 @@ function seedDB(){
     Object.assign({id:'COCACOLA',nombre:'Coca-Cola',cliente:'COCA-COLA',proyectos:['EMBOCEN'],torreEstatus:true},base),
     Object.assign({id:'FRITOLAY',nombre:'Frito Lay',cliente:'FRITO LAY',proyectos:['CARGAS GLOBAL'],torreEstatus:true},base)
   ];
-  DB.config={torreEstatus:TORRE_ESTATUS_DEFECTO.slice()};
+  DB.config={};
   Object.keys(ROLES).forEach(rol=>PERM_KEYS.forEach(p=>DB.permisos.push({rol,permiso:p,habilitado:(PERM_DEFAULT[rol]||[]).includes(p)&&!(PROHIBIDO[rol]||[]).includes(p)})));
   syncRefs();
   const now=Date.now(),lm=m=>toLocal(new Date(now-m*60000)),dd=m=>dstr(new Date(now-m*60000));
@@ -45,7 +45,7 @@ function seedDB(){
     n++;const cmi=cli==='CMI',col=cli==='COLGATE',enc={COLGATE:U.ped,CMI:U.bry,COCACOLA:'U-008',FRITOLAY:'U-009'}[cli];
     const pc=o.pc||(col?'COLGATE':cmi?'ABASA':cli==='COCACOLA'?'EMBOCEN':'CARGAS GLOBAL');
     const d={cliente:cli,proyectoCat:pc,shipment:'SHP-'+(48200+n),noViaje:'NV-'+String(111+n).padStart(6,'0'),opl:o.opl||(cmi?'GRIJALVA':'INTRANSIT'),tipoViaje:cmi?'ROUD TRIP':'ONE WAY',tipoCarga:cmi?'CAJAS':'TARIMAS',noCarga:cmi?420:14,producto:'Producto terminado',
-      fechaPlan:lm(o.pl!==undefined?o.pl:(o.s?o.s+30:o.c)),estatus:'EN ESPERA',pilotoId:pil,noDocRetorno:'',qViaticos:''};
+      fechaPlan:lm(o.pl!==undefined?o.pl:(o.s?o.s+30:o.c)),pilotoId:pil,noDocRetorno:'',qViaticos:''};
     if(o.noRuta){d.rutaId='NO_ASIGNADA';d.rutaRef=o.noRuta;}else d.rutaId=getRuta(cli,pc,ori,des,o.c);
     TKEYS.forEach(k=>d[k]='');
     if(o.s&&!o.blank){const s=o.s;
@@ -66,7 +66,7 @@ function seedDB(){
       if(!tars[tk])tars[tk]=run(o.c+10,()=>API.crearTarifa(U.ale,{cliente:cli,proyecto:pc,rutaId:d.rutaId,capacidad:cap,importe:o.tf,vigenteDesde:dd(o.c+43200)}));
       run(o.a-5,()=>API.aplicarTarifa(U.ale,id));
     }
-    if(o.es)run(o.est||20,()=>API.editarViaje(enc,id,{estatus:o.es},'Actualización de estatus operativo'));
+    if(o.es)run(o.est||20,()=>API.torreMoverEstado(enc,id,o.es));
     (o.pg||[]).forEach(p=>run(p.m,()=>API.registrarPago(U.adm,{tipo:p.t,viajeId:id,monto:p.v,fecha:dd(p.m),referencia:p.r})));
     return id;
   };

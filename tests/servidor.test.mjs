@@ -69,14 +69,14 @@ const r1 = await api('adm', 'registrarRuta', { codigo: 'COL-001', nombre: 'CP �
 const r2 = await api('adm', 'registrarRuta', { codigo: 'COL-LV1', nombre: 'CP → Colgate LV', cliente: 'COLGATE', proyecto: 'LV', origenId: 'CP', destinoId: 'D-C1' });
 const r3 = await api('adm', 'registrarRuta', { codigo: 'CMI-001', nombre: 'CP → CMI 1', cliente: 'CMI', proyecto: 'ABASA', origenId: 'CP', destinoId: 'D-M1' });
 T('01 La administradora registra rutas y se guardan en la base', r1.ok && r2.ok && r3.ok && (await q1('select count(*)::int n from rutas'))[0].n === 3, [r1, r2, r3].map(r => r.message));
-const viaje = (extra = {}) => ({ cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', rutaId: r1.result.id, fechaPlan: '2031-01-01T08:00', estatus: 'EN ESPERA', shipment: 'S-1', ...extra });
+const viaje = (extra = {}) => ({ cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', rutaId: r1.result.id, fechaPlan: '2031-01-01T08:00', shipment: 'S-1', ...extra });
 const v1 = await api('ped', 'crearViaje', viaje());
 T('02 Pedro crea un viaje: queda guardado con identificador estable', v1.ok && /^\d{6}$/.test(v1.result.id) && (await q1('select count(*)::int n from viajes'))[0].n === 1, v1);
 const v1id = v1.result?.id;
 const dup = await api('ped', 'crearViaje', viaje());
 T('03 No se duplica el mismo viaje (fecha + piloto + ruta)', dup.ok === false && (await q1('select count(*)::int n from viajes'))[0].n === 1, dup);
 const lv = await api('adm', 'crearViaje', viaje({ proyectoCat: 'LV', rutaId: r2.result.id, pilotoId: 'P-3', fechaPlan: '2031-01-02T08:00' }));
-const cm = await api('bry', 'crearViaje', { cliente: 'CMI', proyectoCat: 'ABASA', pilotoId: 'P-2', rutaId: r3.result.id, fechaPlan: '2031-01-01T09:00', estatus: 'EN ESPERA' });
+const cm = await api('bry', 'crearViaje', { cliente: 'CMI', proyectoCat: 'ABASA', pilotoId: 'P-2', rutaId: r3.result.id, fechaPlan: '2031-01-01T09:00' });
 T('04 Se crean viajes de otros proyectos y clientes', lv.ok && cm.ok, [lv.message, cm.message]);
 
 /* ---- 2. Alcance por cliente y proyecto (servidor) ---- */
@@ -182,7 +182,7 @@ T('56 Un encargado NO puede crear usuarios (ni se crea cuenta de acceso)', intru
 const malo = await api('adm', 'guardarUsuario', { usuario: 'pedro', nombre: 'Duplicado Pedro', email: 'dup@x.test', clave: 'ClaveSegura1', rol: 'ENCARGADO', clientes: ['CMI'] });
 T('57 Si el motor rechaza el alta, la cuenta de acceso creada se elimina (no quedan cuentas huérfanas)', malo.ok === false && (await q1("select count(*)::int n from auth.users where email='dup@x.test'"))[0].n === 0 && borrados.length >= 1, malo);
 T('58 No se puede conceder a un perfil un permiso prohibido (separación de funciones)', (await api('adm', 'setPermiso', 'ENCARGADO', 'liq_aprobar', true)).ok === false);
-T('59 Torre: solo cambia el estatus y solo en clientes autorizados', (await api('fel', 'editarViaje', v1id, { estatus: 'EN RAMPA' })).ok === false);
+T('59 Torre: solo avanza el estado y solo en clientes autorizados', (await api('fel', 'torreMoverEstado', v1id, 'EN_RUTA')).ok === false);
 
 console.log(filas.join('\n'));
 console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`);

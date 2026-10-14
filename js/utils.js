@@ -44,7 +44,6 @@ const nowLocal=()=>toLocal(new Date());
 const fmtL=v=>v?`${fmtDate(v.slice(0,10))} ${v.slice(11,16)}`:'—';
 const planD=t=>(t.fechaPlan||'').slice(0,10),planT=t=>(t.fechaPlan||'').slice(11,16);
 const since=t=>t.tSalida||t.iniciadoEn;
-const est=t=>t.estatus?`<span class="est tn-${ESTATUS_TONO[t.estatus]||'neutral'}">${esc(t.estatus)}</span>`:'';
 const topScroll=()=>{const m=document.querySelector('#main');if(m)m.scrollTop=0;};
 function diff(a,b){if(!a||!b)return'—';const m=Math.round((new Date(b)-new Date(a))/60000);if(m<0)return'Revisar fechas';const h=Math.floor(m/60);return h?`${h} h ${pad(m%60)} min`:`${m} min`;}
 /* Horarios (columnas FECHA_HORA ... de la hoja VIAJES), en orden cronológico */
@@ -52,8 +51,8 @@ const CAMPOS_TIEMPO=[['tIngresoPlanta','Ingreso a planta CP'],['tEsperaRampa','E
 const TKEYS=CAMPOS_TIEMPO.map(x=>x[0]);
 /* Columnas de tiempo que se calculan solas */
 const DUR=[['Espera de rampa','tEsperaRampa','tRampa'],['En rampa','tRampa','tSalidaPlanta'],['Espera de carga','tIngresoPlanta','tInicioCarga'],['Tiempo de carga','tInicioCarga','tFinCarga'],['Tiempo en tránsito','tSalida','tIngresoBodega'],['Espera de descarga','tIngresoBodega','tInicioDescarga'],['Tiempo de descarga','tInicioDescarga','tFinDescarga']];
-const GRUPOKEYS={cliente:['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre'],plan:['fechaPlan'],estatus:['estatus'],unidad:['pilotoId'],ruta:['rutaId'],tiempos:TKEYS,otros:['noDocRetorno','qViaticos']};
-const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'No. de carga',producto:'Producto',fechaPlan:'Fecha plan',estatus:'Estatus',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
+const GRUPOKEYS={cliente:['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre'],plan:['fechaPlan'],unidad:['pilotoId'],ruta:['rutaId'],tiempos:TKEYS,otros:['noDocRetorno','qViaticos']};
+const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'No. de carga',producto:'Producto',fechaPlan:'Fecha plan',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
 CAMPOS_TIEMPO.forEach(([k,l])=>LBL[k]=l);
 
 function sampleSlip(no){

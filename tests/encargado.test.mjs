@@ -33,7 +33,7 @@ await db.exec(`insert into master.flota(unidad,placa,tango,capacidad,tipo) value
   insert into master.rutas(id,codigo,nombre,cliente_id,proyecto,origen_id,destino_id,estado) values ('R-0001','COL-001','CP → Mayorista Escuintla','COLGATE','COLGATE','CP','D-1','ACTIVA'),('R-0002','COL-002','CP → Los Andes','COLGATE','COLGATE','CP','D-2','ACTIVA');`);
 let tx = null; const deps = { transaccion: fn => db.transaction(t => { tx = t; return fn(async (q, p = []) => t.query(q, p)); }), firmar: async ps => new Map(ps.map(p => [p, 'https://f.test/' + p])), crearUsuarioAuth: async () => uuid(), borrarUsuarioAuth: async () => {} };
 const srv = (q, op, ...a) => ejecutar(deps, U[q], { op, args: a });
-const base = { cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', fechaPlan: '2031-03-01T08:00', estatus: 'EN ESPERA', shipment: 'SHP-1', opl: 'INTRANSIT', tipoViaje: 'ONE WAY', tipoCarga: 'KG', producto: 'P', noCarga: '1' };
+const base = { cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', fechaPlan: '2031-03-01T08:00', shipment: 'SHP-1', opl: 'INTRANSIT', tipoViaje: 'ONE WAY', tipoCarga: 'KG', producto: 'P', noCarga: '1' };
 const v1 = await srv('ped', 'crearViaje', { ...base, rutaId: 'R-0001' });
 T('A1 El encargado guarda un viaje con la ruta elegida del desplegable', v1.ok, v1);
 const id = v1.result && v1.result.id;

@@ -31,16 +31,10 @@ function allowed(v){
 const navItems=()=>ROLES[S.user.rol].nav.filter(v=>allowed(v));
 
 /* ---------- Componentes ---------- */
-/* Colores de estado (Brandbook): punto de color + etiqueta. Cumplido = verde, En proceso = azul océano, Alerta = rojo; lo demás, gris neutro.
-   UNA sola tabla para toda la aplicación: el mismo estado tiene el mismo color en todos los módulos. */
-const TONO_ESTADO={PLANIFICADO:'neutral',EN_RUTA:'progress',ENTREGADO:'warn',LIQUIDADO:'progress',ACEPTADO:'done',RECHAZADO:'alert',FACTURADO:'progress',COBRADO:'done'};
-const ESTATUS_TONO={'EN ESPERA':'neutral','DISPONIBLE':'neutral','NO DISPONIBLE':'neutral','PROCESO DE CARGA':'progress','CARGADO':'progress','EN RAMPA':'progress','EN CAMINO':'progress','ESPERA CON CLIENTE':'progress','ESPERA DE DESCARGA':'progress','ESPERANDO CALIDAD':'progress','ESPERANDO CUSTODIO':'progress','RETORNO':'progress','REPROGRAMADO':'progress','PENDIENTE LIQUIDAR':'progress','COMPLETADO':'done','LIQUIDADO':'done','CANCELADO':'alert','NO SALIO A RUTA':'alert','NO ENTREGADO':'alert','DEVOLUCION':'alert'};
+/* Colores de estado: UNA sola tabla. Cada estado del proceso trae su color en ESTADOS (clase CSS st-<ESTADO>). */
 const TONO_RUTA={PENDIENTE:'alert',EN_TARIFACION:'progress',PENDIENTE_APROBACION:'progress',ACTIVA:'done',RECHAZADA:'alert'};
 const chip=(tono,label)=>`<span class="stc tn-${tono}">${esc(label)}</span>`;
-/* Quien no trabaja en Comercial ve esas etapas como "Liquidación aprobada": Liquidaciones termina al aprobar. */
-const badge=e=>{
-  return chip(TONO_ESTADO[e]||'neutral',ESTADOS[e].l);
-};
+const badge=e=>`<span class="stc st-${esc(e)}">${esc(ESTADOS[e]?ESTADOS[e].l:e)}</span>`;
 const rutaChip=e=>chip(TONO_RUTA[e]||'neutral',{PENDIENTE:'PENDIENTE',EN_TARIFACION:'EN TARIFACIÓN',PENDIENTE_APROBACION:'PENDIENTE APROBACIÓN',ACTIVA:'ACTIVA',RECHAZADA:'RECHAZADA'}[e]||e);
 const vroute=j=>`<div class="vroute"><span class="d o"></span><span>${esc(j.origen)}</span><span class="d t"></span><span>${esc(j.destino)}</span></div>`;
 /* ---- Perfil «Encargado de proyecto»: los ajustes de esta versión SOLO se aplican a este rol; los demás perfiles ven exactamente lo mismo que antes ---- */
@@ -56,7 +50,7 @@ function tabs(key,list,active,ts){
 function tripCard(t){
   const j=J(t);
   return `<article class="tcard" role="button" tabindex="0" data-act="detalle" data-id="${t.id}">
-    <div class="tc-top"><span class="num">Viaje #${t.id}</span><span class="bgs">${badge(t.estado)}${est(t)}</span></div>
+    <div class="tc-top"><span class="num">Viaje #${t.id}</span><span class="bgs">${badge(t.estado)}</span></div>
     <div class="tc-proj"><span class="pchip sm">${esc(j.proyectoNombre)}</span>${t.estado==='EN_RUTA'?`<span><span class="pulse"></span><span data-since="${since(t)}">${elapsed(since(t))}</span></span>`:`<span class="mute">Plan ${fmtL(t.fechaPlan)}</span>`}</div>
     ${vroute(j)}
     <dl class="meta"><dt>Piloto</dt><dd>${esc(j.piloto)}</dd><dt>Unidad / placa</dt><dd>${esc(j.f.unidad)} · ${esc(j.f.placa)}</dd></dl>
@@ -67,13 +61,13 @@ function tripCard(t){
 function tableHTML(ts,extra){
   if(!ts.length)return empty('Sin viajes con este filtro','Cambia el estado o el cliente para ver más resultados.');
   return `<div class="tablewrap scrollx"><table class="resp"><thead><tr><th>Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Origen → destino</th><th>Piloto</th><th>Unidad / placa</th>${extra?`<th>${extra.h}</th>`:''}<th>Estado</th></tr></thead><tbody>
-  ${ts.map(t=>{const j=J(t);return `<tr role="button" tabindex="0" data-act="detalle" data-id="${t.id}"><td data-l="Viaje"><span class="num">#${t.id}</span></td><td data-l="Fecha plan">${fmtL(t.fechaPlan)}</td><td data-l="Cliente"><span class="pchip sm">${esc(j.proyectoNombre)}</span></td><td data-l="Ruta">${esc(j.origen)} → ${esc(j.destino)}</td><td data-l="Piloto">${esc(j.piloto)}</td><td data-l="Unidad">${esc(j.f.unidad)} · ${esc(j.f.placa)}</td>${extra?`<td data-l="${extra.h}">${extra.f(t)}</td>`:''}<td data-l="Estado">${badge(t.estado)} ${est(t)}</td></tr>`;}).join('')}
+  ${ts.map(t=>{const j=J(t);return `<tr role="button" tabindex="0" data-act="detalle" data-id="${t.id}"><td data-l="Viaje"><span class="num">#${t.id}</span></td><td data-l="Fecha plan">${fmtL(t.fechaPlan)}</td><td data-l="Cliente"><span class="pchip sm">${esc(j.proyectoNombre)}</span></td><td data-l="Ruta">${esc(j.origen)} → ${esc(j.destino)}</td><td data-l="Piloto">${esc(j.piloto)}</td><td data-l="Unidad">${esc(j.f.unidad)} · ${esc(j.f.placa)}</td>${extra?`<td data-l="${extra.h}">${extra.f(t)}</td>`:''}<td data-l="Estado">${badge(t.estado)}</td></tr>`;}).join('')}
   </tbody></table></div>`;
 }
 function statBar(ts){
   const tot=ts.length||1,ks=Object.keys(ESTADOS);
-  return `<div class="pbar" role="img" aria-label="Distribución por estado">${ks.map(e=>{const n=cnt(ts,t=>t.estado===e);return n?`<i style="width:${n/tot*100}%;background:var(${ESTADOS[e].c})" title="${ESTADOS[e].l}: ${n}"></i>`:'';}).join('')}</div>
-  <div class="legend">${ks.map(e=>{const n=cnt(ts,t=>t.estado===e);return n?`<span><i class="dot" style="background:var(${ESTADOS[e].c})"></i>${ESTADOS[e].l} ${n}</span>`:'';}).join('')}</div>`;
+  return `<div class="pbar" role="img" aria-label="Distribución por estado">${ks.map(e=>{const n=cnt(ts,t=>t.estado===e);return n?`<i style="width:${n/tot*100}%;background:${ESTADOS[e].c}" title="${ESTADOS[e].l}: ${n}"></i>`:'';}).join('')}</div>
+  <div class="legend">${ks.map(e=>{const n=cnt(ts,t=>t.estado===e);return n?`<span><i class="dot" style="background:${ESTADOS[e].c}"></i>${ESTADOS[e].l} ${n}</span>`:'';}).join('')}</div>`;
 }
 const matchE=(t,f)=>!f||(f==='FIN'?FIN.includes(t.estado):t.estado===f);
 function histHTML(evs){
@@ -183,8 +177,8 @@ function accionesViaje(t){
 }
 function viajesTable(list){
   if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
-  return `<div class="xlwrap"><table class="xl" style="min-width:1500px"><thead><tr><th class="stk">Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Piloto</th><th>Unidad · placa</th><th>Estatus</th><th>Estado</th><th class="stkR">Acciones</th></tr></thead><tbody>
-  ${list.map(t=>{const j=J(t),dup=String(t.shipment||'').trim()&&!/^DUP-/i.test(t.shipment)&&DB.trips.some(x=>x.id!==t.id&&String(x.shipment||'').trim().toLowerCase()===String(t.shipment||'').trim().toLowerCase());return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td class="${dup?'warnl':''}">${est(t)||'<span class="mute">—</span>'}${dup?' <b>Shipment duplicado</b>':''}</td><td>${badge(t.estado)}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
+  return `<div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr><th class="stk">Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Piloto</th><th>Unidad · placa</th><th>Estado</th><th class="stkR">Acciones</th></tr></thead><tbody>
+  ${list.map(t=>{const j=J(t),dup=String(t.shipment||'').trim()&&!/^DUP-/i.test(t.shipment)&&DB.trips.some(x=>x.id!==t.id&&String(x.shipment||'').trim().toLowerCase()===String(t.shipment||'').trim().toLowerCase());return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td class="${dup?'warnl':''}">${badge(t.estado)}${dup?' <b>Shipment duplicado</b>':''}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
   </tbody></table></div>`;
 }
 
@@ -207,14 +201,14 @@ const curModel=()=>S.edit?S.edit.data:S.form;
 function initForm(){
   const d=new Date();d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
     const m={proyecto:esEnc()?(clientesAsig(S.user).length===1?clientesAsig(S.user)[0]:''):(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',
-    fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),estatus:'EN ESPERA',pilotoId:'',rutaId:'',rutaRef:'',noDocRetorno:'',qViaticos:'',savedId:null,err:''};
+    fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',rutaId:'',rutaRef:'',noDocRetorno:'',qViaticos:'',savedId:null,err:''};
   TKEYS.forEach(k=>m[k]='');
   const pc=esEnc()?(m.proyecto?proyectosAsig(S.user,m.proyecto):[]):PROYECTOS_X[m.proyecto];if(pc&&pc.length===1)m.proyectoCat=pc[0];
   return m;
 }
 function toModel(t){
   const m={proyecto:t.proyecto,fechaPlanD:planD(t),fechaPlanT:planT(t),err:''};
-  ['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','estatus','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
+  ['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
   return m;
 }
 
@@ -320,10 +314,9 @@ function fieldsHTML(M,groups,dis){
       <div class="row2">${txt('producto','Producto')}${txt('noViaje','Referencia interna (opcional)')}</div></div>`;
   }
   if(has('plan')){
-    h+=`<div class="card fsec"><h3>${has('estatus')?'Fecha plan y estatus':'Fecha plan'}</h3>
+    h+=`<div class="card fsec"><h3>Fecha plan</h3>
       <div class="row2"><div class="fgroup"><label for="m_fechaPlanD">Fecha plan <span class="mute">*</span></label><input type="date" id="m_fechaPlanD" data-m="fechaPlanD" value="${esc(M.fechaPlanD)}" ${d}><span class="hint">Hoy por defecto; puedes cambiarla</span></div>
-      <div class="fgroup"><label for="m_fechaPlanT">Hora plan <span class="mute">*</span></label><input type="time" id="m_fechaPlanT" data-m="fechaPlanT" value="${esc(M.fechaPlanT)}" ${d}></div></div>
-      ${has('estatus')?sel('estatus','Estatus',CAT.estatus,{src:'CATALOGO',hint:'Cámbialo según avanza el viaje (en rampa, espera con cliente, reprogramado…)'}):''}</div>`;
+      <div class="fgroup"><label for="m_fechaPlanT">Hora plan <span class="mute">*</span></label><input type="time" id="m_fechaPlanT" data-m="fechaPlanT" value="${esc(M.fechaPlanT)}" ${d}></div></div></div>`;
   }
   if(has('unidad')){
     h+=`<div class="card fsec"><h3>Piloto y unidad</h3>
@@ -378,7 +371,7 @@ VIEWS.nuevo=()=>{
   return `<div class="inner form">${pageHead('Registrar nuevo viaje','Incluye todos los campos de VIAJES TRANSPORTES. Lo que ya existe en otras hojas se completa solo. * obligatorio.')}
     ${f.savedId?`<div class="alertbox okb" style="margin-bottom:16px;display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>Viaje #${f.savedId} guardado.</b> Quedó en estado Pendiente. Puedes registrar otro, abrirlo para actualizar horarios o terminar.</span></div>`:''}
     ${f.err?`<div class="alertbox" style="margin-bottom:16px" role="alert"><b>${esc(f.err)}</b></div>`:''}
-    ${fieldsHTML(f,['cliente','plan','estatus','unidad','ruta','tiempos','otros'],dis)}
+    ${fieldsHTML(f,['cliente','plan','unidad','ruta','tiempos','otros'],dis)}
     <div class="formbtns">
       ${f.savedId?`<button class="btn primary lg" data-act="otro">${icon('plus',18)} REGISTRAR OTRO VIAJE</button><button class="btn lg" data-act="detalle" data-id="${f.savedId}">Abrir viaje #${f.savedId}</button>`:`<button class="btn primary lg" data-act="guardar" ${Pl&&!Pl.unidad?'disabled':''}>GUARDAR VIAJE</button>`}
       <button class="btn lg" data-act="terminar">TERMINAR</button>
@@ -386,7 +379,7 @@ VIEWS.nuevo=()=>{
 };
 
 
-/* ---- Torre de Control: hoja tipo Excel · solo el estatus operativo de los clientes autorizados ---- */
+/* ---- Torre de Control: hoja tipo Excel · avanza el estado de los clientes autorizados ---- */
 const TT=[
   {k:'curso',l:'En ruta',f:t=>t.estado==='EN_RUTA'},
   {k:'pend',l:'Planificados',f:t=>t.estado==='PLANIFICADO'},
@@ -394,52 +387,56 @@ const TT=[
   {k:'todos',l:'Todos',f:()=>true}
 ];
 const clienteDe=t=>DB.clientes.find(x=>x.id===t.proyecto)||{};
-const puedeEstatusTorre=t=>hp('viajes_estatus_torre')&&!!clienteDe(t).torreEstatus&&['PLANIFICADO','EN_RUTA'].includes(t.estado);
+/* Torre de Control avanza el estado de sus clientes autorizados: Planificado → En ruta → Entregado */
+const TORRE_SIGUIENTE={PLANIFICADO:'EN_RUTA',EN_RUTA:'ENTREGADO'};
+const torreAccion=t=>!!clienteDe(t).torreEstatus&&!!TORRE_SIGUIENTE[t.estado];
 function torreList(){
   const base=vis().filter(t=>!S.tProy||t.proyecto===S.tProy),k=S.tab.torre||'curso',cur=TT.find(x=>x.k===k)||TT[0],q=S.q.trim().toLowerCase();
-  let l=base.filter(cur.f).filter(t=>!q||(t.id+' '+(J(t).piloto||'')+' '+(J(t).f.placa||'')+' '+(J(t).cliente||'')+' '+(J(t).destino||'')+' '+(t.estatus||'')).toLowerCase().includes(q));
+  let l=base.filter(cur.f).filter(t=>!q||(t.id+' '+(J(t).piloto||'')+' '+(J(t).f.placa||'')+' '+(J(t).cliente||'')+' '+(J(t).destino||'')+' '+((ESTADOS[t.estado]||{}).l||'')).toLowerCase().includes(q));
   l.sort((a,b)=>a.proyecto.localeCompare(b.proyecto)||a.id.localeCompare(b.id));
   return l;
 }
-function estatusOpciones(t){const op=DB.config.torreEstatus.slice();if(t.estatus&&!op.includes(t.estatus))op.unshift(t.estatus);return op;}
 function torreSheet(list){
   if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
-  return `<div class="xlwrap sheet"><table class="xl" style="min-width:1500px"><thead><tr><th class="stk">Viaje</th><th>Cliente</th><th>Proyecto</th><th>Piloto</th><th>Unidad · placa</th><th>Ruta</th><th>Estado</th><th>En ruta</th><th>Estatus operativo</th><th>Fecha plan</th><th>Inicio real (salida)</th><th>Fin descarga</th></tr></thead><tbody>
-  ${list.map(t=>{const j=J(t),ed=puedeEstatusTorre(t);
-    return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${rutaHTML(t)}</td><td>${badge(t.estado)}</td><td>${t.estado==='EN_RUTA'?`<span class="elapsed" style="font-size:14px" data-since="${since(t)}">${elapsed(since(t))}</span>`:'—'}</td>
-    <td class="${ed?'ed':'ro'}" style="min-width:250px">${ed?`<div class="trow"><select class="cin sel" data-status="${t.id}" aria-label="Estatus operativo del viaje ${t.id}">${estatusOpciones(t).map(o=>`<option ${o===t.estatus?'selected':''}>${esc(o)}</option>`).join('')}</select>${est(t)}<span class="cst" id="ss_${t.id}" aria-live="polite"></span></div>`:`${est(t)} <span class="mute" style="font-size:12px">${clienteDe(t).torreEstatus?'(no editable en este estado)':'solo consulta'}</span>`}</td>
+  const puede=hp('viajes_estatus_torre');
+  return `<div class="xlwrap sheet"><table class="xl" style="min-width:1400px"><thead><tr><th class="stk">Viaje</th><th>Cliente</th><th>Proyecto</th><th>Piloto</th><th>Unidad · placa</th><th>Ruta</th><th>Estado</th><th>En ruta</th><th>Fecha plan</th><th>Inicio real (salida)</th><th>Fin descarga</th></tr></thead><tbody>
+  ${list.map(t=>{const j=J(t),sig=TORRE_SIGUIENTE[t.estado],aut=clienteDe(t).torreEstatus,ed=puede&&aut&&!!sig;
+    const ctrl=ed?`<button class="btn primary sm" data-act="torreEstado" data-torreestado="${t.id}" data-dest="${sig}">${sig==='EN_RUTA'?'Enviar a ruta':'Confirmar entrega'}</button><span class="cst" id="ss_${t.id}" aria-live="polite"></span>`
+      :`<span class="mute" style="font-size:12px">${aut?'(sin acción en este estado)':'solo consulta'}</span>`;
+    return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${rutaHTML(t)}</td>
+    <td class="${ed?'ed':'ro'}" style="min-width:230px"><div class="trow">${badge(t.estado)}${ctrl}</div></td>
+    <td>${t.estado==='EN_RUTA'?`<span class="elapsed" style="font-size:14px" data-since="${since(t)}">${elapsed(since(t))}</span>`:'—'}</td>
     <td>${fmtL(t.fechaPlan)}</td><td>${t.tSalida?fmtL(t.tSalida):'—'}</td><td>${t.tFinDescarga?fmtL(t.tFinDescarga):'—'}</td></tr>`;}).join('')}
   </tbody></table></div>`;
 }
 BODY.torre=()=>`<div class="mute" style="margin-bottom:8px">${torreList().length} viajes</div>${torreSheet(torreList())}`;
 VIEWS.torre=()=>{
   const all=vis(),base=S.tProy?all.filter(t=>t.proyecto===S.tProy):all,k=S.tab.torre||'curso';
-  const kp=(n,l,c)=>`<div class="kpi"><span class="n">${n}</span><span class="l"><i class="dot" style="background:var(${c})"></i>${l}</span></div>`;
+  const kp=(n,l,c)=>`<div class="kpi"><span class="n">${n}</span><span class="l"><i class="dot" style="background:${c}"></i>${l}</span></div>`;
   const chips=comboHTML('tProy',S.tProy,[{id:'',nombre:'Todos los clientes'},...PROYECTOS.map(p=>({id:p.id,nombre:p.nombre}))]);
   const aut=DB.clientes.filter(c=>c.torreEstatus).map(c=>c.nombre);
-  const rules=`<div class="rulebar"><span><b>Puedes actualizar el estatus operativo de:</b> ${esc(aut.join(', ')||'ningún cliente')}.</span><span class="mute">Torre no cambia el estado del viaje ni otros datos.</span></div>`;
-  return `<div class="inner" style="max-width:none">${pageHead('TORRE DE CONTROL','Hoja de viajes de todos los proyectos · el estatus se guarda solo al elegirlo',`<span class="clock" id="clock">${new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit',hour12:false})}</span>`)}
-    <div class="grid g4" style="margin-bottom:16px">${kp(cnt(base,t=>t.estado==='PLANIFICADO'),'Planificados','--pend')}${kp(cnt(base,t=>t.estado==='EN_RUTA'),'En ruta','--cur')}${kp(cnt(base,t=>puedeEstatusTorre(t)),'Con estatus editable','--ok')}${kp(cnt(base,t=>t.estado==='ENTREGADO'),'Pendientes de liquidación','--warn')}</div>
+  const rules=`<div class="rulebar"><span><b>Puedes avanzar el estado de:</b> ${esc(aut.join(', ')||'ningún cliente')}.</span><span class="mute">Torre solo mueve el estado (En ruta / Entregado); no edita otros datos.</span></div>`;
+  return `<div class="inner" style="max-width:none">${pageHead('TORRE DE CONTROL','Hoja de viajes de todos los proyectos · avanza el estado de los clientes autorizados',`<span class="clock" id="clock">${new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit',hour12:false})}</span>`)}
+    <div class="grid g4" style="margin-bottom:16px">${kp(cnt(base,t=>t.estado==='PLANIFICADO'),'Planificados',ESTADOS.PLANIFICADO.c)}${kp(cnt(base,t=>t.estado==='EN_RUTA'),'En ruta',ESTADOS.EN_RUTA.c)}${kp(cnt(base,t=>hp('viajes_estatus_torre')&&torreAccion(t)),'Con acción disponible',ESTADOS.ENTREGADO.c)}${kp(cnt(base,t=>t.estado==='ENTREGADO'),'Pendientes de liquidación',ESTADOS.LIQUIDADO.c)}</div>
     ${chips}${rules}${tabs('torre',TT,k,base)}
-    <div style="margin:12px 0"><input type="text" id="q" placeholder="Buscar por viaje, piloto, placa, cliente, destino o estatus" value="${esc(S.q)}" aria-label="Buscar" style="max-width:440px"></div>
+    <div style="margin:12px 0"><input type="text" id="q" placeholder="Buscar por viaje, piloto, placa, cliente, destino o estado" value="${esc(S.q)}" aria-label="Buscar" style="max-width:440px"></div>
     <div id="vb">${BODY.torre()}</div></div>`;
 };
 function refreshSheet(){
   const w=document.querySelector('.xlwrap.sheet'),sl=w?w.scrollLeft:0,st=w?w.scrollTop:0,vb=document.getElementById('vb');
   if(vb){vb.innerHTML=BODY.torre();const w2=document.querySelector('.xlwrap.sheet');if(w2){w2.scrollLeft=sl;w2.scrollTop=st;}}
 }
-/* Guardado automático del estatus (celda de la hoja) */
+/* Torre de Control: avanzar el estado (se guarda solo al pulsar) */
 const AUTOBUSY={};
-async function statusSave(id,el){
-  const v=el.value,key=id+'|estatus',st=document.getElementById('ss_'+id);
-  const set=(c,msg)=>{el.classList.remove('saving','saved','error');el.classList.add(c);el.title=c==='error'?msg:'';
-    if(st){st.className='cst '+c;st.innerHTML=c==='saving'?'…':c==='saved'?'✓':`<button class="cretry" data-act="statusRetry" data-id="${id}" title="${esc(msg)} Toca para reintentar" aria-label="Error: ${esc(msg)}. Reintentar">⚠</button>`;}};
-  if(AUTOBUSY[key]===v)return;
-  let cur;try{cur=API.viaje(S.user.id,id);}catch(e){set('error',e.message);return;}
-  if(String(cur.estatus||'')===v){set('saved');return;}
-  AUTOBUSY[key]=v;set('saving');
-  try{await API.editarViaje(S.user.id,id,{estatus:v},'');refreshSheet();const c2=document.getElementById('ss_'+id);if(c2){c2.className='cst saved';c2.textContent='✓';}}
-  catch(e){set('error',e.message);}
+async function torreEstadoSave(id,dest,btn){
+  const st=document.getElementById('ss_'+id);
+  const set=(c,msg)=>{if(btn){btn.classList.remove('saving','saved','error');btn.classList.add(c);btn.title=c==='error'?msg:'';}
+    if(st){st.className='cst '+c;st.innerHTML=c==='saving'?'…':c==='saved'?'✓':`<button class="cretry" data-act="estadoRetry" data-id="${id}" data-dest="${dest}" title="${esc(msg)} Toca para reintentar" aria-label="Error: ${esc(msg)}. Reintentar">⚠</button>`;}};
+  const key=id+'|estado';
+  if(AUTOBUSY[key]===dest)return;
+  AUTOBUSY[key]=dest;if(btn)btn.disabled=true;set('saving');
+  try{await API.torreMoverEstado(S.user.id,id,dest);refreshSheet();const c2=document.getElementById('ss_'+id);if(c2){c2.className='cst saved';c2.textContent='✓';}}
+  catch(e){set('error',e.message);if(btn)btn.disabled=false;}
   finally{delete AUTOBUSY[key];}
 }
 
@@ -537,12 +534,12 @@ const esDuenoUI=t=>{if(!t.creadoPorId)return true;if(t.creadoPorId===S.user.id)r
 const canEditT=t=>hp('viajes_editar_tiempos')&&mine(t)&&esDuenoUI(t)&&!['LIQUIDADO','ACEPTADO','FACTURADO','COBRADO'].includes(t.estado);
 const canEditD=t=>hp('viajes_editar_datos')&&mine(t)&&esDuenoUI(t)&&DATA_EDIT_STATES.includes(t.estado);
 const canEdit=t=>canEditT(t)||canEditD(t);
-const editGroups=t=>['cliente','plan','estatus','unidad','ruta','tiempos','otros'].filter(g=>g==='plan'||g==='tiempos'?canEditT(t):canEditD(t));
+const editGroups=t=>['cliente','plan','unidad','ruta','tiempos','otros'].filter(g=>g==='plan'||g==='tiempos'?canEditT(t):canEditD(t));
 function editView(t){
   const E=S.edit,soloT=!canEditD(t);
   return `<div class="inner form" style="max-width:860px">
     <button class="btn ghost sm" data-act="editCancel" style="margin-bottom:12px">${icon('back',16)} Cancelar edición</button>
-    ${pageHead('Editar viaje #'+t.id,soloT?'Puedes actualizar la fecha plan y los horarios. El estado, el estatus y los demás datos son de solo lectura'+(esEnc()?'.':' para tu perfil.'):'Actualiza datos, fechas y horarios del viaje.')}
+    ${pageHead('Editar viaje #'+t.id,soloT?'Puedes actualizar la fecha plan y los horarios. El estado y los demás datos son de solo lectura'+(esEnc()?'.':' para tu perfil.'):'Actualiza datos, fechas y horarios del viaje.')}
     ${E.data.err?`<div class="alertbox" style="margin-bottom:16px" role="alert"><b>${esc(E.data.err)}</b></div>`:''}
     ${fieldsHTML(E.data,editGroups(t),false)}
     <div class="card fsec"><h3>Motivo del cambio</h3><div class="fgroup"><label for="m_motivo">Motivo (opcional; queda en el historial junto al valor anterior)</label><textarea id="m_motivo" data-motivo="1" style="min-height:70px">${esc(E.motivo||'')}</textarea></div></div>
@@ -560,24 +557,18 @@ async function autoSave(id,k,v){
   v=String(v==null?'':v).trim();
   const key=id+'|'+k;
   if(AUTOBUSY[key]===v)return;                                   /* evita registros duplicados */
-  if(k!=='estatus'&&v!==''&&!RX_DT.test(v)){S.autoFail[key]=v;setInd(k,'error','Fecha y hora no válidas.');return;}
+  if(v!==''&&!RX_DT.test(v)){S.autoFail[key]=v;setInd(k,'error','Fecha y hora no válidas.');return;}
   if(k==='fechaPlan'&&v===''){S.autoFail[key]=v;setInd(k,'error','La fecha plan no puede quedar vacía.');return;}
   let cur;try{cur=API.viaje(S.user.id,id);}catch(e){setInd(k,'error',e.message);return;}
   if(String(cur[k]||'')===v){delete S.autoFail[key];setInd(k,'saved');return;}      /* sin cambios: no se registra nada */
   AUTOBUSY[key]=v;setInd(k,'saving');
   try{
     await API.editarViaje(S.user.id,id,{[k]:v},'');                      /* sin comentario ni botón de guardar */
-    delete S.autoFail[key];setInd(k,'saved');refreshDurs(id);if(k==='estatus')render();
+    delete S.autoFail[key];setInd(k,'saved');refreshDurs(id);
   }catch(e){
     S.autoFail[key]=v;setInd(k,'error',e.message);               /* el valor se conserva en el campo para reintentar */
   }finally{delete AUTOBUSY[key];}
 }
-const estatusCard=t=>{
-  if(!hp('viajes_estatus_torre')||hp('viajes_editar_datos'))return '';
-  const cl=clienteDe(t);
-  if(!puedeEstatusTorre(t))return `<div class="card"><h3>Estatus operativo</h3><div>${est(t)}</div><div class="mute" style="margin-top:8px;font-size:13px">${cl.torreEstatus?'Este viaje ya no admite cambios de estatus por Torre de Control.':`Para ${esc(cl.cliente||t.proyecto)} Torre de Control solo tiene consulta.`}</div></div>`;
-  return `<div class="card"><h3>Estatus operativo</h3><div class="trow"><select id="a_estatus" data-auto="estatus" data-id="${t.id}" style="max-width:320px" aria-label="Estatus operativo">${estatusOpciones(t).map(o=>`<option ${o===t.estatus?'selected':''}>${esc(o)}</option>`).join('')}</select></div><span class="sv" id="sv_estatus" aria-live="polite"></span><div class="mute" style="margin-top:6px;font-size:13px">Se guarda solo al elegirlo. Solo puedes usar los estatus autorizados.</div></div>`;
-};
 const moneyCard=(t)=>{
   const verF=hp('finanzas_ver'),dash='<span class="mute">Sin registrar</span>';
   const tf=nn(t.tarifaCliente),cp=nn(t.costoProveedor),vi=nn(t.qViaticos);
@@ -616,7 +607,7 @@ VIEWS.detalle=()=>{
     ?`${kvr('ID de viaje','<span class="num">#'+t.id+'</span>')}${kvr('No. de viaje',v(t.noViaje))}${kvr('Cliente',esc(j.cliente))}${kvr('Proyecto',v(t.proyectoCat))}${kvr('Producto',v(t.producto))}${kvr('Fecha plan',fmtL(t.fechaPlan))}${kvr('Inicio del viaje',inicio?fmtL(inicio.length>16?toLocal(new Date(inicio)):inicio):dash)}${kvr('Finalización del viaje',fin?fmtL(fin.length>16?toLocal(new Date(fin)):fin):dash)}`
     :`${kvr('ID de viaje','<span class="num">#'+t.id+'</span>')}${kvr('No. de viaje',v(t.noViaje))}${kvr('Cliente',esc(j.cliente))}${kvr('Proyecto',v(t.proyectoCat))}${kvr('Shipment',v(t.shipment))}
         ${kvr('Tipo de viaje',v(t.tipoViaje))}${kvr('Tipo de carga',v(t.tipoCarga))}${kvr('No. de carga',v(t.noCarga))}${kvr('Producto',v(t.producto))}${kvr('OPL',v(t.opl))}
-        ${kvr('Ruta',rutaHTML(t))}${kvr('Fecha plan',fmtL(t.fechaPlan))}${kvr('Estatus',t.estatus?est(t):dash)}${kvr('Estado del proceso',badge(t.estado))}
+        ${kvr('Ruta',rutaHTML(t))}${kvr('Fecha plan',fmtL(t.fechaPlan))}${kvr('Estado',badge(t.estado))}
         ${t.estado==='EN_RUTA'?kvr('Tiempo transcurrido',`<span class="elapsed" data-since="${since(t)}">${elapsed(since(t))}</span>`):''}
         ${kvr('No. doc retorno',v(t.noDocRetorno))}${'qViaticos' in t?kvr('Q viáticos',t.qViaticos!==''&&t.qViaticos!=null?'Q '+esc(t.qViaticos):dash):''}`;
   const horarios=rev?'':`<div class="card" style="grid-column:1/-1"><h3>Horarios del viaje</h3>
@@ -624,7 +615,7 @@ VIEWS.detalle=()=>{
         ${hp('comercial_agrupar')?'<div class="mute" style="margin-top:8px;font-size:13px">Datos del viaje: solo lectura para tu perfil.</div>':`<h3 style="margin:14px 0 0;font-size:14px">Tiempos calculados</h3><div id="durs_box">${dursHTML(t)}</div>`}</div>`;
   return `<div class="inner">
     <button class="btn ghost sm" data-act="back" style="margin-bottom:12px">${icon('back',16)} ${esc(fromLbl)}</button>
-    ${pageHead('Viaje #'+t.id,`<span class="pchip sm">${esc(j.proyectoNombre)}</span> &nbsp;${esc(j.cliente)}`,`<span class="bgs">${badge(t.estado)}${rev?'':est(t)}</span>${editBtn}`)}
+    ${pageHead('Viaje #'+t.id,`<span class="pchip sm">${esc(j.proyectoNombre)}</span> &nbsp;${esc(j.cliente)}`,`<span class="bgs">${badge(t.estado)}</span>${editBtn}`)}
     ${t.estado==='RECHAZADO'?`<div class="alertbox" style="margin-bottom:14px;padding:14px 16px"><b>Rechazo #${t.rechazos||1}</b><div style="margin:6px 0;font-size:16px">${esc(t.comentarioRevision)}</div><span class="mute" style="font-size:13px">${esc(t.revisadoPor)} · ${fmtDT(t.revisadoEn)}</span></div>`:''}
     <div class="hroute"><div class="pt"><small>Origen</small><b>${esc(j.origen)||'Pendiente de asignar'}</b></div><div class="line"></div><div class="pt"><small>Destino</small><b>${esc(j.destino)||'Pendiente de asignar'}</b></div></div>
     <div class="card next"><h3>Siguiente paso</h3>${nextStep(t)}</div>
@@ -633,7 +624,6 @@ VIEWS.detalle=()=>{
       <div class="card"><h3>Piloto y unidad</h3><dl class="kv">
         ${kvr('Piloto',esc(j.piloto)+' '+src('PILOTOS'))}${kvr('Unidad',esc(f.unidad)+' '+src('PILOTOS'))}${kvr('Placa',esc(f.placa)+' '+src('FLOTA'))}${rev?'':kvr('Tango',esc(f.tango)+' '+src('FLOTA'))}${rev?'':kvr('Tipo de unidad',esc(f.tipo)+' '+src('FLOTA'))}${kvr('Capacidad',esc(f.capacidad)+' '+src('FLOTA'))}</dl></div>
       ${horarios}
-      ${estatusCard(t)}
       ${hp('comercial_ver')||hp('finanzas_ver')?moneyCard(t):''}
       ${verLiq?`<div class="card" style="grid-column:1/-1"><h3>Liquidación · historial de envíos</h3>${liqHTML}</div>`:''}
        ${hp('comercial_ver')&&(agrs.length||t.estado==='ACEPTADO')?`<div class="card" style="grid-column:1/-1"><h3>Facturación</h3>${agrs.length?`<div class="tablewrap scrollx"><table><thead><tr><th>ID de agrupación</th><th>Estado</th><th>N° de factura</th><th>Viajes asociados</th><th>Creada por</th></tr></thead><tbody>${agrs.map(g=>`<tr><td><b>${g.id}</b></td><td>${g.estado==='ACTIVA'?`<span class="badge st-FACTURADO">${ETAPA_L[etapaAgr(g)]}</span>`:'<span class="badge st-RECHAZADO">Anulada</span>'}</td><td>${g.numeroFactura?esc(g.numeroFactura):'<span class="mute">pendiente</span>'}</td><td>${g.viajeIds.map(i=>'#'+i).join(', ')}</td><td>${esc(g.creadoPor)} · ${fmtDT(g.creadoEn)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="mute">Aún sin factura preparada.</div>'}</div>`:''}
@@ -669,9 +659,8 @@ VIEWS.proyectos=()=>{
     ${gest?`<section class="section"><h2>Datos de los clientes</h2><div class="xlwrap" style="max-height:none"><table class="xl" style="min-width:1100px"><thead><tr><th>Código</th><th>Cliente</th><th>Nombre</th><th>Identificador fiscal</th><th>Datos de facturación</th><th>Proyectos</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead><tbody>
       ${DB.clientes.map(c=>`<tr class="${c.activo===false?'dim':''}"><td><b>${esc(c.id)}</b></td><td>${esc(c.cliente)}</td><td>${esc(c.nombre)}</td><td>${c.nit?esc(c.nit):'<span class="warnl">Pendiente</span>'}</td><td style="white-space:normal;min-width:200px">${clientePend(c).length?`<span class="warnl">Pendiente: ${clientePend(c).join(', ')}</span>`:'<span class="mute">Completos</span>'}</td><td style="white-space:normal;min-width:160px">${esc(c.proyectos.join(', '))}</td><td>${chip(c.activo===false?'neutral':'done',c.activo===false?'Inactivo':'Activo')}</td><td>${esc(c.creadoPor||'—')}<br><span class="mute">${c.creadoEn?fmtDT(c.creadoEn):''}</span></td><td style="white-space:nowrap"><button class="btn sm" data-act="clienteOpen" data-id="${c.id}">Editar</button> <button class="btn sm ${c.activo===false?'ok':'fix'}" data-act="clienteEstado" data-id="${c.id}">${c.activo===false?'Activar':'Desactivar'}</button></td></tr>`).join('')}
       </tbody></table></div></section>
-    <section class="section"><h2>Torre de Control</h2><div class="mute" style="margin:-6px 0 10px;font-size:13px">Torre solo puede cambiar el estatus operativo, y solo de los clientes marcados. Los estatus que implican cierre, cancelación o liquidación nunca se delegan.</div>
-      <div class="grid g2"><div class="card"><h3>Clientes cuyo estatus puede actualizar</h3>${DB.clientes.map(c=>`<label style="display:flex;gap:10px;align-items:center;min-height:36px"><input type="checkbox" data-torre="${c.id}" ${c.torreEstatus?'checked':''}> <b>${esc(c.nombre)}</b></label>`).join('')}</div>
-      <div class="card"><h3>Estatus que puede asignar</h3><div class="bgs">${CAT.estatus.map(e=>{const veda=ESTATUS_VEDADOS.includes(e);return `<label class="chip" style="display:flex;gap:6px;align-items:center;${veda?'opacity:.5':''}"><input type="checkbox" data-torreop="${esc(e)}" ${DB.config.torreEstatus.includes(e)?'checked':''} ${veda?'disabled title="No se delega a Torre de Control"':''}> ${esc(e)}</label>`;}).join('')}</div></div></div></section>`:''}</div>`;
+    <section class="section"><h2>Torre de Control</h2><div class="mute" style="margin:-6px 0 10px;font-size:13px">Torre solo avanza el estado (En ruta / Entregado) de los viajes de los clientes marcados; no edita otros datos.</div>
+      <div class="grid g2"><div class="card"><h3>Clientes cuyo estado puede avanzar</h3>${DB.clientes.map(c=>`<label style="display:flex;gap:10px;align-items:center;min-height:36px"><input type="checkbox" data-torre="${c.id}" ${c.torreEstatus?'checked':''}> <b>${esc(c.nombre)}</b></label>`).join('')}</div></div></section>`:''}</div>`;
 };
 VIEWS.proyecto=()=>{
   const p=PROYECTOS.find(x=>x.id===S.param);if(!p)return empty('Proyecto no encontrado');
@@ -722,7 +711,7 @@ VIEWS.catalogos=()=>{
     pil:tb(['Id','Piloto','Unidad asignada','Proyecto'],PILOTOS.map(p=>[p.id,esc(p.nombre),p.unidad?esc(p.unidad):'<span class="mute">Sin unidad</span>',pn(p.proyecto)])),
     flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)])),
     ori:tb(['Origen'],ORIGENES.map(o=>[esc(o.nombre)])),
-    cat:`<div class="grid g2">${Object.entries({'CLIENTES':CAT.clientes,'PROYECTOS':CAT.proyectos,'TIPO DE UNIDAD':CAT.tipoUnidad,'OPL':CAT.opl,'TIPO CARGA':CAT.tipoCarga,'TIPO DE VIAJE':CAT.tipoViaje,'ESTATUS':CAT.estatus}).map(([n,a])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${a.length}</span></h3><div class="bgs">${a.map(x=>`<span class="est">${esc(x)}</span>`).join('')}</div></div>`).join('')}</div>`,
+    cat:`<div class="grid g2">${Object.entries({'CLIENTES':CAT.clientes,'PROYECTOS':CAT.proyectos,'TIPO DE UNIDAD':CAT.tipoUnidad,'OPL':CAT.opl,'TIPO CARGA':CAT.tipoCarga,'TIPO DE VIAJE':CAT.tipoViaje}).map(([n,a])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${a.length}</span></h3><div class="bgs">${a.map(x=>`<span class="est">${esc(x)}</span>`).join('')}</div></div>`).join('')}</div>`,
     des:tb(['Id','Destino','Proyecto'],DESTINOS.map(d=>[d.id,esc(d.nombre),pn(d.proyecto)])),fle:flePanel()}[k];
   return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; no se editan ni se duplican aquí')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
     <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS, FLOTA y DESTINOS son ficticios (todavía no tengo esos archivos); las listas de CATALOGO y ORIGEN sí son las reales de tu hoja. En Power Apps cada catálogo se leerá directo de su hoja (Excel/SharePoint) y el filtro por proyecto asume una columna Proyecto en PILOTOS, ORIGEN y DESTINOS.</div></div>`;
@@ -1064,8 +1053,8 @@ VIEWS.modelo=()=>{
     ['USUARIOS','Identidad estable',[['IdUsuario','Texto (clave) U-001','Estable; se usa en la auditoría'],['Usuario · NombreCompleto','Texto',''],['Rol','Opción','ADMIN · ENCARGADO · TORRE · LIQUIDACIONES · COMERCIAL · GERENCIA'],['Activo','Sí/No','Sustituir por cuenta Microsoft']]],
     ['ACCESO_CLIENTE','Alcance de encargados',[['IdUsuario','Búsqueda → USUARIOS',''],['Cliente','Búsqueda → CLIENTES','Un encargado solo opera sus clientes']]],
     ['PERMISOS','Matriz rol × permiso',[['Rol','Opción',''],['Permiso','Opción','22 permisos'],['Habilitado','Sí/No','Cambios auditados']]],
-    ['CLIENTES','Clientes y proyectos',[['IdCliente · Nombre · Cliente','Texto','Código y nombre únicos'],['Proyectos','Lista → CATALOGO','Proyectos permitidos'],['NIT · DireccionFiscal · CorreoFacturacion · Contacto · Telefono · CreditoDias','Texto','Vacío = PENDIENTE; no se inventa'],['Activo · TorreEstatus · CreadoPor/El','—','Torre solo actualiza el estatus de los clientes marcados']]],
-    ['VIAJES (hoja VIAJES_TRANSPORTES)','Un registro por viaje, para siempre',[['ID VIAJE, CLIENTE, PROYECTO, SHIPMENT, NO. VIAJE, TIPO VIAJE, TIPO CARGA, NO. CARGA, PRODUCTO, OPL, PILOTO, ORIGEN, DESTINO, FECHA PLAN','Columnas reales',''],['Horarios (10) · ESTATUS · NO. DOC RETORNO · Q_VIATICOS','Columnas reales',''],['PLACA · TANGO · TIPO UNIDAD','Desde FLOTA','No se copian'],['Estado','Opción','Planificado → En ruta → Entregado → Liquidado → Aceptado/Rechazado → Facturado → Cobrado; solo cambia por transiciones válidas'],['AgrupacionId · NumeroFactura','Búsqueda / Texto','Proyección de la agrupación activa'],['CreadoPor/El · Iniciado · Finalizado · Enviado · Revisado · Aprobado','Persona + fecha','Resumen; la fuente es AUDITORIA']]],
+    ['CLIENTES','Clientes y proyectos',[['IdCliente · Nombre · Cliente','Texto','Código y nombre únicos'],['Proyectos','Lista → CATALOGO','Proyectos permitidos'],['NIT · DireccionFiscal · CorreoFacturacion · Contacto · Telefono · CreditoDias','Texto','Vacío = PENDIENTE; no se inventa'],['Activo · TorreEstatus · CreadoPor/El','—','Torre avanza el estado de los clientes marcados']]],
+    ['VIAJES (hoja VIAJES_TRANSPORTES)','Un registro por viaje, para siempre',[['ID VIAJE, CLIENTE, PROYECTO, SHIPMENT, NO. VIAJE, TIPO VIAJE, TIPO CARGA, NO. CARGA, PRODUCTO, OPL, PILOTO, ORIGEN, DESTINO, FECHA PLAN','Columnas reales',''],['Horarios (10) · NO. DOC RETORNO · Q_VIATICOS','Columnas reales',''],['PLACA · TANGO · TIPO UNIDAD','Desde FLOTA','No se copian'],['Estado','Opción','Planificado → En ruta → Entregado → Liquidado → Aceptado/Rechazado → Facturado → Cobrado; solo cambia por transiciones válidas'],['AgrupacionId · NumeroFactura','Búsqueda / Texto','Proyección de la agrupación activa'],['CreadoPor/El · Iniciado · Finalizado · Enviado · Revisado · Aprobado','Persona + fecha','Resumen; la fuente es AUDITORIA']]],
     ['LIQUIDACIONES','Un renglón por envío (ciclo)',[['IdLiquidacion LIQ-0001','Texto (clave)',''],['IdViaje · Ciclo','Búsqueda · Número',''],['EnvioPor/El · EvidenciaId','Persona/fecha · Búsqueda',''],['Decision · Revisor · RevisionEn · Comentario','Opción · Persona · fecha · texto','Nunca se sobrescribe un ciclo anterior']]],
     ['EVIDENCIAS','Fotografías',[['IdEvidencia EVI-0001','Texto (clave)',''],['IdViaje · IdLiquidacion','Búsquedas',''],['Imagen','Archivo adjunto','Una por envío; las anteriores se conservan']]],
     ['AGRUPACIONES_COMERCIALES','Agrupación ≠ factura',[['IdAgrupacion AGR-0001','Texto (clave)','Identifica el conjunto'],['Cliente','Búsqueda → CLIENTES','Un solo cliente por agrupación'],['IdViajes','Relación 1..n → VIAJES','Sin duplicados'],['NumeroFactura','Texto único','Identifica la factura; distinto del ID de agrupación'],['Estado · Anulada{por,en,motivo} · Correcciones[]','Opción · registro','Nunca se borra la asignación anterior']]],
@@ -1090,7 +1079,7 @@ VIEWS.modelo=()=>{
     <div class="alertbox info" style="margin-bottom:16px"><b>Regla:</b> un único registro por viaje durante todo su ciclo de vida. Las tablas VIAJES, LIQUIDACIONES, EVIDENCIAS, AGRUPACIONES_COMERCIALES y AUDITORIA se relacionan por IdViaje; nada se borra, todo cambio es un evento nuevo.</div>
     <div class="grid g2">${T.map(t=>`<div class="card"><h3>${t[0]}</h3><div class="mute" style="margin:-8px 0 10px;font-size:13px">${t[1]}</div><div class="scrollx"><table style="font-size:13px"><thead><tr><th>Campo</th><th>Tipo sugerido</th><th>Nota</th></tr></thead><tbody>${t[2].map(r=>`<tr><td><code>${r[0]}</code></td><td>${r[1]}</td><td class="mute">${r[2]}</td></tr>`).join('')}</tbody></table></div></div>`).join('')}</div>
     <section class="section"><h2>Flujo de estados</h2><div class="tablewrap scrollx"><table><thead><tr><th>Estado actual</th><th>Quién lo mueve</th><th>Siguiente</th></tr></thead><tbody>${E.map(r=>`<tr><td>${badge(r[0])}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table></div>
-    <div class="mute" style="margin-top:8px;font-size:13px"><b>ESTATUS</b> (columna de tu hoja, 20 valores) es el estatus operativo del viaje y es independiente del Estado del proceso. Torre de Control no modifica el Estado ni el ESTATUS: solo fechas y horas.</div></section></div>`;
+    <div class="mute" style="margin-top:8px;font-size:13px">El viaje tiene un solo estado: <b>Estado</b> (Planificado → En ruta → Entregado → Liquidado → Aceptado/Rechazado → Facturado → Cobrado). Torre de Control avanza el estado de sus clientes autorizados; no edita fechas ni horas.</div></section></div>`;
 };
 
 /* =====================================================================
@@ -1254,7 +1243,8 @@ const ACT={
   async devolverSend(d){const r=await run(()=>API.devolver(S.user.id,d.id,S.modal.data.comentario),`Viaje #${d.id} devuelto al responsable con tu comentario.`,true);if(r.ok)afterWrite();},
   async shipmentDupOpen(d){formM({title:`Aprobar Shipment duplicado · viaje #${d.id}`,text:'Esta es una aprobación excepcional de Gerencia de Transporte. El valor se convertirá en <b>DUP-</b> + el Shipment actual. Si ese DUP- ya existe, no se podrá aprobar ni liquidar.',ok:'APROBAR DUPLICADO',okCls:'fix',act:'shipmentDupOk',id:d.id});},
   async shipmentDupOk(d){const r=await run(()=>API.aprobarShipmentDuplicado(S.user.id,d.id),`Shipment aprobado como ${r.shipment}.`,true);if(r.ok)afterWrite();},
-  async statusRetry(d){const el=document.querySelector('select[data-status="'+d.id+'"]');if(el)statusSave(d.id,el);},
+  async torreEstado(d,el){await torreEstadoSave(d.torreestado,d.dest,el);},
+  async estadoRetry(d,el){const btn=document.querySelector('button[data-torreestado="'+d.id+'"]');await torreEstadoSave(d.id,d.dest,btn);},
   /* alta y edición de viajes */
   async guardar(){
     const f=S.form;f.err='';
@@ -1511,9 +1501,7 @@ app.addEventListener('keydown',e=>{
 app.addEventListener('submit',e=>{e.preventDefault();doLogin();});
 app.addEventListener('change',async e=>{
   const t=e.target;
-  if(t.dataset.status){statusSave(t.dataset.status,t);return;}
   if(t.dataset.torre){await run(()=>API.guardarReglasTorre(S.user.id,{cliente:t.dataset.torre,torreEstatus:t.checked}),'Regla de Torre actualizada.');render();return;}
-  if(t.dataset.torreop){const ops=[...document.querySelectorAll('input[data-torreop]:checked')].map(x=>x.dataset.torreop);await run(()=>API.guardarOpcionesTorre(S.user.id,{opciones:ops}),'Estatus autorizados actualizados.');render();return;}
   if(t.dataset.mfile&&S.modal){const f=t.files&&t.files[0];if(!f)return;if(f.size>2000000){S.modal.err='El archivo supera 2 MB.';render();return;}const k=t.dataset.mfile;const rd=new FileReader();rd.onload=()=>{S.modal.data[k]=rd.result;S.modal.err='';render();};rd.readAsDataURL(f);return;}
   if(t.dataset.auto){autoSave(t.dataset.id,t.dataset.auto,t.value);return;}
   if(t.dataset.photo){const f=t.files&&t.files[0];if(!f)return;const d=await readPhoto(f);if(d){S.draft[t.dataset.photo]=d;render();}return;}

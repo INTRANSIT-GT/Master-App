@@ -25,7 +25,7 @@ if(!API.gastos)API.gastos=async()=>[];
   if(!(window.supabase&&window.supabase.createClient)){console.warn('No se cargó supabase-js: modo demostración');return;}
   BACKEND.modo='supabase';
   const sb=BACKEND.sb=window.supabase.createClient(C.SUPABASE_URL.trim(),k,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  const MUT=['crearViaje','editarViaje','iniciar','finalizar','enviarLiquidacion','aprobar','devolver','aprobarShipmentDuplicado','prepararFactura','actualizarFactura','enviarFactura','emitirFactura','registrarCobro','corregirFactura','anularAgrupacion','registrarImportes','registrarPago','anularPago','crearTarifa','editarTarifa','cambiarEstadoTarifa','aplicarTarifa','aplicarTarifasPendientes','cargarMem','solicitarRuta','registrarRuta','validarRuta','rechazarRuta','aprobarRutaComercial','aprobarRutaTransporte','marcarNotificacion','setPermiso','guardarUsuario','guardarCliente','guardarReglasTorre','guardarOpcionesTorre'];
+  const MUT=['crearViaje','editarViaje','iniciar','finalizar','torreMoverEstado','enviarLiquidacion','aprobar','devolver','aprobarShipmentDuplicado','prepararFactura','actualizarFactura','enviarFactura','emitirFactura','registrarCobro','corregirFactura','anularAgrupacion','registrarImportes','registrarPago','anularPago','crearTarifa','editarTarifa','cambiarEstadoTarifa','aplicarTarifa','aplicarTarifasPendientes','cargarMem','solicitarRuta','registrarRuta','validarRuta','rechazarRuta','aprobarRutaComercial','aprobarRutaTransporte','marcarNotificacion','setPermiso','guardarUsuario','guardarCliente','guardarReglasTorre'];
   const err=b=>{const e=new ApiError(b.code||'SERVIDOR',b.message||'Operación rechazada por el servidor.');if(b.faltantes)e.faltantes=b.faltantes;return e;};
   async function llamar(op,args){
     if(!navigator.onLine)throw new ApiError('SIN_CONEXION','Sin conexión con el servidor. La operación NO se guardó.');
@@ -43,7 +43,7 @@ if(!API.gastos)API.gastos=async()=>[];
   function hidratar(sn){
     const db=blankDB();
     ['usuarios','acceso','permisos','clientes','liquidaciones','evidencias','agrupaciones','audit','pagos','rutas','tarifas','mem','notificaciones'].forEach(k=>{db[k]=sn[k]||[];});
-    db.trips=sn.trips||[];db.config=sn.config||{torreEstatus:[]};
+    db.trips=sn.trips||[];db.config=sn.config||{};
     DB=db;
     [[PILOTOS,sn.catalogos.pilotos],[FLOTA,sn.catalogos.flota],[DESTINOS,sn.catalogos.destinos]].forEach(([a,n])=>{a.length=0;a.push(...(n||[]));});
     syncRefs();

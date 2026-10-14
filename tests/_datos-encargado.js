@@ -16,6 +16,6 @@
 })()
 
 ;/* viajes de ejemplo para que las listas y el detalle tengan contenido (los crea el propio motor) */
-(()=>{const b={cliente:'COLGATE',proyectoCat:'COLGATE',pilotoId:'P-1',estatus:'EN ESPERA',shipment:'S',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'P',placaArrastre:'PA-1'};
+(()=>{const b={cliente:'COLGATE',proyectoCat:'COLGATE',pilotoId:'P-1',shipment:'S',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'P',placaArrastre:'PA-1'};
   window.__V1=API.crearViaje('U-1',Object.assign({},b,{rutaId:'R-0001',fechaPlan:'2031-03-01T08:00',shipment:'S-1'})).id;
   window.__V2=API.crearViaje('U-1',Object.assign({},b,{rutaId:'R-0004',pilotoId:'P-2',fechaPlan:'2031-03-02T08:00',shipment:'S-2'})).id;})();

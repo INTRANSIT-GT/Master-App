@@ -35,8 +35,8 @@ const deps = { transaccion: fn => db.transaction(tx => { txActual = tx; return f
 const srv = (quien, op, ...args) => ejecutar(deps, U[quien], { op, args });
 const rt = await srv('adm', 'registrarRuta', { codigo: 'COL-001', nombre: 'CP → Colgate 1', cliente: 'COLGATE', proyecto: 'COLGATE', origenId: 'CP', destinoId: 'D-C1' });
 const rt2 = await srv('adm', 'registrarRuta', { codigo: 'CMI-001', nombre: 'CP → CMI 1', cliente: 'CMI', proyecto: 'ABASA', origenId: 'CP', destinoId: 'D-M1' });
-const sv1 = await srv('ped', 'crearViaje', { cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', rutaId: rt.result.id, fechaPlan: '2031-01-01T08:00', estatus: 'EN ESPERA' });
-await srv('bry', 'crearViaje', { cliente: 'CMI', proyectoCat: 'ABASA', pilotoId: 'P-2', rutaId: rt2.result.id, fechaPlan: '2031-01-01T09:00', estatus: 'EN ESPERA' });
+const sv1 = await srv('ped', 'crearViaje', { cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', rutaId: rt.result.id, fechaPlan: '2031-01-01T08:00' });
+await srv('bry', 'crearViaje', { cliente: 'CMI', proyectoCat: 'ABASA', pilotoId: 'P-2', rutaId: rt2.result.id, fechaPlan: '2031-01-01T09:00' });
 const V1 = sv1.result.id;
 
 /* ---------- puente: lo que el navegador alcanzaría por la red ---------- */
@@ -104,7 +104,7 @@ T('17 Sin conexión no se escribió nada en el servidor', (await db.query("selec
 T('18 Aparece el aviso visible de falta de conexión', !!d.querySelector('.offbar') && /Nada de lo que hagas se guarda/.test(d.querySelector('.offbar').textContent));
 Object.defineProperty(w.navigator, 'onLine', { get: () => true, configurable: true }); w.eval('render()');
 T('19 Al volver la conexión el aviso desaparece', !d.querySelector('.offbar'));
-const con = await ev(`API.crearViaje(S.user.id,{cliente:"CMI",proyectoCat:"ABASA",pilotoId:"P-2",rutaId:"${rt2.result.id}",fechaPlan:"2031-05-05T08:00",estatus:"EN ESPERA"}).then(r=>"ok",e=>e.code+": "+e.message)`);
+const con = await ev(`API.crearViaje(S.user.id,{cliente:"CMI",proyectoCat:"ABASA",pilotoId:"P-2",rutaId:"${rt2.result.id}",fechaPlan:"2031-05-05T08:00"}).then(r=>"ok",e=>e.code+": "+e.message)`);
 T('20 Con conexión la misma operación se guarda', con === 'ok' && (await db.query("select count(*)::int n from viajes")).rows[0].n === 3, con);
 /* seguridad de la configuración */
 const w2 = pagina({ SUPABASE_URL: 'https://prueba.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_secret_abcdef' }); await flush();
