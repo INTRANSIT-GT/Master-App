@@ -1,0 +1,6 @@
+# Configuración mínima para la CLI de Supabase (supabase link / supabase functions deploy).
+[functions.api]
+verify_jwt = true     # solo usuarios con sesión válida pueden invocar la función
+
+[functions.sync-flota]
+verify_jwt = true     # solo usuarios con sesión válida pueden invocar la función
