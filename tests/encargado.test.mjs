@@ -22,7 +22,7 @@ await db.exec(`create role anon nologin; create role authenticated nologin; crea
   create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security; grant usage on schema storage to authenticated; grant select, insert on storage.objects to authenticated;`);
-let sqlOk = true; for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql', '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql']) { try { await db.exec(leer('supabase/migrations/' + f)); } catch (e) { sqlOk = false; T('SQL ' + f, false, e.message); } }
+let sqlOk = true; for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql', '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql']) { try { await db.exec(leer('supabase/migrations/' + f)); } catch (e) { sqlOk = false; T('SQL ' + f, false, e.message); } }
 T('A0 Las migraciones 001–008 se aplican (no se cambió la base de datos)', sqlOk);
 const U = {}; const mk = async (k, u, n, r) => { U[k] = uuid(); await db.query('insert into auth.users(id,email) values ($1,$2)', [U[k], u + '@t.test']); await db.query('insert into master.perfiles(id,usuario,email,nombre,rol) values ($1,$2,$3,$4,$5)', [U[k], u, u + '@t.test', n, r]); };
 await db.exec(`insert into master.clientes(id,nombre,cliente,proyectos) values ('COLGATE','Colgate','COLGATE','{COLGATE,LV}'); insert into master.clientes_fiscal(cliente_id) values ('COLGATE');`);
@@ -100,22 +100,28 @@ ev("go('detalle',__V1)");
 T('B19 [Cambios 2, 5, 6] El detalle del viaje del encargado muestra «Ingreso a planta» e «Ingreso a bodega»', /Ingreso a planta/.test(d.querySelector('#app').textContent) && !/planta CP|bodega CG/.test(d.querySelector('#app').textContent) && /Ingreso a bodega/.test(d.querySelector('#app').textContent));
 
 /* ---- PARTE C · los demás perfiles: HTML idéntico al del código original ---- */
-const A = cargar(process.env.NEGATIVO ? '/tmp/ui_neg.js' : null), O = cargar(path.join(ORIG, 'js/ui.js'));
-T('C0 Las dos versiones (original y nueva) cargan sin errores', A.errs.length === 0 && O.errs.length === 0, [A.errs, O.errs]);
-const norm = h => h.replace(/(<input type="(?:date|time)"[^>]*? value=")[^"]*"/g, '$1"').replace(/data-since="\d+"/g, '').replace(/>\d+[hms ]+\d*[ms]*</g, '><');
-const roles = ev('Object.keys(ROLES).filter(r=>r!=="ENCARGADO")');
-const pantallas = r => { const x = A.w.eval(`(()=>{const u={id:'U-${r}',usuario:'${r.toLowerCase()}',clave:'x',nombre:'Prueba ${r}',rol:'${r}',activo:true,proyectos:[]};DB.usuarios.push(u);DB.acceso.push({userId:u.id,cliente:'COLGATE'});S.user=u;return JSON.stringify(navItems().filter(v=>v!=='modelo'));})()`); return JSON.parse(x); };
-let comparadas = 0; const difs = [];
-for (const r of roles) {
-  const vistas = pantallas(r); O.w.eval(`(()=>{const u={id:'U-${r}',usuario:'${r.toLowerCase()}',clave:'x',nombre:'Prueba ${r}',rol:'${r}',activo:true,proyectos:[]};DB.usuarios.push(u);DB.acceso.push({userId:u.id,cliente:'COLGATE'});})()`);
-  const casos = [...vistas.map(v => `S.form=null;S.edit=null;S.modal=null;go('${v}')`), `S.form=null;S.edit=null;S.modal=null;go('detalle',__V1)`, `S.form=null;S.edit=null;S.modal=null;S.view='nuevo';render()`];
-  for (const caso of casos) {
-    const set = c => `(()=>{S.user=DB.usuarios.find(u=>u.id==='U-${r}');try{${c}}catch(e){}; return document.querySelector('#app').innerHTML;})()`;
-    const a = norm(A.w.eval(set(caso))), o = norm(O.w.eval(set(caso))); comparadas++;
-    if (a !== o) difs.push(r + ' · ' + caso.split(';').pop());
+/* La comparación usa la carpeta local `respaldo_original/` (copia de los archivos originales), que no está
+   versionada en git. Si no existe (p. ej. al migrar de equipo), la Parte C se omite con un aviso. */
+if (fs.existsSync(path.join(ORIG, 'js/ui.js'))) {
+  const A = cargar(process.env.NEGATIVO ? '/tmp/ui_neg.js' : null), O = cargar(path.join(ORIG, 'js/ui.js'));
+  T('C0 Las dos versiones (original y nueva) cargan sin errores', A.errs.length === 0 && O.errs.length === 0, [A.errs, O.errs]);
+  const norm = h => h.replace(/(<input type="(?:date|time)"[^>]*? value=")[^"]*"/g, '$1"').replace(/data-since="\d+"/g, '').replace(/>\d+[hms ]+\d*[ms]*</g, '><');
+  const roles = ev('Object.keys(ROLES).filter(r=>r!=="ENCARGADO")');
+  const pantallas = r => { const x = A.w.eval(`(()=>{const u={id:'U-${r}',usuario:'${r.toLowerCase()}',clave:'x',nombre:'Prueba ${r}',rol:'${r}',activo:true,proyectos:[]};DB.usuarios.push(u);DB.acceso.push({userId:u.id,cliente:'COLGATE'});S.user=u;return JSON.stringify(navItems().filter(v=>v!=='modelo'));})()`); return JSON.parse(x); };
+  let comparadas = 0; const difs = [];
+  for (const r of roles) {
+    const vistas = pantallas(r); O.w.eval(`(()=>{const u={id:'U-${r}',usuario:'${r.toLowerCase()}',clave:'x',nombre:'Prueba ${r}',rol:'${r}',activo:true,proyectos:[]};DB.usuarios.push(u);DB.acceso.push({userId:u.id,cliente:'COLGATE'});})()`);
+    const casos = [...vistas.map(v => `S.form=null;S.edit=null;S.modal=null;go('${v}')`), `S.form=null;S.edit=null;S.modal=null;go('detalle',__V1)`, `S.form=null;S.edit=null;S.modal=null;S.view='nuevo';render()`];
+    for (const caso of casos) {
+      const set = c => `(()=>{S.user=DB.usuarios.find(u=>u.id==='U-${r}');try{${c}}catch(e){}; return document.querySelector('#app').innerHTML;})()`;
+      const a = norm(A.w.eval(set(caso))), o = norm(O.w.eval(set(caso))); comparadas++;
+      if (a !== o) difs.push(r + ' · ' + caso.split(';').pop());
+    }
   }
+  T(`C1 Los demás perfiles (${roles.join(', ')}) generan EXACTAMENTE el mismo HTML que antes en ${comparadas} pantallas comparadas`, difs.length === 0 && comparadas >= 20, difs);
+} else {
+  filas.push('SKIP C0–C1 Comparación con el respaldo original omitida: no existe ' + ORIG + '/js/ui.js (carpeta local no versionada, no migrada).');
 }
-T(`C1 Los demás perfiles (${roles.join(', ')}) generan EXACTAMENTE el mismo HTML que antes en ${comparadas} pantallas comparadas`, difs.length === 0 && comparadas >= 20, difs);
 T('C2 El motor de reglas, permisos, autenticación y SQL no se modificaron', ['js/engine.js', 'js/backend.js', 'js/utils.js', 'js/catalogos.js', 'supabase/functions/api/core.mjs', 'supabase/functions/api/handler.mjs', 'supabase/functions/api/store.mjs', 'supabase/migrations/001_esquema.sql'].every(f => !fs.existsSync(path.join(ORIG, f)) || leer(f) === fs.readFileSync(path.join(ORIG, f), 'utf8')));
-T('C3 Este paquete de prueba NO incluye URL ni claves de Supabase (js/config.js vacío); ningún JWT ni clave secreta en el código', /SUPABASE_URL:''/.test(leer('js/config.js')) && /SUPABASE_PUBLISHABLE_KEY:''/.test(leer('js/config.js')) && !['index.html','prueba-visual.html','js/ui.js','js/backend.js','js/config.js','js/datos-prueba-visual.js','service-worker.js'].some(f => /eyJ[A-Za-z0-9_-]{20,}\./.test(leer(f)) || /sb_secret_[A-Za-z0-9]{8,}/.test(leer(f))));
+T('C3 El código que se publica no lleva URL ni clave secreta de Supabase (la publishable/anon, pública, solo va en js/config.js)', /SUPABASE_URL:(?:'|$)/.test(leer('js/config.js').slice(0, 4000)) && !['index.html', 'prueba-visual.html', 'js/ui.js', 'js/backend.js', 'js/engine.js', 'js/datos-prueba-visual.js', 'service-worker.js'].some(f => /eyJ[A-Za-z0-9_-]{20,}\./.test(leer(f)) || /sb_secret_[A-Za-z0-9]{8,}/.test(leer(f))) && !/sb_secret_/.test(leer('js/config.js')));
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

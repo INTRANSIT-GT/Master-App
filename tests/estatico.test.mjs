@@ -23,8 +23,14 @@ T('08 El service worker no toca otros orígenes (Supabase) ni guarda datos: solo
 T('09 La portada usa solo los logotipos principales: no hay íconos de servicios ni submarcas', !ex('assets/iconos') && !/iconos\/|ICONOS_SERVICIOS|svcgrid/.test(leer('js/ui.js') + leer('js/assets.js') + leer('css/app.css') + leer('service-worker.js')));
 T('10 Logotipos principales incluidos: versión blanca (sobre azul) y versión a color (sobre claro), con la misma proporción', ['logo-blanco.png', 'logo-color.png'].every(n => ex('assets/logos/' + n)) && Math.abs(dims('assets/logos/logo-color.png')[0] / dims('assets/logos/logo-color.png')[1] - 2.935) < 0.01);
 const código = ['index.html', 'js/config.js', 'js/backend.js', 'js/ui.js', 'js/engine.js', 'js/pwa.js', 'service-worker.js', 'manifest.json'].map(leer).join('\n');
-T('11 Sin JWT, claves privadas ni contraseñas en el código que se publica', !/eyJ[A-Za-z0-9_-]{20,}\./.test(código) && !/sb_secret_[A-Za-z0-9]{10,}/.test(código) && !/(admin|colgate|cmi|torre|liq|comercial|gerencia|cocacola|fritolay|implan)123/.test(código));
-T('12 js/config.js no trae claves (se llena al configurar)', /SUPABASE_URL:''/.test(leer('js/config.js')) && /SUPABASE_PUBLISHABLE_KEY:''/.test(leer('js/config.js')));
+/* La clave publishable/anon es un JWT público por diseño: solo se permite en js/config.js. */
+const códigoSinConfig = ['index.html', 'js/backend.js', 'js/ui.js', 'js/engine.js', 'js/pwa.js', 'service-worker.js', 'manifest.json'].map(leer).join('\n');
+T('11 Sin JWT, claves privadas ni contraseñas en el código que se publica', !/eyJ[A-Za-z0-9_-]{20,}\./.test(códigoSinConfig) && !/sb_secret_[A-Za-z0-9]{10,}/.test(código) && !/(admin|colgate|cmi|torre|liq|comercial|gerencia|cocacola|fritolay|implan)123/.test(código));
+const cfg = leer('js/config.js');
+T('12 js/config.js solo lleva la clave publishable/anon (nunca una secreta)', !/sb_secret_/.test(cfg) && (() => {
+  const m = cfg.match(/SUPABASE_PUBLISHABLE_KEY:'([^']*)'/); if (!m || !m[1]) return true;
+  try { return JSON.parse(Buffer.from(m[1].split('.')[1], 'base64url').toString()).role === 'anon'; } catch (e) { return /^sb_publishable_/.test(m[1]); }
+})());
 T('13 El motor del servidor está al día con js/engine.js (ejecuta: npm run build:core)', (() => { const g = leer('supabase/functions/api/core.mjs'); const e = leer('js/engine.js').replace(/\/\*#BROWSER\*\/[\s\S]*?\/\*#END\*\//g, ''); return g.includes(e); })());
 T('14 No existe la clave service_role en ningún archivo de la interfaz', !/SUPABASE_SERVICE_ROLE_KEY/.test(código));
 T('15 La Edge Function usa la clave de servicio solo desde variables de entorno del servidor', /Deno\.env\.get\("SUPABASE_SERVICE_ROLE_KEY"\)/.test(leer('supabase/functions/api/index.ts')) && !/eyJ/.test(leer('supabase/functions/api/index.ts')));

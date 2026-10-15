@@ -92,11 +92,18 @@ async function leerTabla(q, tabla, cols, extra, orden) {
 }
 const claveDe = (spec, r) => spec.key.map(k => r[k]).join('\u0001');
 
-export async function loadState(q) {
+export async function loadState(q, opts = {}) {
   const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], ordenesPago: [], rutas: [], tarifas: [], mem: [], notificaciones: [], config: {}, seq: {} };
   for (const spec of TABLAS) {
     const orden = spec.key.map(k => spec.cols.find(c => c[0] === k)[1]).join(', ');
-    const rows = await leerTabla(q, spec.tabla, spec.cols, !spec.sinExtra, orden);
+    let rows;
+    /* La auditoría es de solo agregar y crece sin límite. Para operaciones que escriben solo se necesita el último
+       registro (para encadenar el hash de los eventos nuevos): se lee solo la cola. En lectura completa (snapshot,
+       verificación de la cadena) se lee entera. */
+    if (spec.tabla === 'auditoria' && opts.auditoriaTail) {
+      const cols = spec.cols.map(sel).join(', ') + (spec.sinExtra ? '' : ', extra');
+      rows = (await q(`select ${cols} from master.auditoria order by id desc limit ${Number(opts.auditoriaTail)}`)).rows;
+    } else rows = await leerTabla(q, spec.tabla, spec.cols, !spec.sinExtra, orden);
     let partes = {};
     for (const p of spec.partes || []) {
       const idCol = spec.cols.find(c => c[0] === spec.key[0])[1];
@@ -157,7 +164,7 @@ async function upsert(q, tabla, cols, claves, fila, tipos) {
   const upd = nombres.filter(n => !claves.includes(n)).map(n => `${n}=excluded.${n}`);
   await q(`insert into master.${tabla} (${nombres.join(', ')}) values (${marcas.join(', ')}) on conflict (${claves.join(', ')}) ${upd.length ? 'do update set ' + upd.join(', ') : 'do nothing'}`, params);
 }
-export async function saveState(q, antes, db) {
+export async function saveState(q, antes, db, rechazo) {
   const tipos = {};
   for (const spec of TABLAS) {
     const tp = Object.fromEntries(spec.cols.map(([f, c, t]) => [c, t]));
@@ -168,6 +175,9 @@ export async function saveState(q, antes, db) {
       const p = previos.get(k);
       if (p && p.texto === f.texto) continue;
       if (p && spec.soloAgregar) throw new Error('La auditoría es de solo agregar: intento de modificar ' + k);
+      /* Si el motor rechazó la operación, no debe haber tocado datos de negocio: solo la auditoría (el registro del
+         intento) y las secuencias pueden cambiar. El fallo se detecta aquí, reusando el mismo recorrido del diff. */
+      if (rechazo && spec.tabla !== 'auditoria') throw new Error('Operación rechazada con cambios parciales: se descarta para no guardar datos a medias.');
       await upsert(q, spec.tabla, spec.cols, claves, f.principal, tp);
       for (const part of spec.partes || []) {
         const fp = f.partes[part.tabla], pp = p && p.partes[part.tabla];
@@ -178,6 +188,7 @@ export async function saveState(q, antes, db) {
       }
     }
     if (spec.borrable) for (const [k, p] of previos) if (!nuevos.has(k)) {
+      if (rechazo) throw new Error('Operación rechazada con cambios parciales: se descarta para no guardar datos a medias.');
       const w = claves.map((c, i) => `${c}=$${i + 1}${tp[c] === 'u' ? '::uuid' : ''}`).join(' and ');
       await q(`delete from master.${spec.tabla} where ${w}`, claves.map(c => p.principal[c]));
     }

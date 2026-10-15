@@ -21,7 +21,7 @@ await db.exec(`create role anon nologin; create role authenticated nologin; crea
   create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security; grant usage on schema storage to authenticated; grant select, insert on storage.objects to authenticated;`);
-for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql']) await db.exec(leer('supabase/migrations/' + f));
+for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql', '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql']) await db.exec(leer('supabase/migrations/' + f));
 const U = {}, EMAIL = {};
 const mk = async (k, usuario, nombre, rol, proyectos = []) => { U[k] = uuid(); EMAIL[usuario + '@intransit.test'] = U[k]; await db.query('insert into auth.users(id,email) values ($1,$2)', [U[k], usuario + '@intransit.test']);
   await db.query('insert into master.perfiles(id,usuario,email,nombre,rol,proyectos) values ($1,$2,$3,$4,$5,$6)', [U[k], usuario, usuario + '@intransit.test', nombre, rol, proyectos]); };
@@ -33,10 +33,13 @@ let txActual = null;
 const deps = { transaccion: fn => db.transaction(tx => { txActual = tx; return fn(async (t, p = []) => tx.query(t, p)); }), firmar: async ps => new Map(ps.map(p => [p, 'https://firmado.test/' + p])),
   crearUsuarioAuth: async ({ email }) => { const id = uuid(); await txActual.query('insert into auth.users(id,email) values ($1,$2)', [id, email]); return id; }, borrarUsuarioAuth: async () => {} };
 const srv = (quien, op, ...args) => ejecutar(deps, U[quien], { op, args });
+/* Campos obligatorios para iniciar/finalizar el viaje en el flujo actual. */
+const tiempos = { tIngresoPlanta: '2031-01-01T08:10', tEsperaRampa: '2031-01-01T08:20', tRampa: '2031-01-01T08:30', tInicioCarga: '2031-01-01T08:40', tFinCarga: '2031-01-01T09:00', tSalidaPlanta: '2031-01-01T09:05', tSalida: '2031-01-01T09:10', tIngresoBodega: '2031-01-01T13:00', tInicioDescarga: '2031-01-01T13:10', tFinDescarga: '2031-01-01T13:40' };
+const viajeData = (o = {}) => ({ shipment: 'S-1', opl: 'J&J', tipoViaje: 'ONE WAY', tipoCarga: 'TARIMAS', noCarga: '1', producto: 'Producto', placaArrastre: 'C-ARR-1', ...tiempos, ...o });
 const rt = await srv('adm', 'registrarRuta', { codigo: 'COL-001', nombre: 'CP → Colgate 1', cliente: 'COLGATE', proyecto: 'COLGATE', origenId: 'CP', destinoId: 'D-C1' });
 const rt2 = await srv('adm', 'registrarRuta', { codigo: 'CMI-001', nombre: 'CP → CMI 1', cliente: 'CMI', proyecto: 'ABASA', origenId: 'CP', destinoId: 'D-M1' });
-const sv1 = await srv('ped', 'crearViaje', { cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', rutaId: rt.result.id, fechaPlan: '2031-01-01T08:00' });
-await srv('bry', 'crearViaje', { cliente: 'CMI', proyectoCat: 'ABASA', pilotoId: 'P-2', rutaId: rt2.result.id, fechaPlan: '2031-01-01T09:00' });
+const sv1 = await srv('ped', 'crearViaje', { cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', rutaId: rt.result.id, fechaPlan: '2031-01-01T08:00', ...viajeData() });
+await srv('bry', 'crearViaje', { cliente: 'CMI', proyectoCat: 'ABASA', pilotoId: 'P-2', rutaId: rt2.result.id, fechaPlan: '2031-01-01T09:00', ...viajeData({ shipment: 'S-2' }) });
 const V1 = sv1.result.id;
 
 /* ---------- puente: lo que el navegador alcanzaría por la red ---------- */
@@ -81,7 +84,7 @@ T('06 Pedro entra con su cuenta; el perfil viene del servidor', ev('S.user&&S.us
 T('07 Solo recibe los viajes de COLGATE (nada de CMI)', ev('DB.trips.length') === 1 && ev('DB.trips.every(t=>t.proyecto==="COLGATE")'));
 T('08 Ningún usuario trae contraseñas al navegador', ev('DB.usuarios.every(u=>!u.clave)') && !/clave/i.test(JSON.stringify(ev('DB.usuarios.map(u=>Object.keys(u))'))) === false || ev('DB.usuarios.every(u=>u.clave===""||u.clave===undefined)'));
 const ini = await ev(`API.iniciar(S.user.id,"${V1}").then(r=>"ok",e=>e.code+": "+e.message)`);
-T('09 Iniciar un viaje: el servidor lo guarda y la pantalla se actualiza', ini === 'ok' && ev(`DB.trips.find(t=>t.id==="${V1}").estado`) === 'EN_CURSO' && (await db.query('select estado from viajes where id=$1', [V1])).rows[0].estado === 'EN_CURSO', ini);
+T('09 Iniciar un viaje: el servidor lo guarda y la pantalla se actualiza', ini === 'ok' && ev(`DB.trips.find(t=>t.id==="${V1}").estado`) === 'EN_RUTA' && (await db.query('select estado from viajes where id=$1', [V1])).rows[0].estado === 'EN_RUTA', ini);
 await ev(`API.finalizar(S.user.id,"${V1}")`);
 const liq = await ev(`API.enviarLiquidacion(S.user.id,"${V1}",sampleSlip("x")).then(r=>"ok",e=>e.code+": "+e.message)`);
 T('10 La evidencia se sube al almacenamiento protegido (con la política real) y luego se envía la liquidación', liq === 'ok' && subidas.length === 1 && subidas[0].startsWith('viajes/' + V1 + '/'), [liq, subidas]);
@@ -89,7 +92,7 @@ T('11 En la base queda solo la ruta del archivo, nunca la imagen incrustada', (a
 await login('mar@intransit.test', 'clave123');
 T('12 Quien revisa recibe un enlace firmado de la evidencia, sin la ruta interna', ev('DB.evidencias.length') === 1 && /^https:\/\/firmado\.test\//.test(ev('DB.evidencias[0].dataUrl')) && ev('DB.evidencias[0].path') === '');
 const apr = await ev(`API.aprobar(S.user.id,"${V1}").then(r=>"ok",e=>e.code+": "+e.message)`);
-T('13 Mar aprueba y el estado cambia en el servidor', apr === 'ok' && (await db.query('select estado from viajes where id=$1', [V1])).rows[0].estado === 'PENDIENTE_COMERCIAL', apr);
+T('13 Mar aprueba y el estado cambia en el servidor', apr === 'ok' && (await db.query('select estado from viajes where id=$1', [V1])).rows[0].estado === 'ACEPTADO', apr);
 T('14 Mar no recibe facturas ni tarifas ni pagos', ev('DB.agrupaciones.length')===0 && ev('DB.tarifas.length')===0 && ev('DB.pagos.length')===0);
 await login('bryan@intransit.test', 'clave123');
 const intr = await ev(`API.iniciar(S.user.id,"${V1}").then(r=>"ok",e=>e.code+": "+e.message)`);
@@ -97,14 +100,14 @@ T('15 Bryan no puede operar un viaje de COLGATE; el rechazo del servidor llega a
 /* sin conexión */
 Object.defineProperty(w.navigator, 'onLine', { get: () => false, configurable: true });
 const antes = (await db.query("select count(*)::int n from auditoria")).rows[0].n;
-const off = await ev(`API.crearViaje(S.user.id,{cliente:"CMI",proyectoCat:"ABASA",pilotoId:"P-2",rutaId:"${rt2.result.id}",fechaPlan:"2031-05-05T08:00"}).then(r=>"ok",e=>e.code+": "+e.message)`);
+const off = await ev(`API.crearViaje(S.user.id,Object.assign({cliente:"CMI",proyectoCat:"ABASA",pilotoId:"P-2",rutaId:"${rt2.result.id}",fechaPlan:"2031-05-05T08:00"},${JSON.stringify(viajeData({ shipment: 'S-3' }))})).then(r=>"ok",e=>e.code+": "+e.message)`);
 w.eval('render()');
 T('16 Sin conexión: la operación se rechaza con un mensaje claro y NO se confirma', /^SIN_CONEXION/.test(off) && /NO se guardó/.test(off), off);
 T('17 Sin conexión no se escribió nada en el servidor', (await db.query("select count(*)::int n from viajes")).rows[0].n === 2 && (await db.query("select count(*)::int n from auditoria")).rows[0].n === antes);
 T('18 Aparece el aviso visible de falta de conexión', !!d.querySelector('.offbar') && /Nada de lo que hagas se guarda/.test(d.querySelector('.offbar').textContent));
 Object.defineProperty(w.navigator, 'onLine', { get: () => true, configurable: true }); w.eval('render()');
 T('19 Al volver la conexión el aviso desaparece', !d.querySelector('.offbar'));
-const con = await ev(`API.crearViaje(S.user.id,{cliente:"CMI",proyectoCat:"ABASA",pilotoId:"P-2",rutaId:"${rt2.result.id}",fechaPlan:"2031-05-05T08:00"}).then(r=>"ok",e=>e.code+": "+e.message)`);
+const con = await ev(`API.crearViaje(S.user.id,Object.assign({cliente:"CMI",proyectoCat:"ABASA",pilotoId:"P-2",rutaId:"${rt2.result.id}",fechaPlan:"2031-05-05T08:00"},${JSON.stringify(viajeData({ shipment: 'S-3' }))})).then(r=>"ok",e=>e.code+": "+e.message)`);
 T('20 Con conexión la misma operación se guarda', con === 'ok' && (await db.query("select count(*)::int n from viajes")).rows[0].n === 3, con);
 /* seguridad de la configuración */
 const w2 = pagina({ SUPABASE_URL: 'https://prueba.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_secret_abcdef' }); await flush();
@@ -115,6 +118,6 @@ T('22 Tampoco usa un JWT con rol service_role', w3.eval('BACKEND.modo') === 'blo
 const w4 = pagina({ SUPABASE_URL: '', SUPABASE_PUBLISHABLE_KEY: '' }); await flush();
 T('23 Sin configuración ni datos de ejemplo, la app lo dice claramente y no inventa datos', w4.eval('BACKEND.modo') === 'demo' && /Sin configurar/.test(w4.document.querySelector('#app').textContent) && w4.eval('DB.trips.length') === 0);
 /* archivos del proyecto */
-const noSecretos = ['index.html', 'js/config.js', 'js/backend.js', 'js/ui.js', 'js/engine.js', 'manifest.json', 'service-worker.js'].every(f => !/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/.test(leer(f)));
+const noSecretos = ['index.html', 'js/backend.js', 'js/ui.js', 'js/engine.js', 'manifest.json', 'service-worker.js'].every(f => !/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/.test(leer(f)));
 T('24 Ningún JWT ni clave privada incrustada en el código de la interfaz', noSecretos);
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

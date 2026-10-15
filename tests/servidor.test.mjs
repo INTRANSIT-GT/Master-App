@@ -7,6 +7,10 @@ import { ejecutar } from '../supabase/functions/api/handler.mjs';
 const raíz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), 'utf8');
 
+/* Migraciones en orden. El 005 es un ejemplo (se ejecuta a mano) y no entra aquí. */
+const MIGRACIONES = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
+  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql'];
+
 const db = new PGlite();
 await db.exec('set search_path = master, public');   /* las tablas viven en el esquema master (integración AP_VIAJES) */
 let ok = 0, mal = 0; const filas = [];
@@ -14,7 +18,7 @@ const T = (n, c, x) => { c ? ok++ : mal++; filas.push((c ? 'OK   ' : 'FAIL ') + 
 const uuid = () => crypto.randomUUID();
 
 /* ---- entorno mínimo equivalente al de Supabase ---- */
-await db.exec(`
+const ENTORNO = `
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
   create schema auth; create table auth.users(id uuid primary key, email text);
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
@@ -24,21 +28,37 @@ await db.exec(`
   create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security;
   grant usage on schema storage to authenticated; grant select, insert on storage.objects to authenticated;
-`);
-for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql']) {
+`;
+await db.exec(ENTORNO);
+for (const f of MIGRACIONES) {
   try { await db.exec(sqlDe(f)); T('SQL ' + f + ' se aplica sin errores', true); } catch (e) { T('SQL ' + f + ' se aplica sin errores', false, e.message); }
 }
-try { await db.exec(sqlDe('001_esquema.sql') + sqlDe('002_seguridad_rls.sql') + sqlDe('003_almacenamiento.sql') + sqlDe('004_permisos_base.sql')); T('Los scripts son re-ejecutables (idempotentes)', true); }
-catch (e) { T('Los scripts son re-ejecutables (idempotentes)', false, e.message); }
+/* Idempotencia de los scripts base (001–004, documentados como re-ejecutables): se prueba en una
+   base aparte para no tocar la principal (002 recrea las políticas de master). */
+try {
+  const db2 = new PGlite();
+  await db2.exec('set search_path = master, public'); await db2.exec(ENTORNO);
+  const base = MIGRACIONES.filter(f => /^00[1-4]_/.test(f)).map(sqlDe).join('\n');
+  await db2.exec(base); await db2.exec(base);
+  T('Los scripts base (001–004) son re-ejecutables (idempotentes)', true);
+  await db2.close();
+} catch (e) { T('Los scripts base (001–004) son re-ejecutables (idempotentes)', false, e.message); }
 
 /* ---- datos base: usuarios (Auth + perfil), clientes, accesos y catálogos ---- */
 const U = {}; const mk = async (k, usuario, nombre, rol, proyectos = []) => { U[k] = uuid(); await db.query('insert into auth.users(id,email) values ($1,$2)', [U[k], usuario + '@intransit.test']);
   await db.query('insert into master.perfiles(id,usuario,email,nombre,rol,proyectos) values ($1,$2,$3,$4,$5,$6)', [U[k], usuario, usuario + '@intransit.test', nombre, rol, proyectos]); };
 await db.exec(`insert into master.clientes(id,nombre,cliente,proyectos,torre_estatus) values ('COLGATE','Colgate','COLGATE','{COLGATE,LV}',false),('CMI','CMI','CMI','{ABASA}',false),('COCACOLA','Coca-Cola','COCACOLA','{COCACOLA}',true);
   insert into master.clientes_fiscal(cliente_id) values ('COLGATE'),('CMI'),('COCACOLA');`);
-await mk('adm', 'admin', 'Administradora', 'ADMIN'); await mk('ped', 'pedro', 'Pedro Chaperon', 'ENCARGADO'); await mk('bry', 'bryan', 'Bryan Cmi', 'ENCARGADO');
-await mk('imp', 'implan', 'Encargado COLGATE (IMPLAN)', 'ENCARGADO', ['COLGATE']); await mk('mar', 'mar', 'Mar Liquidaciones', 'LIQUIDACIONES');
-await mk('ale', 'alejandra', 'Alejandra', 'COMERCIAL'); await mk('ger', 'gerencia', 'Gerencia', 'GERENCIA'); await mk('fel', 'felipe', 'Felipe Torre', 'TORRE');
+await mk('adm', 'admin', 'Administradora', 'ADMIN');
+await mk('ped', 'pedro', 'Pedro Chaperon', 'ENCARGADO');
+await mk('bry', 'bryan', 'Bryan Cmi', 'ENCARGADO');
+await mk('imp', 'implan', 'Encargado COLGATE (IMPLAN)', 'ENCARGADO', ['COLGATE']);
+await mk('mar', 'mar', 'Mar Liquidaciones', 'LIQUIDACIONES');
+await mk('ale', 'alejandra', 'Alejandra', 'COMERCIAL');
+await mk('gco', 'gcomercial', 'Gerencia Comercial', 'GERENCIA_COMERCIAL');
+await mk('gtr', 'gtransporte', 'Gerencia Transporte', 'GERENCIA_TRANSPORTE');
+await mk('fel', 'felipe', 'Felipe Torre', 'TORRE');
+await mk('cta', 'conta', 'Contabilidad', 'CONTABILIDAD');
 await db.query(`insert into master.acceso_cliente(user_id,cliente_id) values ($1,'COLGATE'),($2,'CMI'),($3,'COLGATE')`, [U.ped, U.bry, U.imp]);
 await db.exec(`insert into master.flota(unidad,placa,tango,capacidad,tipo) values ('T-1','C-001AAA','TNG-1','10 Ton','10TON'),('T-2','C-002BBB','TNG-2','10 Ton','10TON'),('T-3','C-003CCC','TNG-3','10 Ton','10TON');
   insert into master.pilotos(id,nombre,unidad,cliente_id) values ('P-1','Piloto Uno','T-1','COLGATE'),('P-2','Piloto Dos','T-2','CMI'),('P-3','Piloto Tres','T-3','COLGATE');
@@ -64,19 +84,21 @@ const comoUsuario = async (quien, fn) => {       // simula una consulta directa 
 };
 const intenta = async f => { try { await f(); return null; } catch (e) { return e.message; } };
 
-/* ---- 1. Rutas (catálogo) y primer viaje ---- */
+/* ---- 1. Rutas (catálogo) y primeros viajes ---- */
 const r1 = await api('adm', 'registrarRuta', { codigo: 'COL-001', nombre: 'CP → Colgate 1', cliente: 'COLGATE', proyecto: 'COLGATE', origenId: 'CP', destinoId: 'D-C1' });
 const r2 = await api('adm', 'registrarRuta', { codigo: 'COL-LV1', nombre: 'CP → Colgate LV', cliente: 'COLGATE', proyecto: 'LV', origenId: 'CP', destinoId: 'D-C1' });
 const r3 = await api('adm', 'registrarRuta', { codigo: 'CMI-001', nombre: 'CP → CMI 1', cliente: 'CMI', proyecto: 'ABASA', origenId: 'CP', destinoId: 'D-M1' });
-T('01 La administradora registra rutas y se guardan en la base', r1.ok && r2.ok && r3.ok && (await q1('select count(*)::int n from rutas'))[0].n === 3, [r1, r2, r3].map(r => r.message));
-const viaje = (extra = {}) => ({ cliente: 'COLGATE', proyectoCat: 'COLGATE', pilotoId: 'P-1', rutaId: r1.result.id, fechaPlan: '2031-01-01T08:00', shipment: 'S-1', ...extra });
+T('01 La administradora registra rutas (quedan En tarifación) y se guardan en la base', r1.ok && r2.ok && r3.ok && r1.result.estado === 'EN_TARIFACION' && (await q1('select count(*)::int n from rutas'))[0].n === 3, [r1, r2, r3].map(r => r.message));
+
+const T10 = { tIngresoPlanta: '2031-01-01T08:10', tEsperaRampa: '2031-01-01T08:20', tRampa: '2031-01-01T08:30', tInicioCarga: '2031-01-01T08:40', tFinCarga: '2031-01-01T09:00', tSalidaPlanta: '2031-01-01T09:05', tSalida: '2031-01-01T09:10', tIngresoBodega: '2031-01-01T13:00', tInicioDescarga: '2031-01-01T13:10', tFinDescarga: '2031-01-01T13:40' };
+const viaje = (extra = {}) => ({ cliente: 'COLGATE', pilotoId: 'P-1', rutaId: r1.result.id, fechaPlan: '2031-01-01T08:00', shipment: 'S-1', opl: 'J&J', tipoViaje: 'ONE WAY', tipoCarga: 'TARIMAS', noCarga: '1', producto: 'Producto de prueba', placaArrastre: 'C-ARR-001', ...T10, ...extra });
 const v1 = await api('ped', 'crearViaje', viaje());
 T('02 Pedro crea un viaje: queda guardado con identificador estable', v1.ok && /^\d{6}$/.test(v1.result.id) && (await q1('select count(*)::int n from viajes'))[0].n === 1, v1);
 const v1id = v1.result?.id;
 const dup = await api('ped', 'crearViaje', viaje());
 T('03 No se duplica el mismo viaje (fecha + piloto + ruta)', dup.ok === false && (await q1('select count(*)::int n from viajes'))[0].n === 1, dup);
-const lv = await api('adm', 'crearViaje', viaje({ proyectoCat: 'LV', rutaId: r2.result.id, pilotoId: 'P-3', fechaPlan: '2031-01-02T08:00' }));
-const cm = await api('bry', 'crearViaje', { cliente: 'CMI', proyectoCat: 'ABASA', pilotoId: 'P-2', rutaId: r3.result.id, fechaPlan: '2031-01-01T09:00' });
+const lv = await api('adm', 'crearViaje', viaje({ rutaId: r2.result.id, pilotoId: 'P-3', fechaPlan: '2031-01-02T08:00', shipment: 'S-2' }));
+const cm = await api('bry', 'crearViaje', viaje({ cliente: 'CMI', rutaId: r3.result.id, pilotoId: 'P-2', fechaPlan: '2031-01-01T09:00', shipment: 'S-3' }));
 T('04 Se crean viajes de otros proyectos y clientes', lv.ok && cm.ok, [lv.message, cm.message]);
 
 /* ---- 2. Alcance por cliente y proyecto (servidor) ---- */
@@ -88,7 +110,7 @@ T('07 Encargado con proyecto asignado (IMPLAN) solo ve el proyecto COLGATE, no L
 T('08 Su lista de rutas se limita a su proyecto', sI.rutas.length === 1 && sI.rutas[0].proyecto === 'COLGATE', sI.rutas.map(r => r.codigo));
 T('09 La administradora ve todo', sA.trips.length === 3 && sA.rutas.length === 3, [sA.trips.length, sA.rutas.length]);
 const intr = await api('bry', 'iniciar', v1id);
-T('10 Bryan no puede operar un viaje de COLGATE aunque conozca su identificador', intr.ok === false && (await q1('select estado from viajes where id=$1', [v1id]))[0].estado === 'PENDIENTE', intr);
+T('10 Bryan no puede operar un viaje de COLGATE aunque conozca su identificador', intr.ok === false && (await q1('select estado from viajes where id=$1', [v1id]))[0].estado === 'PLANIFICADO', intr);
 T('11 El intento rechazado queda registrado en la auditoría', (await q1("select count(*)::int n from auditoria where entidad='SEGURIDAD' and por_id=$1", [U.bry]))[0].n >= 1);
 const sinSesion = await ejecutar(deps, null, { op: 'snapshot' });
 T('12 Sin sesión válida no se entrega nada', sinSesion.ok === false && sinSesion.code === 'NO_AUTENTICADO');
@@ -100,89 +122,127 @@ T('14 Operaciones desconocidas se rechazan', opMala.ok === false && opMala.code 
 /* ---- 3. Ciclo del viaje y liquidación con evidencia en almacenamiento ---- */
 T('15 Pedro inicia y finaliza el viaje', (await api('ped', 'iniciar', v1id)).ok && (await api('ped', 'finalizar', v1id)).ok);
 const est = async () => (await q1('select estado from viajes where id=$1', [v1id]))[0].estado;
+T('16 El viaje queda Entregado (listo para liquidar)', (await est()) === 'ENTREGADO');
 const ruta = f => `viajes/${v1id}/${f}`;
 const sinArchivo = await api('ped', 'enviarLiquidacion', v1id, { path: ruta('evidencia-0001.jpg') });
-T('16 No se acepta una evidencia que no existe en el almacenamiento', sinArchivo.ok === false, sinArchivo);
+T('17 No se acepta una evidencia que no existe en el almacenamiento', sinArchivo.ok === false, sinArchivo);
 const subida = await comoUsuario('ped', tx => intenta(() => tx.query(`insert into storage.objects(bucket_id,name,owner) values ('evidencias',$1,$2)`, [ruta('evidencia-0001.jpg'), U.ped])));
-T('17 Pedro puede subir evidencia de su viaje (política de almacenamiento)', subida === null, subida);
+T('18 Pedro puede subir evidencia de su viaje (política de almacenamiento)', subida === null, subida);
 const ajena = await comoUsuario('bry', tx => intenta(() => tx.query(`insert into storage.objects(bucket_id,name,owner) values ('evidencias',$1,$2)`, [ruta('evidencia-bryan.jpg'), U.bry])));
-T('18 Bryan NO puede subir evidencia a un viaje de otro cliente', ajena !== null, ajena);
+T('19 Bryan NO puede subir evidencia a un viaje de otro cliente', ajena !== null, ajena);
 const ruidosa = await comoUsuario('ped', tx => intenta(() => tx.query(`insert into storage.objects(bucket_id,name,owner) values ('evidencias',$1,$2)`, ['viajes/' + v1id + '/../../x/hack.jpg', U.ped])));
-T('19 Rutas de archivo manipuladas (../) se rechazan', ruidosa !== null, ruidosa);
+T('20 Rutas de archivo manipuladas (../) se rechazan', ruidosa !== null, ruidosa);
 const enviada = await api('ped', 'enviarLiquidacion', v1id, { path: ruta('evidencia-0001.jpg') });
-T('20 Con la evidencia en el almacenamiento, la liquidación se envía', enviada.ok && ['EN_REVISION', 'PENDIENTE_LIQUIDACION'].includes(await est()), enviada);
+T('21 Con la evidencia en el almacenamiento, la liquidación se envía', enviada.ok && (await est()) === 'LIQUIDADO', enviada);
 const evi = (await snap('mar')).evidencias;
-T('21 Quien revisa recibe un enlace firmado (no la ruta interna)', evi.length === 1 && evi[0].dataUrl.startsWith('https://firmado.test/') && evi[0].path === '');
-T('22 Bryan no recibe evidencias de otros clientes', (await snap('bry')).evidencias.length === 0);
+T('22 Quien revisa recibe un enlace firmado (no la ruta interna)', evi.length === 1 && evi[0].dataUrl.startsWith('https://firmado.test/') && evi[0].path === '');
+T('23 Bryan no recibe evidencias de otros clientes', (await snap('bry')).evidencias.length === 0);
 const rev = await api('ped', 'aprobar', v1id);
-T('23 El encargado no puede aprobar su propia liquidación', rev.ok === false);
+T('24 El encargado no puede aprobar su propia liquidación', rev.ok === false);
 const ap = await api('mar', 'aprobar', v1id);
-T('24 Liquidaciones aprueba y el viaje pasa a Comercial', ap.ok && (await est()) === 'PENDIENTE_COMERCIAL', ap);
-T('25 Mar no ve montos, tarifas ni facturas', (await snap('mar')).agrupaciones.length === 0 && (await snap('mar')).tarifas.length === 0 && (await snap('mar')).pagos.length === 0);
+T('25 Liquidaciones aprueba y el viaje queda Aceptado', ap.ok && (await est()) === 'ACEPTADO', ap);
+T('26 Mar no ve montos, tarifas ni facturas', (await snap('mar')).agrupaciones.length === 0 && (await snap('mar')).tarifas.length === 0 && (await snap('mar')).pagos.length === 0);
 
-/* ---- 4. Comercial: tarifa, factura y reglas de validación ---- */
-const tar = await api('ale', 'crearTarifa', { cliente: 'COLGATE', proyecto: 'COLGATE', rutaId: r1.result.id, capacidad: '10 Ton', importe: 4800, vigenteDesde: '2030-01-01' });
-T('26 Comercial registra la tarifa', tar.ok, tar);
+/* ---- 4. Comercial: tarifa, aprobación de ruta, factura y reglas ---- */
+const tar = await api('ale', 'crearTarifa', { cliente: 'COLGATE', proyecto: 'COLGATE', rutaId: r1.result.id, capacidad: '10 Ton', importe: 4800, importeOpl: 3000, vigenteDesde: '2030-01-01' });
+T('27 Comercial registra la tarifa y la ruta pasa a Pendiente de aprobación', tar.ok && (await q1('select estado from rutas where id=$1', [r1.result.id]))[0].estado === 'PENDIENTE_APROBACION', tar);
+const apc = await api('gco', 'aprobarRutaComercial', r1.result.id);
+const apt = await api('gtr', 'aprobarRutaTransporte', r1.result.id);
+T('28 Las dos gerencias aprueban la ruta y queda Activa', apc.ok && apt.ok && (await q1('select estado from rutas where id=$1', [r1.result.id]))[0].estado === 'ACTIVA', [apc.message, apt.message]);
 const apl = await api('ale', 'aplicarTarifa', v1id);
-T('27 Aplica la tarifa vigente al viaje (guardada en la tabla de importes)', apl.ok && Number((await q1('select tarifa_cliente from viajes_tarifa where viaje_id=$1', [v1id]))[0]?.tarifa_cliente) === 4800, apl);
+T('29 Aplica la tarifa vigente al viaje (cliente y OPL en la tabla de importes)', apl.ok && Number((await q1('select tarifa_cliente from viajes_tarifa where viaje_id=$1', [v1id]))[0]?.tarifa_cliente) === 4800 && Number((await q1('select tarifa_opl from viajes_tarifa where viaje_id=$1', [v1id]))[0]?.tarifa_opl) === 3000, apl);
 const g = await api('ale', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [v1id], numeroFactura: '', fechaFactura: '' });
 const gid = g.result?.id;
 const env0 = await api('ale', 'enviarFactura', gid);
-T('28 No se envía sin número ni fecha y dice qué falta', env0.ok === false && env0.code === 'FALTAN_CAMPOS' && (env0.faltantes || []).length >= 2, env0);
-T('29 La factura rechazada sigue en PREPARADA', (await q1('select fase from agrupaciones where id=$1', [gid]))[0].fase === 'PREPARADA');
-const act = await api('ale', 'actualizarFactura', gid, { numeroFactura: 'FAC-9001', fechaFactura: '2031-02-01' });
+T('30 No se envía sin serie, número ni fecha y dice qué falta', env0.ok === false && env0.code === 'FALTAN_CAMPOS' && (env0.faltantes || []).length >= 3, env0);
+T('31 La factura rechazada sigue en PREPARADA', (await q1('select fase from agrupaciones where id=$1', [gid]))[0].fase === 'PREPARADA');
+const act = await api('ale', 'actualizarFactura', gid, { numeroFactura: 'FAC-9001', serieFactura: 'A', fechaFactura: '2031-02-01' });
 const env1 = await api('ale', 'enviarFactura', gid);
-T('30 Con datos completos, la factura se envía', act.ok && env1.ok && (await q1('select fase from agrupaciones where id=$1', [gid]))[0].fase === 'ENVIADA', [act.message, env1.message]);
-const g2 = await api('ale', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [v1id], numeroFactura: 'FAC-9001', fechaFactura: '2031-02-01' });
-T('31 No se puede facturar dos veces el mismo viaje ni repetir el número de factura', g2.ok === false, g2);
-const ger = await snap('ger');
-T('32 Gerencia consulta facturación y finanzas pero no opera', ger.agrupaciones.length === 1 && (await api('ger', 'enviarFactura', gid)).ok === false);
+T('32 Con datos completos, la factura se envía y el viaje pasa a Facturado', act.ok && env1.ok && (await q1('select fase from agrupaciones where id=$1', [gid]))[0].fase === 'ENVIADA' && (await est()) === 'FACTURADO', [act.message, env1.message]);
+const g2 = await api('ale', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [v1id], numeroFactura: 'FAC-9002', serieFactura: 'A', fechaFactura: '2031-02-01' });
+T('33 No se puede facturar dos veces el mismo viaje', g2.ok === false, g2);
+const gsnap = await snap('gco');
+T('34 Gerencia Comercial consulta la facturación pero no la opera', gsnap.agrupaciones.length === 1 && (await api('gco', 'enviarFactura', gid)).ok === false);
 
 /* ---- 5. Integridad de la base ---- */
 const ver = await api('adm', 'verificarAuditoria');
-T('33 La cadena de huellas de la auditoría es íntegra tras todas las operaciones', ver.ok && ver.result.ok === true && ver.result.total > 10, ver);
-T('34 La auditoría no se puede modificar ni borrar ni vaciar', (await intenta(() => db.query("update auditoria set accion='x'"))) !== null && (await intenta(() => db.query('delete from auditoria'))) !== null && (await intenta(() => db.query('truncate auditoria'))) !== null);
-T('35 Los viajes no se pueden borrar', (await intenta(() => db.query('delete from viajes'))) !== null);
-T('36 No se pueden saltar estados (APROBADA → EN_CURSO)', (await intenta(() => db.query("update viajes set estado='EN_CURSO' where id=$1", [v1id]))) !== null);
-T('37 La base rechaza una ruta ASIGNADA sin código ni origen', (await intenta(() => db.query("update rutas set codigo='' where id=$1", [r1.result.id]))) !== null);
-T('38 Una factura no puede estar enviada sin número', (await intenta(() => db.query("update agrupaciones set numero_factura='' where id=$1", [gid]))) !== null);
+T('35 La cadena de huellas de la auditoría es íntegra tras todas las operaciones', ver.ok && ver.result.ok === true && ver.result.total > 10, ver);
+T('36 La auditoría no se puede modificar ni borrar ni vaciar', (await intenta(() => db.query("update auditoria set accion='x'"))) !== null && (await intenta(() => db.query('delete from auditoria'))) !== null && (await intenta(() => db.query('truncate auditoria'))) !== null);
+T('37 Los viajes no se pueden borrar', (await intenta(() => db.query('delete from viajes'))) !== null);
+T('38 No se pueden saltar estados (Facturado → En ruta)', (await intenta(() => db.query("update viajes set estado='EN_RUTA' where id=$1", [v1id]))) !== null);
+T('39 La base rechaza una ruta Activa sin código', (await intenta(() => db.query("update rutas set codigo='' where id=$1", [r1.result.id]))) !== null);
+T('40 Una factura no puede estar enviada sin número', (await intenta(() => db.query("update agrupaciones set numero_factura='' where id=$1", [gid]))) !== null);
 
 /* ---- 6. RLS: consultas directas con la sesión de cada usuario ---- */
 const cuenta = async (quien, tabla) => comoUsuario(quien, async tx => (await tx.query(`select count(*)::int n from master.${tabla}`)).rows[0].n);
-T('39 Sin sesión (anon) no se lee ninguna tabla', (await intenta(() => comoUsuario(null, tx => tx.query('select * from master.viajes')))) !== null && (await intenta(() => comoUsuario(null, tx => tx.query('select * from master.perfiles')))) !== null);
-T('40 RLS: Pedro solo lee viajes de COLGATE; Bryan solo CMI', await cuenta('ped', 'viajes') === 2 && await cuenta('bry', 'viajes') === 1, [await cuenta('ped', 'viajes'), await cuenta('bry', 'viajes')]);
-T('41 RLS: el encargado con proyecto asignado solo lee ese proyecto', await cuenta('imp', 'viajes') === 1);
-T('42 RLS: consultar por identificador de otro cliente devuelve 0 filas', await comoUsuario('bry', async tx => (await tx.query('select id from master.viajes where id=$1', [v1id])).rows.length) === 0);
-T('43 RLS: costos, tarifas y facturas no son visibles para quien no tiene permiso', await cuenta('ped', 'viajes_costos') === 0 && await cuenta('ped', 'viajes_tarifa') === 0 && await cuenta('ped', 'agrupaciones') === 0 && await cuenta('ped', 'tarifas') === 0);
-T('44 RLS: Comercial ve la tarifa del viaje; Gerencia ve las facturas', await cuenta('ale', 'viajes_tarifa') === 1 && await cuenta('ger', 'agrupaciones') === 1);
-T('45 RLS: cada usuario solo ve su propio perfil (la administradora ve todos)', await cuenta('ped', 'perfiles') === 1 && await cuenta('adm', 'perfiles') === 8);
-T('46 RLS: nadie ve las secuencias internas', (await intenta(() => cuenta('adm', 'secuencias'))) !== null);
+T('41 Sin sesión (anon) no se lee ninguna tabla', (await intenta(() => comoUsuario(null, tx => tx.query('select * from master.viajes')))) !== null && (await intenta(() => comoUsuario(null, tx => tx.query('select * from master.perfiles')))) !== null);
+T('42 RLS: Pedro solo lee viajes de COLGATE; Bryan solo CMI', await cuenta('ped', 'viajes') === 2 && await cuenta('bry', 'viajes') === 1, [await cuenta('ped', 'viajes'), await cuenta('bry', 'viajes')]);
+T('43 RLS: el encargado con proyecto asignado solo lee ese proyecto', await cuenta('imp', 'viajes') === 1);
+T('44 RLS: consultar por identificador de otro cliente devuelve 0 filas', await comoUsuario('bry', async tx => (await tx.query('select id from master.viajes where id=$1', [v1id])).rows.length) === 0);
+T('45 RLS: costos, tarifas y facturas no son visibles para quien no tiene permiso', await cuenta('ped', 'viajes_costos') === 0 && await cuenta('ped', 'viajes_tarifa') === 0 && await cuenta('ped', 'agrupaciones') === 0 && await cuenta('ped', 'tarifas') === 0);
+T('46 RLS: Comercial ve la tarifa del viaje y las facturas', await cuenta('ale', 'viajes_tarifa') === 1 && await cuenta('ale', 'agrupaciones') === 1);
+T('47 RLS: cada usuario solo ve su propio perfil (la administradora ve todos)', await cuenta('ped', 'perfiles') === 1 && await cuenta('adm', 'perfiles') === 10);
+T('48 RLS: nadie ve las secuencias internas', (await intenta(() => cuenta('adm', 'secuencias'))) !== null);
 const audV = quien => comoUsuario(quien, async tx => (await tx.query('select count(*)::int n from master.auditoria where viaje_id=$1', [v1id])).rows[0].n);
-T('47 RLS: la auditoría de un viaje solo la leen quienes pueden ver ese viaje', await audV('bry') === 0 && await audV('ped') > 0 && await cuenta('adm', 'auditoria') > 10, [await audV('bry'), await audV('ped')]);
+T('49 RLS: la auditoría de un viaje solo la leen quienes pueden ver ese viaje', await audV('bry') === 0 && await audV('ped') > 0 && await cuenta('adm', 'auditoria') > 10, [await audV('bry'), await audV('ped')]);
 const escritura = ['update master.viajes set shipment=$$x$$', 'delete from master.viajes', "insert into master.clientes(id,nombre,cliente) values ($$ZZ$$,$$Z$$,$$Z$$)", "update master.perfiles set rol=$$ADMIN$$", "update master.permisos set habilitado=true"];
-for (const [i, s] of escritura.entries()) T('48.' + (i + 1) + ' Un usuario no puede escribir directamente: ' + s.split(' ').slice(0, 3).join(' '), (await intenta(() => comoUsuario('adm', tx => tx.query(s)))) !== null);
-T('49 Notificaciones: solo los destinatarios (o la administradora) las leen', true);
+for (const [i, s] of escritura.entries()) T('50.' + (i + 1) + ' Un usuario no puede escribir directamente: ' + s.split(' ').slice(0, 3).join(' '), (await intenta(() => comoUsuario('adm', tx => tx.query(s)))) !== null);
 const ev = await comoUsuario('ped', async tx => (await tx.query('select count(*)::int n from storage.objects')).rows[0].n), ev2 = await comoUsuario('bry', async tx => (await tx.query('select count(*)::int n from storage.objects')).rows[0].n);
-T('50 Almacenamiento: Pedro ve la evidencia de su viaje y Bryan no', ev === 1 && ev2 === 0, [ev, ev2]);
+T('51 Almacenamiento: Pedro ve la evidencia de su viaje y Bryan no', ev === 1 && ev2 === 0, [ev, ev2]);
 
-/* ---- 7. Rutas nuevas y notificaciones del perfil unificado ---- */
+/* ---- 7. Rutas nuevas, validación y notificaciones ---- */
 const sol = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'Ruta nueva Escuintla', origenProp: 'CEDIS Mixco', destinoProp: 'Escuintla centro' });
-T('51 Encargado/IMPLAN solicita una ruta nueva: queda NO ASIGNADA', sol.ok && (await q1('select estado,codigo from rutas where id=$1', [sol.result?.id]))[0].estado === 'NO_ASIGNADA', sol);
+T('52 Encargado/IMPLAN solicita una ruta nueva: queda PENDIENTE', sol.ok && (await q1('select estado from rutas where id=$1', [sol.result?.id]))[0].estado === 'PENDIENTE', sol);
 const nt = await q1('select destinatarios from notificaciones order by id desc limit 1');
-T('52 Genera la notificación para Gerencia y Comercial', nt[0] && nt[0].destinatarios.includes('GERENCIA') && nt[0].destinatarios.includes('COMERCIAL'), nt);
-T('53 Otro proyecto o cliente: solicitud rechazada', (await api('imp', 'solicitarRuta', { cliente: 'CMI', proyecto: 'ABASA', nombre: 'X ruta' })).ok === false && (await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'LV', nombre: 'X ruta' })).ok === false);
+T('53 Genera la notificación para las dos gerencias', nt[0] && nt[0].destinatarios.includes('GERENCIA_COMERCIAL') && nt[0].destinatarios.includes('GERENCIA_TRANSPORTE'), nt);
+T('54 Otro proyecto o cliente: solicitud rechazada', (await api('imp', 'solicitarRuta', { cliente: 'CMI', proyecto: 'ABASA', nombre: 'X ruta' })).ok === false && (await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'LV', nombre: 'X ruta' })).ok === false);
 const val = await api('ale', 'validarRuta', sol.result.id, { codigo: 'COL-099', origenId: 'CP', destinoId: 'D-C2' });
-T('54 Comercial valida la ruta y queda asignada con código', val.ok && (await q1('select estado,codigo from rutas where id=$1', [sol.result.id]))[0].codigo === 'COL-099', val);
+T('55 Comercial valida la ruta: queda En tarifación con código', val.ok && (await q1('select estado,codigo from rutas where id=$1', [sol.result.id]))[0].estado === 'EN_TARIFACION' && (await q1('select codigo from rutas where id=$1', [sol.result.id]))[0].codigo === 'COL-099', val);
 
 /* ---- 8. Usuarios: alta con cuenta de acceso solo para la administradora ---- */
-const nuevo = await api('adm', 'guardarUsuario', { usuario: 'nuevo1', nombre: 'Nuevo Encargado', email: 'Nuevo1@IntTransit.test', clave: 'ClaveSegura1', rol: 'ENCARGADO', clientes: ['CMI'], proyectos: [], activo: true });
-T('55 La administradora crea un usuario: se crea la cuenta Auth y el perfil con el mismo identificador', nuevo.ok && (await q1('select u.email from perfiles p join auth.users u on u.id=p.id where p.usuario=$1', ['nuevo1']))[0]?.email === 'nuevo1@inttransit.test', nuevo);
+const nuevo = await api('adm', 'guardarUsuario', { usuario: 'nuevo1', nombre: 'Nuevo Encargado', email: 'Nuevo1@intransit.test', clave: 'ClaveSegura1', rol: 'ENCARGADO', clientes: ['CMI'], proyectos: [], activo: true });
+const filaNuevo = (await q1('select p.email, u.email as uemail from perfiles p join auth.users u on u.id=p.id where p.usuario=$1', ['nuevo1']))[0];
+T('56 La administradora crea un usuario: se crea la cuenta Auth y el perfil con el mismo identificador', nuevo.ok && filaNuevo && filaNuevo.uemail === 'nuevo1@intransit.test', nuevo);
 const intruso = await api('ped', 'guardarUsuario', { usuario: 'intruso', nombre: 'Intruso Root', email: 'i@i.test', clave: 'ClaveSegura1', rol: 'ADMIN', clientes: [] });
-T('56 Un encargado NO puede crear usuarios (ni se crea cuenta de acceso)', intruso.ok === false && (await q1("select count(*)::int n from auth.users where email='i@i.test'"))[0].n === 0, intruso);
+T('57 Un encargado NO puede crear usuarios (ni se crea cuenta de acceso)', intruso.ok === false && (await q1("select count(*)::int n from auth.users where email='i@i.test'"))[0].n === 0, intruso);
 const malo = await api('adm', 'guardarUsuario', { usuario: 'pedro', nombre: 'Duplicado Pedro', email: 'dup@x.test', clave: 'ClaveSegura1', rol: 'ENCARGADO', clientes: ['CMI'] });
-T('57 Si el motor rechaza el alta, la cuenta de acceso creada se elimina (no quedan cuentas huérfanas)', malo.ok === false && (await q1("select count(*)::int n from auth.users where email='dup@x.test'"))[0].n === 0 && borrados.length >= 1, malo);
-T('58 No se puede conceder a un perfil un permiso prohibido (separación de funciones)', (await api('adm', 'setPermiso', 'ENCARGADO', 'liq_aprobar', true)).ok === false);
-T('59 Torre: solo avanza el estado y solo en clientes autorizados', (await api('fel', 'torreMoverEstado', v1id, 'EN_RUTA')).ok === false);
+T('58 Si el motor rechaza el alta, la cuenta de acceso creada se elimina (no quedan cuentas huérfanas)', malo.ok === false && (await q1("select count(*)::int n from auth.users where email='dup@x.test'"))[0].n === 0 && borrados.length >= 1, malo);
+T('59 No se puede conceder a un perfil un permiso prohibido (separación de funciones)', (await api('adm', 'setPermiso', 'ENCARGADO', 'liq_aprobar', true)).ok === false);
+T('60 Torre: solo avanza el estado y solo en clientes autorizados', (await api('fel', 'torreMoverEstado', v1id, 'EN_RUTA')).ok === false);
+
+/* ---- 9. OPL (proveedor) y órdenes de pago ---- */
+T('61 El viaje facturado queda con su tarifa de OPL lista para pagar al proveedor', Number((await q1('select tarifa_opl from viajes_tarifa where viaje_id=$1', [v1id]))[0].tarifa_opl) === 3000);
+const opSin = await api('adm', 'crearOrdenPago', { proveedor: 'J&J', viajeIds: [] });
+const opProv = await api('adm', 'crearOrdenPago', { proveedor: 'GTL', viajeIds: [v1id] });
+const opNoFact = await api('adm', 'crearOrdenPago', { proveedor: 'J&J', viajeIds: [lv.result.id] });
+T('62 La orden exige viajes, un proveedor válido y que el viaje esté facturado al cliente', opSin.ok === false && opProv.code === 'VALIDACION' && opNoFact.code === 'NO_FACTURADO', [opSin.message, opProv.message, opNoFact.message]);
+const op1 = await api('adm', 'crearOrdenPago', { proveedor: 'J&J', viajeIds: [v1id] });
+const op1id = op1.result?.id;
+T('63 Se emite la orden de pago del proveedor por el total de la OPL', op1.ok && op1.result.fase === 'EMITIDA' && op1.result.importe === 3000 && /^OP-\d{4}$/.test(op1id), op1);
+const opDup = await api('adm', 'crearOrdenPago', { proveedor: 'J&J', viajeIds: [v1id] });
+T('64 Un viaje no puede entrar en dos órdenes de pago activas', opDup.ok === false && opDup.code === 'YA_EN_ORDEN', opDup);
+const anulCorta = await api('adm', 'anularOrdenPago', op1id, 'no');
+T('65 Anular una orden exige un motivo', anulCorta.ok === false, anulCorta);
+const anul = await api('adm', 'anularOrdenPago', op1id, 'Proveedor cambió de condiciones');
+const op2 = await api('adm', 'crearOrdenPago', { proveedor: 'J&J', viajeIds: [v1id] });
+T('66 La orden emitida se anula y su viaje puede volver a una orden nueva', anul.ok && (await q1('select estado from ordenes_pago where id=$1', [op1id]))[0].estado === 'ANULADA' && op2.ok, anul);
+const op2id = op2.result?.id;
+const rutaOp = f => `pagos/${op2id}/${f}`;
+const sinDocs = await api('adm', 'registrarTransferencia', op2id, { fecha: '2031-03-01', monto: 3000, referencia: 'TRF-9001' });
+T('67 Sin la evidencia y la factura del proveedor, la orden no se cierra', sinDocs.ok === false && sinDocs.code === 'SIN_ARCHIVO', sinDocs);
+const subDoc = await comoUsuario('adm', tx => intenta(() => tx.query(`insert into storage.objects(bucket_id,name,owner) values ('evidencias',$1,$2)`, [rutaOp('orden-documento-0001.pdf'), U.adm])));
+const subTrf = await comoUsuario('adm', tx => intenta(() => tx.query(`insert into storage.objects(bucket_id,name,owner) values ('evidencias',$1,$2)`, [rutaOp('transferencia-0001.pdf'), U.adm])));
+const subFac = await comoUsuario('adm', tx => intenta(() => tx.query(`insert into storage.objects(bucket_id,name,owner) values ('evidencias',$1,$2)`, [rutaOp('factura-proveedor-0001.pdf'), U.adm])));
+T('68 La política de almacenamiento permite subir los archivos de la orden', subDoc === null && subTrf === null && subFac === null, [subDoc, subTrf, subFac]);
+const doc = await api('adm', 'adjuntarDocumentoOrden', op2id, { path: rutaOp('orden-documento-0001.pdf'), nombre: 'orden.pdf' });
+T('69 Se adjunta el documento de la orden (con archivo real en el almacenamiento)', doc.ok && doc.result.emision.documento.path === rutaOp('orden-documento-0001.pdf'), doc);
+const tr = await api('adm', 'registrarTransferencia', op2id, { fecha: '2031-03-01', monto: 3000, referencia: 'TRF-9001', evidencia: { path: rutaOp('transferencia-0001.pdf'), nombre: 'transferencia.pdf' }, factura: { path: rutaOp('factura-proveedor-0001.pdf'), nombre: 'factura.pdf' } });
+T('70 Con evidencia y factura, la orden se paga y queda el pago al proveedor', tr.ok && tr.result.fase === 'PAGADA' && (await q1("select count(*)::int n from pagos where tipo='PROVEEDOR' and viaje_id=$1", [v1id]))[0].n === 1, tr);
+const anulPagada = await api('adm', 'anularOrdenPago', op2id, 'Intentar anular una paga');
+T('71 Una orden ya pagada no se anula', anulPagada.ok === false, anulPagada);
+const rePagar = await api('adm', 'crearOrdenPago', { proveedor: 'J&J', viajeIds: [v1id] });
+T('72 El viaje de una orden pagada ya no se puede volver a incluir', rePagar.ok === false && rePagar.code === 'YA_EN_ORDEN', rePagar);
+T('73 RLS: solo quien puede ver finanzas lee las órdenes de pago', await cuenta('adm', 'ordenes_pago') === 2 && await cuenta('ped', 'ordenes_pago') === 0);
 
 console.log(filas.join('\n'));
 console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`);

@@ -1,0 +1,19 @@
+# Dependencias
+node_modules/
+
+# Sistema operativo / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+
+# Supabase CLI (estado local de enlaces y secretos)
+supabase/.temp/
+supabase/.branches/
+.env
+.env.*
+
+# Artefactos de prueba / empaquetados (no son código fuente)
+prueba_encargado_proyecto.zip
+prueba_encargado_proyecto/

@@ -27,7 +27,7 @@ $$;
 create or replace function app.ve_viaje(cliente text, proyecto text, estado text) returns boolean language sql stable security definer set search_path=master,pg_temp as $$
   select app.perm('viajes_ver_todos')
       or (app.perm('viajes_ver') and app.asignado(cliente, proyecto))
-      or (app.perm('comercial_ver') and estado in ('PENDIENTE_COMERCIAL','COMERCIAL_REGISTRADA'))
+      or (app.perm('comercial_ver') and estado in ('ACEPTADO','FACTURADO','COBRADO'))
 $$;
 create or replace function app.viaje_visible(vid text) returns boolean language sql stable security definer set search_path=master,pg_temp as $$
   select exists (select 1 from master.viajes v where v.id=vid and app.ve_viaje(v.cliente_id, v.proyecto_cat, v.estado))

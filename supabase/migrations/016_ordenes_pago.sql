@@ -47,7 +47,7 @@ create or replace function app.puede_subir(nombre text) returns boolean language
     case split_part(nombre,'/',1)
       when 'viajes' then exists (select 1 from master.viajes v
           where v.id=split_part(nombre,'/',2) and app.perm('liq_enviar') and app.asignado(v.cliente_id, v.proyecto_cat)
-            and v.estado in ('PENDIENTE_LIQUIDACION','PENDIENTE_CORRECCION'))
+            and v.estado in ('ENTREGADO','RECHAZADO'))
       when 'facturas' then exists (select 1 from master.agrupaciones g
           where g.id=split_part(nombre,'/',2) and app.perm('facturas_emitir') and g.fase='ENVIADA' and g.estado='ACTIVA')
       when 'pagos' then exists (select 1 from master.ordenes_pago o

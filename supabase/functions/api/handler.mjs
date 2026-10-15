@@ -10,7 +10,6 @@ export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar
 export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
-const sinAuditoria = db => JSON.stringify({ ...db, audit: undefined, seq: undefined });
 
 function rutasDeArchivos(args) {
   const out = [];
@@ -28,8 +27,15 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
   let authCreado = null;
   try {
     const salida = await deps.transaccion(async q => {
-      await q('select pg_advisory_xact_lock(727001)');                     // una operación a la vez: sin carreras ni duplicados
-      const { db, catalogos } = await loadState(q);
+      /* Una operación de ESCRITURA a la vez (exclusivo): sin carreras ni duplicados. Las LECTURAS toman un lock
+         compartido: pueden correr en paralelo entre sí, pero nunca a la vez que una escritura (así el snapshot se
+         arma sobre un estado consistente sin bloquear a las demás lecturas). */
+      const soloLectura = OPS_LECTURA.includes(op);
+      await q(`select pg_advisory_xact_lock${soloLectura ? '_shared' : ''}(727001)`);
+      /* La auditoría solo se necesita completa para el snapshot y para verificar la cadena; el resto de operaciones
+         (incluidas las de escritura, que solo encadenan el hash del último evento) leen solo la cola. */
+      const fullAudit = op === 'snapshot' || op === 'verificarAuditoria';
+      const { db, catalogos } = await loadState(q, fullAudit ? {} : { auditoriaTail: 1 });
       const E = createEngine();
       E.PILOTOS.push(...catalogos.pilotos); E.FLOTA.push(...catalogos.flota); E.DESTINOS.push(...catalogos.destinos);
       E.setDB(db);
@@ -71,15 +77,13 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
       if (rechazo) return { resp: rechazo, commit: false };
       /* fotografia() recorre TODAS las filas y las serializa: es caro, así que solo se calcula para operaciones que escriben (no en lecturas como snapshot). */
       const antes = fotografia(db);
-      const base = sinAuditoria(db);
       try { resultado = E.API[op](actorId, ...args); }
       catch (e) {
         if (!(e instanceof E.ApiError)) throw e;
         rechazo = falla(e.code, e.message, e.faltantes ? { faltantes: e.faltantes } : {});
       }
-      if (rechazo && sinAuditoria(db) !== base) throw new Error('Operación rechazada con cambios parciales: se descarta para no guardar datos a medias.');
       if (db.evidencias.some(e => e.dataUrl)) throw new Error('Las evidencias deben estar en el almacenamiento protegido, no incrustadas.');
-      await saveState(q, antes, db);                                           // si el motor rechazó, solo se guarda el registro de seguridad
+      await saveState(q, antes, db, rechazo);                                  // si el motor rechazó, solo se guarda el registro de seguridad; saveState verifica que no haya cambios parciales
       /* Un guardado ya consumió CPU comparando y persistiendo el estado completo. No se arma otro snapshot
          dentro de la misma petición: con miles de viajes Superbase corta la respuesta antes de confirmar al cliente. */
       return { resp: rechazo ? rechazo : { ok: true, result: resultado === undefined ? null : resultado }, commit: true };
