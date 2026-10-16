@@ -47,5 +47,11 @@ Deno.serve(async (req: Request) => {
   const uid = usuarioDelToken(req);
   if (!uid) return json({ ok: false, code: "NO_AUTENTICADO", message: "Inicia sesión para continuar." }, 401);
   let body: any; try { body = await req.json(); } catch { return json({ ok: false, code: "ARGUMENTOS", message: "Solicitud inválida." }, 400); }
-  return json(await ejecutar(deps, uid, body));
+  try { return json(await ejecutar(deps, uid, body)); }
+  catch (e) {
+    /* En vez de morir con un 500 opaco (que en el navegador se ve como "el servidor no respondió"),
+       se devuelve el motivo real como mensaje, para poder diagnosticarlo sin acceso a los registros. */
+    console.error("api error:", e && e.stack ? e.stack : e);
+    return json({ ok: false, code: "ERROR_SERVIDOR", message: "Error del servidor: " + (e && e.message ? e.message : String(e)) });
+  }
 });
