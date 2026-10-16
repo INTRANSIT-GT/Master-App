@@ -17,3 +17,10 @@ supabase/.branches/
 # Artefactos de prueba / empaquetados (no son código fuente)
 prueba_encargado_proyecto.zip
 prueba_encargado_proyecto/
+
+# Copias/exportaciones del proyecto que no son fuente (evita que un zip las vuelva a colar)
+Master-App-main/
+MasterApp-administrador/
+MasterApp-administrador-v2/
+respaldo_original/
+respaldo_anterior/

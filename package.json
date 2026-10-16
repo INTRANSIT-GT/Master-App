@@ -9,11 +9,11 @@
     "test:servidor": "node tests/servidor.test.mjs",
     "serve": "npx --yes http-server . -p 8080 -c-1",
     "test:cliente": "node tests/cliente-supabase.test.mjs",
-    "test": "npm run test:servidor && npm run test:cliente && npm run test:exportar",
-    "test:exportar": "node tests/exportar.test.mjs",
-    "test:encargado": "node tests/encargado.test.mjs",
+    "test": "npm run test:servidor && npm run test:cliente && npm run test:admin",
     "test:admin": "node tests/administrador.test.mjs",
-    "test:visual": "node tests/prueba-visual.test.mjs"
+    "test:encargado": "node tests/encargado.test.mjs",
+    "test:visual": "node tests/prueba-visual.test.mjs",
+    "test:demo": "node tests/exportar.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",
