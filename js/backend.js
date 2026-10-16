@@ -33,9 +33,9 @@ if(!API.gastos)API.gastos=async()=>[];
     try{r=await sb.functions.invoke('api',{body:{op,args}});}
     catch(e){throw new ApiError('SIN_CONEXION','No se pudo contactar al servidor. La operación NO se guardó.');}
     if(r.error){
-      let b=null;try{b=await r.error.context.json();}catch(_){}
+      let b=null,st=(r.error.context&&r.error.context.status)||'';try{b=await r.error.context.json();}catch(_){}
       if(b&&b.ok===false)throw err(b);
-      throw new ApiError('SERVIDOR','El servidor no respondió correctamente. La operación NO se guardó.');
+      throw new ApiError('SERVIDOR','El servidor no respondió correctamente'+(st?' (HTTP '+st+')':'')+'. La operación NO se guardó.');
     }
     if(!r.data||r.data.ok===false)throw err(r.data||{});
     return r.data;

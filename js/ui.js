@@ -7,7 +7,7 @@ Object.assign(ICON,{
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'
 });
-const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:'',cb:null,cbq:'',opSoloOpl:false,opSel:{}};
+const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:'',cb:null,cbq:'',opSoloOpl:false,opSel:{},pag:{}};
 const hp=p=>hasPerm(S.user,p);
 const vis=()=>API.listarViajes(S.user.id).slice().sort((a,b)=>b.id.localeCompare(a.id));
 const mine=t=>asignado(S.user,t);
@@ -62,11 +62,12 @@ function tripCard(t){
     <div class="actions"><button class="btn primary sm" data-act="detalle" data-id="${t.id}">VER DETALLE</button></div>
   </article>`;
 }
-function tableHTML(ts,extra){
+function tableHTML(ts,extra,key='todos'){
   if(!ts.length)return empty('Sin viajes con este filtro','Cambia el estado o el cliente para ver más resultados.');
+  const pg=paginar(key,ts);
   return `<div class="tablewrap scrollx"><table class="resp"><thead><tr><th>Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Origen → destino</th><th>Piloto</th><th>Unidad / placa</th>${extra?`<th>${extra.h}</th>`:''}<th>Estado</th></tr></thead><tbody>
-  ${ts.map(t=>{const j=J(t);return `<tr role="button" tabindex="0" data-act="detalle" data-id="${t.id}"><td data-l="Viaje"><span class="num">#${t.id}</span></td><td data-l="Fecha plan">${fmtL(t.fechaPlan)}</td><td data-l="Cliente"><span class="pchip sm">${esc(j.proyectoNombre)}</span></td><td data-l="Ruta">${esc(j.origen)} → ${esc(j.destino)}</td><td data-l="Piloto">${esc(j.piloto)}</td><td data-l="Unidad">${esc(j.f.unidad)} · ${esc(j.f.placa)}</td>${extra?`<td data-l="${extra.h}">${extra.f(t)}</td>`:''}<td data-l="Estado">${badge(t.estado)}</td></tr>`;}).join('')}
-  </tbody></table></div>`;
+  ${pg.filas.map(t=>{const j=J(t);return `<tr role="button" tabindex="0" data-act="detalle" data-id="${t.id}"><td data-l="Viaje"><span class="num">#${t.id}</span></td><td data-l="Fecha plan">${fmtL(t.fechaPlan)}</td><td data-l="Cliente"><span class="pchip sm">${esc(j.proyectoNombre)}</span></td><td data-l="Ruta">${esc(j.origen)} → ${esc(j.destino)}</td><td data-l="Piloto">${esc(j.piloto)}</td><td data-l="Unidad">${esc(j.f.unidad)} · ${esc(j.f.placa)}</td>${extra?`<td data-l="${extra.h}">${extra.f(t)}</td>`:''}<td data-l="Estado">${badge(t.estado)}</td></tr>`;}).join('')}
+  </tbody></table></div>${paginador(key,pg)}`;
 }
 function statBar(ts){
   const tot=ts.length||1,ks=Object.keys(ESTADOS);
@@ -74,6 +75,18 @@ function statBar(ts){
   <div class="legend">${ks.map(e=>{const n=cnt(ts,t=>t.estado===e);return n?`<span><i class="dot" style="background:${ESTADOS[e].c}"></i>${ESTADOS[e].l} ${n}</span>`:'';}).join('')}</div>`;
 }
 const matchE=(t,f)=>!f||(f==='FIN'?FIN.includes(t.estado):t.estado===f);
+/* ---------- Paginación de listas largas ----------
+   En equipos con miles de filas, pintar la tabla completa traba el navegador. Cada lista larga se muestra por
+   páginas. Con listas pequeñas (menos que PAGINA) se devuelve el MISMO arreglo y sin controles, así la salida es
+   idéntica a la de antes (no cambia lo que ya funcionaba). */
+const PAGINA=100;
+const paginar=(k,a)=>{const total=a?a.length:0,n=Math.max(1,Math.ceil(total/PAGINA)),p=Math.min(Math.max(1,Math.floor(S.pag[k]||1)),n);return{filas:total<=PAGINA?a:(a||[]).slice((p-1)*PAGINA,p*PAGINA),p,n,total};};
+const paginador=(k,pg)=>{
+  if(pg.n<=1)return'';
+  const desde=(pg.p-1)*PAGINA+1,hasta=Math.min(pg.p*PAGINA,pg.total);
+  const b=(np,l,dis)=>`<button type="button" class="btn sm" data-act="pagina" data-k="${k}" data-p="${np}" ${dis?'disabled':''}>${l}</button>`;
+  return `<div class="pager" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0"><span class="mute">Mostrando ${desde}–${hasta} de ${pg.total}</span>${b(1,'«',pg.p<=1)}${b(pg.p-1,'‹ Anterior',pg.p<=1)}<span class="mute">Página ${pg.p} de ${pg.n}</span>${b(pg.p+1,'Siguiente ›',pg.p>=pg.n)}${b(pg.n,'»',pg.p>=pg.n)}</div>`;
+};
 function histHTML(evs){
   if(!evs.length)return `<div class="mute">Sin eventos registrados.</div>`;
   return `<ul class="tl">${evs.map(h=>`<li><b>${esc(h.accion)}</b>${h.campo?` <span class="mute">· ${esc(lblT(h.campo))}</span>`:''}${h.campo&&(h.anterior||h.nuevo)?`<div>${esc(h.anterior||'(vacío)')} → <b>${esc(h.nuevo||'(vacío)')}</b></div>`:''}<div class="by">${esc(h.por)} · ${esc(rolL(h.rol))} · ${fmtDT(h.en)}</div>${h.motivo?`<div class="nt">“${esc(h.motivo)}”</div>`:''}${h.ref?`<div class="by">Ref. ${esc(h.ref)}</div>`:''}</li>`).join('')}</ul>`;
@@ -181,11 +194,12 @@ function accionesViaje(t){
   if(['ENTREGADO','RECHAZADO'].includes(t.estado)&&hp('viajes_aprobar_duplicado')&&String(t.shipment||'').trim()&&!/^DUP-/i.test(t.shipment))a+=b('shipmentDupOpen','Aprobar DUP','fix');
   return a;
 }
-function viajesTable(list){
+function viajesTable(list,key='viajes'){
   if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
+  const pg=paginar(key,list);
   return `<div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr><th class="stk">Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Piloto</th><th>Unidad · placa</th><th>Estado</th><th class="stkR">Acciones</th></tr></thead><tbody>
-  ${list.map(t=>{const j=J(t),dup=String(t.shipment||'').trim()&&!/^DUP-/i.test(t.shipment)&&DB.trips.some(x=>x.id!==t.id&&String(x.shipment||'').trim().toLowerCase()===String(t.shipment||'').trim().toLowerCase());return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td class="${dup?'warnl':''}">${badge(t.estado)}${dup?' <b>Shipment duplicado</b>':''}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
-  </tbody></table></div>`;
+  ${pg.filas.map(t=>{const j=J(t),dup=String(t.shipment||'').trim()&&!/^DUP-/i.test(t.shipment)&&DB.trips.some(x=>x.id!==t.id&&String(x.shipment||'').trim().toLowerCase()===String(t.shipment||'').trim().toLowerCase());return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td class="${dup?'warnl':''}">${badge(t.estado)}${dup?' <b>Shipment duplicado</b>':''}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
+  </tbody></table></div>${paginador(key,pg)}`;
 }
 
 /* ---- Viajes del encargado ---- */
@@ -295,11 +309,12 @@ function clientesAdminHTML(){
   const opts=[{id:'',nombre:'Todos los clientes'}].concat(lista.map(c=>({id:c.id,nombre:c.nombre})));
   const link=u=>/^https?:\/\//i.test(String(u||'').trim())?`<a href="${esc(String(u).trim())}" target="_blank" rel="noopener noreferrer">Abrir contrato</a>`:vacioTxt(u);
   const cab=['ID cliente','Cliente','Cliente padre','Servicio','Nombre usuario','Correo','Teléfono','Link contrato','NIT','Proyecto','Estado','Creado','Acciones'];
+  const pg=paginar('cli',filas);
   const tabla=!lista.length
     ?`<div class="alertbox info"><b>No hay clientes registrados.</b> ${catalogoFalla()?esc(catalogoFalla()):'La base de datos no devolvió clientes.'}${REINTENTAR}</div>`
     :`<div class="xlwrap" style="max-height:none"><table class="xl" id="tablaClientes" style="min-width:1750px"><thead><tr>${cab.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
-      ${filas.map(c=>`<tr class="${c.activo===false?'dim':''}"><td><b>${esc(c.id)}</b></td><td>${esc(c.nombre)}</td><td>${vacioTxt(c.clientePadre)}</td><td>${vacioTxt(c.servicio)}</td><td>${vacioTxt(c.contacto)}</td><td>${vacioTxt(c.correoFacturacion)}</td><td>${vacioTxt(c.telefono)}</td><td>${link(c.linkContrato)}</td><td>${c.nit?esc(c.nit):'<span class="warnl">Pendiente</span>'}</td><td style="white-space:normal;min-width:160px">${(c.proyectos||[]).length?esc(c.proyectos.join(', ')):'<span class="warnl">Sin proyectos</span>'}</td><td>${chip(c.activo===false?'neutral':'done',c.activo===false?'Inactivo':'Activo')}</td><td>${c.creadoEn?fmtDT(c.creadoEn):'<span class="mute">—</span>'}${c.creadoPor?`<br><span class="mute">${esc(c.creadoPor)}</span>`:''}</td><td style="white-space:nowrap">${gest?`<button class="btn sm" data-act="clienteOpen" data-id="${c.id}">Editar</button> <button class="btn sm ${c.activo===false?'ok':'fix'}" data-act="clienteEstado" data-id="${c.id}">${c.activo===false?'Activar':'Desactivar'}</button> `:''}<button class="btn sm ghost" data-act="proj" data-id="${c.id}">Ver viajes</button></td></tr>`).join('')}
-      </tbody></table></div>`;
+      ${pg.filas.map(c=>`<tr class="${c.activo===false?'dim':''}"><td><b>${esc(c.id)}</b></td><td>${esc(c.nombre)}</td><td>${vacioTxt(c.clientePadre)}</td><td>${vacioTxt(c.servicio)}</td><td>${vacioTxt(c.contacto)}</td><td>${vacioTxt(c.correoFacturacion)}</td><td>${vacioTxt(c.telefono)}</td><td>${link(c.linkContrato)}</td><td>${c.nit?esc(c.nit):'<span class="warnl">Pendiente</span>'}</td><td style="white-space:normal;min-width:160px">${(c.proyectos||[]).length?esc(c.proyectos.join(', ')):'<span class="warnl">Sin proyectos</span>'}</td><td>${chip(c.activo===false?'neutral':'done',c.activo===false?'Inactivo':'Activo')}</td><td>${c.creadoEn?fmtDT(c.creadoEn):'<span class="mute">—</span>'}${c.creadoPor?`<br><span class="mute">${esc(c.creadoPor)}</span>`:''}</td><td style="white-space:nowrap">${gest?`<button class="btn sm" data-act="clienteOpen" data-id="${c.id}">Editar</button> <button class="btn sm ${c.activo===false?'ok':'fix'}" data-act="clienteEstado" data-id="${c.id}">${c.activo===false?'Activar':'Desactivar'}</button> `:''}<button class="btn sm ghost" data-act="proj" data-id="${c.id}">Ver viajes</button></td></tr>`).join('')}
+      </tbody></table></div>${paginador('cli',pg)}`;
   return `<div class="inner" style="max-width:none">${pageHead('Clientes','Tabla de clientes: contacto, contrato, NIT y proyectos',gest?`<button class="btn primary" data-act="clienteOpen" data-id="">${icon('plus',18)} Nuevo cliente</button>`:'')}
     ${lista.length?`<div class="lfilters" style="grid-template-columns:minmax(220px,360px) auto 1fr;align-items:center"><div>${comboHTML('cliFiltro',f,opts,'Todos los clientes')}</div>${f?`<button class="btn sm" data-act="cliLimpiar">Limpiar selección</button>`:'<span></span>'}<span class="mute">${filas.length} de ${lista.length} ${lista.length===1?'cliente':'clientes'}</span></div>`:''}
     ${tabla}
@@ -511,15 +526,16 @@ function torreList(){
 function torreSheet(list){
   if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
   const puede=hp('viajes_estatus_torre');
+  const pg=paginar('torre',list);
   return `<div class="xlwrap sheet"><table class="xl" style="min-width:1400px"><thead><tr><th class="stk">Viaje</th><th>Cliente</th><th>Proyecto</th><th>Piloto</th><th>Unidad · placa</th><th>Ruta</th><th>Estado</th><th>En ruta</th><th>Fecha plan</th><th>Inicio real (salida)</th><th>Fin descarga</th></tr></thead><tbody>
-  ${list.map(t=>{const j=J(t),sig=TORRE_SIGUIENTE[t.estado],aut=clienteDe(t).torreEstatus,ed=puede&&aut&&!!sig;
+  ${pg.filas.map(t=>{const j=J(t),sig=TORRE_SIGUIENTE[t.estado],aut=clienteDe(t).torreEstatus,ed=puede&&aut&&!!sig;
     const ctrl=ed?`<button class="btn primary sm" data-act="torreEstado" data-torreestado="${t.id}" data-dest="${sig}">${sig==='EN_RUTA'?'Enviar a ruta':'Confirmar entrega'}</button><span class="cst" id="ss_${t.id}" aria-live="polite"></span>`
       :`<span class="mute" style="font-size:12px">${aut?'(sin acción en este estado)':'solo consulta'}</span>`;
     return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${rutaHTML(t)}</td>
     <td class="${ed?'ed':'ro'}" style="min-width:230px"><div class="trow">${badge(t.estado)}${ctrl}</div></td>
     <td>${t.estado==='EN_RUTA'?`<span class="elapsed" style="font-size:14px" data-since="${since(t)}">${elapsed(since(t))}</span>`:'—'}</td>
     <td>${fmtL(t.fechaPlan)}</td><td>${t.tSalida?fmtL(t.tSalida):'—'}</td><td>${t.tFinDescarga?fmtL(t.tFinDescarga):'—'}</td></tr>`;}).join('')}
-  </tbody></table></div>`;
+  </tbody></table></div>${paginador('torre',pg)}`;
 }
 BODY.torre=()=>`<div class="mute" style="margin-bottom:8px">${torreList().length} viajes</div>${torreSheet(torreList())}`;
 VIEWS.torre=()=>{
@@ -584,15 +600,16 @@ function liqTable(list,k){
   const rows=list.slice().sort((a,b)=>{const x=col[2](a),y=col[2](b);return (x<y?-1:x>y?1:0)*so.dir||a.id.localeCompare(b.id);});
   if(!rows.length)return empty('No hay liquidaciones con estos filtros','Cambia la búsqueda, el cliente, el proyecto o las fechas, o limpia los filtros.');
   const revisor=hp('liq_aprobar')||hp('liq_devolver');
+  const pg=paginar('liq',rows);
   return `<div class="mute" style="margin-bottom:8px">${rows.length} ${rows.length===1?'liquidación':'liquidaciones'}</div><div class="xlwrap"><table class="xl" style="min-width:1150px"><thead><tr>${LQ_COLS.map(c=>`<th aria-sort="${so.k===c[0]?(so.dir>0?'ascending':'descending'):'none'}"><button class="thbtn" data-act="sortL" data-k="${c[0]}">${c[1]} <span aria-hidden="true">${so.k===c[0]?(so.dir>0?'▲':'▼'):'↕'}</span></button></th>`).join('')}<th>Acciones</th></tr></thead><tbody>
-  ${rows.map(t=>{
+  ${pg.filas.map(t=>{
     const ls=liqsOf(t),lq=ls[ls.length-1],dec=ls.filter(x=>x.decision).pop();
     let acts=lq&&lq.evidencia?`<button class="btn sm" data-act="photoEv" data-id="${t.id}" data-ev="${lq.evidenciaId}">Ver evidencia</button> `:'';
     if(t.estado==='LIQUIDADO'&&revisor)acts+=(hp('liq_aprobar')?`<button class="btn sm ok" data-act="aprobarAsk" data-id="${t.id}">Aceptar</button> `:'')+(hp('liq_devolver')?`<button class="btn sm fix" data-act="devolverOpen" data-id="${t.id}">Rechazar</button>`:'');
     else if(['ENTREGADO','RECHAZADO'].includes(t.estado)&&hp('liq_enviar')&&mine(t))acts+=`<button class="btn sm primary" data-act="detalle" data-id="${t.id}">${t.estado==='RECHAZADO'?'Corregir y liquidar':'Liquidar'}</button>`;
     return `<tr role="button" tabindex="0" data-act="detalle" data-id="${t.id}"><td><b>#${t.id}</b></td><td>${esc(J(t).cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(J(t).piloto)}</td><td>${fmtDate(planD(t))}</td><td>${badge(t.estado)}</td><td>${t.enviadoEn?fmtDT(t.enviadoEn):'—'}</td>
     <td style="white-space:normal;min-width:210px">${dec?`<b>${dec.decision==='APROBADA'?'Aprobada':'Devuelta'}</b> · ${esc(dec.revisor)}<br><span class="mute">${fmtDT(dec.revisionEn)}</span>${dec.comentario?`<br><span class="mute">“${esc(dec.comentario.slice(0,70))}”</span>`:''}`:'<span class="mute">Sin revisar</span>'}</td><td style="white-space:nowrap">${acts}</td></tr>`;}).join('')}
-  </tbody></table></div>`;
+  </tbody></table></div>${paginador('liq',pg)}`;
 }
 function liqCurrent(){const L=liqTabs(),k=S.tab.liq&&L.find(x=>x.k===S.tab.liq)?S.tab.liq:L[0].k;return {L,k,cur:L.find(x=>x.k===k)};}
 BODY.liquidaciones=()=>{const {k,cur}=liqCurrent();return liqTable(liqFilter(vis().filter(cur.f)),k);};
@@ -780,7 +797,7 @@ VIEWS.proyecto=()=>{
   const p=PROYECTOS.find(x=>x.id===S.param);if(!p)return empty('Proyecto no encontrado');
   const pt=vis().filter(t=>t.proyecto===p.id),list=pt.filter(t=>matchEst(t,S.fEstado));
   return `<div class="inner"><button class="btn ghost sm" data-act="nav" data-v="${hp('tablero_ver')?'proyectos':ROLES[S.user.rol].home}" style="margin-bottom:12px">${icon('back',16)} Proyectos</button>
-    ${pageHead(esc(p.nombre),`${esc(p.cliente)} · Encargado: ${esc(p.encargado)}`)}<div class="card" style="margin-bottom:16px">${statBar(pt)}</div>${estadoChips()}${tableHTML(list)}</div>`;
+    ${pageHead(esc(p.nombre),`${esc(p.cliente)} · Encargado: ${esc(p.encargado)}`)}<div class="card" style="margin-bottom:16px">${statBar(pt)}</div>${estadoChips()}${tableHTML(list,null,'proyecto')}</div>`;
 };
 function estadoChips(){
   const opts=[{id:'',nombre:'Todos'},{id:'PLANIFICADO',nombre:'Planificados'},{id:'EN_RUTA',nombre:'En ruta'},{id:'ENTREGADO',nombre:'Entregados'},{id:'LIQUIDADO',nombre:'Liquidados'},{id:'ACEPTADO',nombre:'Aceptados'},{id:'RECHAZADO',nombre:'Rechazados'},{id:'FACTURADO',nombre:'Facturados'},{id:'COBRADO',nombre:'Cobrados'}];
@@ -798,7 +815,7 @@ VIEWS.todos=()=>`<div class="inner">${pageHead('Todos los viajes','Sin filtro de
 
 
 
-function fleTabla(h,rows){return `<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
+function fleTabla(h,rows,key){const pg=paginar(key||'fle',rows);return `<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${pg.filas.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${paginador(key||'fle',pg)}`;}
 function flePanel(){
   const d=S.fle;
   const head=`<div class="row" style="align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap"><b>Flota · Fleetio</b><span class="spacer"></span>
@@ -809,9 +826,9 @@ function flePanel(){
   if(d.err)return `${nota}${head}<div class="alertbox warn">${esc(d.err)}</div>`;
   const fch=v=>esc(String(v||'').slice(0,10));
   const tm=d.mant.length?fleTabla(['Fecha','Unidad','Referencia','Estado','Proveedor','Mano de obra','Repuestos','Total','Notas'],
-      d.mant.map(m=>[fch(m.fecha),esc(m.unidad),esc(m.referencia),esc(m.estado),esc(m.proveedor),m.mano_obra!=null?qfmt(m.mano_obra):'—',m.repuestos!=null?qfmt(m.repuestos):'—',m.total!=null?qfmt(m.total):'—',esc(m.notas)])):'<div class="mute">Sin mantenimientos.</div>';
+      d.mant.map(m=>[fch(m.fecha),esc(m.unidad),esc(m.referencia),esc(m.estado),esc(m.proveedor),m.mano_obra!=null?qfmt(m.mano_obra):'—',m.repuestos!=null?qfmt(m.repuestos):'—',m.total!=null?qfmt(m.total):'—',esc(m.notas)]),'flemant'):'<div class="mute">Sin mantenimientos.</div>';
   const tg=d.gast.length?fleTabla(['Fecha','Unidad','Tipo','Proveedor','Monto','Notas'],
-      d.gast.map(g=>[fch(g.fecha),esc(g.unidad),esc(g.tipo),esc(g.proveedor),g.monto!=null?qfmt(g.monto):'—',esc(g.notas)])):'<div class="mute">Sin gastos.</div>';
+      d.gast.map(g=>[fch(g.fecha),esc(g.unidad),esc(g.tipo),esc(g.proveedor),g.monto!=null?qfmt(g.monto):'—',esc(g.notas)]),'flegast'):'<div class="mute">Sin gastos.</div>';
   return `${nota}${head}<div class="mute small" style="margin-bottom:10px">Mantenimientos: <b>${d.mant.length}</b> · Gastos: <b>${d.gast.length}</b></div>
     <h3>Mantenimientos <span class="mute" style="font-weight:500">· servicio</span></h3>${tm}
     <h3 style="margin:18px 0 8px">Gastos <span class="mute" style="font-weight:500">· egresos por unidad</span></h3>${tg}`;
@@ -819,14 +836,14 @@ function flePanel(){
 VIEWS.catalogos=()=>{
   const k0=S.tab.cat||'pil',verFle=hp('catalogos_ver')||hp('finanzas_ver'),k=(k0==='fle'&&!verFle)?'pil':k0;
   const T=[{k:'pil',l:'PILOTOS',f:()=>true},{k:'flo',l:'FLOTA',f:()=>true},{k:'ori',l:'ORIGEN',f:()=>true},{k:'des',l:'DESTINOS',f:()=>true},{k:'cat',l:'CATALOGO (listas)',f:()=>true},...(verFle?[{k:'fle',l:'FLEETIO',f:()=>true}]:[])];
-  const tb=(h,rows)=>`<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const tb=(h,rows,key)=>{const pg=paginar(key||'cat',rows);return `<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${pg.filas.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${paginador(key||'cat',pg)}`;};
   const pn=id=>esc((PROYECTOS.find(p=>p.id===id)||{}).nombre||id);
   const body={
-    pil:tb(['Id','Piloto','Unidad asignada','Proyecto'],PILOTOS.map(p=>[p.id,esc(p.nombre),p.unidad?esc(p.unidad):'<span class="mute">Sin unidad</span>',pn(p.proyecto)])),
-    flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)])),
-    ori:tb(['Origen'],ORIGENES.map(o=>[esc(o.nombre)])),
+    pil:tb(['Id','Piloto','Unidad asignada','Proyecto'],PILOTOS.map(p=>[p.id,esc(p.nombre),p.unidad?esc(p.unidad):'<span class="mute">Sin unidad</span>',pn(p.proyecto)]),'catpil'),
+    flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)]),'catflo'),
+    ori:tb(['Origen'],ORIGENES.map(o=>[esc(o.nombre)]),'catori'),
     cat:`<div class="grid g2">${Object.entries({'CLIENTES':CAT.clientes,'PROYECTOS':CAT.proyectos,'TIPO DE UNIDAD':CAT.tipoUnidad,'OPL':CAT.opl,'TIPO CARGA':CAT.tipoCarga,'TIPO DE VIAJE':CAT.tipoViaje}).map(([n,a])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${a.length}</span></h3><div class="bgs">${a.map(x=>`<span class="est">${esc(x)}</span>`).join('')}</div></div>`).join('')}</div>`,
-    des:tb(['Id','Destino','Proyecto'],DESTINOS.map(d=>[d.id,esc(d.nombre),pn(d.proyecto)])),fle:flePanel()}[k];
+    des:tb(['Id','Destino','Proyecto'],DESTINOS.map(d=>[d.id,esc(d.nombre),pn(d.proyecto)]),'catdes'),fle:flePanel()}[k];
   return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; no se editan ni se duplican aquí')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
     <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS, FLOTA y DESTINOS son ficticios (todavía no tengo esos archivos); las listas de CATALOGO y ORIGEN sí son las reales de tu hoja. En Power Apps cada catálogo se leerá directo de su hoja (Excel/SharePoint) y el filtro por proyecto asume una columna Proyecto en PILOTOS, ORIGEN y DESTINOS.</div></div>`;
 };
@@ -859,22 +876,24 @@ BODY.comercial=()=>{
   const bar=canAct?`<div class="selbar"><b>${selT.length} ${selT.length===1?'viaje seleccionado':'viajes seleccionados'}</b><span>${cli0?'· Cliente: <b>'+esc((PROYECTOS.find(p=>p.id===cli0)||{}).cliente)+'</b>':'· Selecciona uno o varios viajes del mismo cliente'}</span>${selT.length?`<span>· ${selT.length===1?'Factura individual (no hace falta agrupar)':'Factura de viajes agrupados'} · Tarifa: <b>${qfmt(tot)}</b>${selT.length>conT.length?` <span class="warnl">(${selT.length-conT.length} sin tarifa)</span>`:''}</span>`:''}<span class="spacer"></span>${hp('tarifa_registrar')?`<button class="btn sm" data-act="aplicarTarifasTodas">Aplicar tarifas vigentes${sinTar?` (${sinTar} sin tarifa)`:''}</button>`:''}<button class="btn sm ghost" data-act="selClear" ${selT.length?'':'disabled'}>Limpiar</button><button class="btn primary" data-act="facturaOpen" ${selT.length?'':'disabled'}>FACTURAR</button></div>`:'';
   const pendRows=rows.filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId);
   const allSel=canAct&&pendRows.length&&pendRows.every(t=>S.sel.includes(t.id));
+  const pg=paginar('com',rows);
   const tbl=rows.length?`<div class="xlwrap"><table class="xl" style="min-width:1700px"><thead><tr><th>${canAct?`<input type="checkbox" data-selall="1" ${allSel?'checked':''} aria-label="Seleccionar todos los pendientes visibles">`:''}</th><th>Cliente</th><th>Proyecto</th><th>Fecha plan</th><th>ID viaje</th><th>No. viaje</th><th>Piloto</th><th>Unidad · placa</th><th>Capacidad</th><th>Ruta</th><th>Salida</th><th>Fin descarga</th><th>Tarifa cliente</th><th>Estado comercial</th><th>Factura</th><th>No. factura</th></tr></thead><tbody>
-    ${rows.map(t=>{const j=J(t),pend=t.estado==='ACEPTADO',res=!!t.agrupacionId,g=AG[t.agrupacionId],chk=S.sel.includes(t.id),bloq=cli0&&t.proyecto!==cli0,libre=pend&&!res;
+    ${pg.filas.map(t=>{const j=J(t),pend=t.estado==='ACEPTADO',res=!!t.agrupacionId,g=AG[t.agrupacionId],chk=S.sel.includes(t.id),bloq=cli0&&t.proyecto!==cli0,libre=pend&&!res;
       return `<tr class="${chk?'sel':''} ${libre?'':'dim'}"><td>${canAct&&libre?`<input type="checkbox" data-sel="${t.id}" ${chk?'checked':''} ${bloq?'disabled title="Solo puedes facturar viajes de un mismo cliente"':''} aria-label="Seleccionar viaje ${t.id}">`:''}</td>
       <td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${fmtL(t.fechaPlan)}</td><td><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(t.noViaje||'—')}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${esc(j.f.capacidad||'—')}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${t.tSalida?fmtL(t.tSalida):'—'}</td><td>${t.tFinDescarga?fmtL(t.tFinDescarga):'—'}</td>
       <td style="text-align:right">${tarifaCelda(t,pend)}</td>
       <td>${g?etapaBadge(etapaAgr(g)):chip('neutral','Pendiente')}</td><td>${g?(g.modalidad==='AGRUPADA'?`<b>${g.id}</b> · agrupada`:`${g.id} · individual`):'—'}</td><td>${t.numeroFactura?esc(t.numeroFactura):'—'}</td></tr>`;}).join('')}
-    </tbody></table></div>`:empty('No hay viajes con estos filtros','Solo aparecen viajes con la liquidación aprobada.');
+    </tbody></table></div>${paginador('com',pg)}`:empty('No hay viajes con estos filtros','Solo aparecen viajes con la liquidación aprobada.');
   return bar+tbl;
 };
 function agrTable(list,acts){
   if(!list.length)return empty('Sin facturas','Cuando se prepare una factura aparecerá aquí.');
+  const pg=paginar('agr',list);
   const vig=list.filter(g=>g.estado==='ACTIVA'&&g.fase!=='PREPARADA');
   const sum=fn=>r2(vig.reduce((s,g)=>s+(fn(g)||0),0));
   const emi=vig.filter(g=>g.fase==='EMITIDA'&&nn(g.importeFacturado)!=null);
   return `<div class="xlwrap"><table class="xl" style="min-width:1750px"><thead><tr><th>ID</th><th>Modalidad</th><th>Cliente</th><th>Viajes</th><th>N.º factura</th><th>Fecha factura</th><th>Enviado a facturar</th><th>Enviada por · fecha</th><th>Emitida (evidencia)</th><th>Facturado</th><th>Cobrado</th><th>Saldo por cobrar</th><th>Estado</th><th>Detalle</th>${acts?'<th class="stkR">Acciones</th>':''}</tr></thead><tbody>
-  ${list.map(g=>{const et=etapaAgr(g),cob=cobradoDe(g),fa=g.fase==='EMITIDA'?nn(g.importeFacturado):null,okA=g.estado==='ACTIVA';
+  ${pg.filas.map(g=>{const et=etapaAgr(g),cob=cobradoDe(g),fa=g.fase==='EMITIDA'?nn(g.importeFacturado):null,okA=g.estado==='ACTIVA';
   const B=(a,l,c)=>`<button class="btn sm ${c||''}" data-act="${a}" data-id="${g.id}">${l}</button> `;
   let ac=B('agrDetalle','Ver viajes','ghost');
   if(okA){
@@ -891,7 +910,7 @@ function agrTable(list,acts){
   <td style="text-align:right">${g.fase==='EMITIDA'?qfmt(fa):'—'}</td><td style="text-align:right">${g.fase==='EMITIDA'?qfmt(cob):'—'}</td><td style="text-align:right">${fa==null?'—':qfmt(r2(fa-cob))}</td>
   <td>${etapaBadge(et)}</td><td style="white-space:normal;min-width:190px;font-size:12px">${g.anulada?`<span class="mute">Anulada por ${esc(g.anulada.por)} · ${fmtDT(g.anulada.en)} · “${esc(g.anulada.motivo)}”</span><br>`:''}${(g.cobros||[]).map(c=>`<span class="mute">Cobro ${qfmt(c.monto)} · ${fmtDate(c.fecha)} · ${esc(c.referencia)}</span><br>`).join('')}${g.correcciones.map(c=>`<span class="mute">Nº corregido: ${esc(c.anterior)} → ${esc(c.nuevo)} (${esc(c.por)})</span><br>`).join('')}</td>
   ${acts?`<td class="stkR" style="white-space:normal;min-width:220px"><div class="acts-wrap">${ac}</div></td>`:''}</tr>`;}).join('')}
-  </tbody><tfoot><tr><td colspan="6"><b>Totales (cada factura se cuenta una sola vez; las preparadas no suman)</b></td><td style="text-align:right"><b>${qfmt(sum(g=>g.importeEnviado))}</b></td><td colspan="2"></td><td style="text-align:right"><b>${qfmt(sum(g=>g.fase==='EMITIDA'?nn(g.importeFacturado):0))}</b></td><td style="text-align:right"><b>${qfmt(sum(g=>cobradoDe(g)))}</b></td><td style="text-align:right"><b>${emi.length?qfmt(r2(emi.reduce((s,g)=>s+g.importeFacturado-cobradoDe(g),0))):'—'}</b></td><td colspan="${acts?3:2}"></td></tr></tfoot></table></div>
+  </tbody><tfoot><tr><td colspan="6"><b>Totales (cada factura se cuenta una sola vez; las preparadas no suman)</b></td><td style="text-align:right"><b>${qfmt(sum(g=>g.importeEnviado))}</b></td><td colspan="2"></td><td style="text-align:right"><b>${qfmt(sum(g=>g.fase==='EMITIDA'?nn(g.importeFacturado):0))}</b></td><td style="text-align:right"><b>${qfmt(sum(g=>cobradoDe(g)))}</b></td><td style="text-align:right"><b>${emi.length?qfmt(r2(emi.reduce((s,g)=>s+g.importeFacturado-cobradoDe(g),0))):'—'}</b></td><td colspan="${acts?3:2}"></td></tr></tfoot></table></div>${paginador('agr',pg)}
   <div class="mute" style="margin-top:8px;font-size:13px"><b>Preparada</b> = datos en armado, no enviada. <b>Enviada a facturación</b> = validada y enviada. <b>Emitida</b> = factura oficial con su evidencia. <b>Cobrada</b> = dinero recibido. Son etapas distintas: no se marca una factura como emitida sin evidencia.</div>`;
 }
 /* ---- Facturación: historial de lo enviado a facturar, con filtros combinables ---- */
@@ -928,11 +947,12 @@ BODY.hist=()=>{
   rows.sort((a,b)=>{const x=col[2](a),y=col[2](b);return (x<y?-1:x>y?1:0)*so.dir||a.id.localeCompare(b.id);});
   const conImp=rows.filter(r=>r.importe!=null);
   if(!rows.length)return empty('No hay envíos con estos filtros','Cambia o limpia los filtros. Solo se listan viajes enviados a facturar.');
+  const pg=paginar('hist',rows);
   return `<div class="exportbar"><div class="mute">${rows.length} ${rows.length===1?'viaje':'viajes'} · Importe total: <b>${qfmt(r2(conImp.reduce((s,r)=>s+r.importe,0)))}</b>${conImp.length<rows.length?` <span class="warnl">(${rows.length-conImp.length} sin importe)</span>`:''}</div>
   <div class="exportbtns"><span class="mute" style="font-size:12.5px">Se exporta lo que ves, con el detalle de cada factura y viaje</span><button class="btn sm" data-act="exportFactXlsx" title="Descargar Excel con todo el detalle">${icon('receipt',16)} Descargar Excel</button><button class="btn sm primary" data-act="exportFactPdf" title="Descargar PDF con todo el detalle">${icon('receipt',16)} Descargar PDF</button></div></div>
   <div class="xlwrap"><table class="xl" style="min-width:1300px"><thead><tr>${FC_COLS.map(c=>`<th aria-sort="${so.k===c[0]?(so.dir>0?'ascending':'descending'):'none'}"><button class="thbtn" data-act="sortF" data-k="${c[0]}">${c[1]} <span aria-hidden="true">${so.k===c[0]?(so.dir>0?'▲':'▼'):'↕'}</span></button></th>`).join('')}</tr></thead><tbody>
-  ${rows.map(r=>`<tr><td>${esc(r.cliente)}</td><td>${esc(r.proyecto)}</td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td>${fmtDate(r.fechaViaje)}</td><td>${r.fechaEnvio?fmtDate(r.fechaEnvio):'<span class="mute">sin enviar</span>'}</td><td>${r.factura?esc(r.factura):'—'}</td><td>${r.grupo||'—'}</td><td style="text-align:right">${r.importe==null?sinReg:qfmt(r.importe)}</td><td>${etapaBadge(r.etapa)}</td><td>${esc(r.por)}</td></tr>`).join('')}
-  </tbody></table></div>`;
+  ${pg.filas.map(r=>`<tr><td>${esc(r.cliente)}</td><td>${esc(r.proyecto)}</td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td>${fmtDate(r.fechaViaje)}</td><td>${r.fechaEnvio?fmtDate(r.fechaEnvio):'<span class="mute">sin enviar</span>'}</td><td>${r.factura?esc(r.factura):'—'}</td><td>${r.grupo||'—'}</td><td style="text-align:right">${r.importe==null?sinReg:qfmt(r.importe)}</td><td>${etapaBadge(r.etapa)}</td><td>${esc(r.por)}</td></tr>`).join('')}
+  </tbody></table></div>${paginador('hist',pg)}`;
 };
 function histFiltros(){
   const hay=(esAdm()&&S.fcViaje)||S.fcCli||S.fcPcat||S.fcMes||S.fcSem||S.fcFecha||S.fcDesde||S.fcHasta||S.fcFechas.length||S.fcQ||S.fcEstado!=='ENV'||S.fcBase!=='envio';
@@ -953,10 +973,11 @@ BODY.tarifas=()=>{
   const rows=tarData().filter(t=>(!S.tfCli||t.cliente===S.tfCli)&&(!S.tfPcat||t.proyecto===S.tfPcat)&&(!S.tfCap||t.capacidad===S.tfCap)&&(!S.tfEst||(S.tfEst==='A'?t.activa:!t.activa))&&(!q||(t.cliente+' '+t.proyecto+' '+rutaTxt(t.rutaId)+' '+t.capacidad+' '+t.id).toLowerCase().includes(q)))
     .sort((a,b)=>a.cliente.localeCompare(b.cliente)||rutaTxt(a.rutaId).localeCompare(rutaTxt(b.rutaId))||b.vigenteDesde.localeCompare(a.vigenteDesde));
   const ed=hp('tarifas_editar'),dsv=hp('tarifas_desactivar');
+  const pg=paginar('tar',rows);
   return rows.length?`<div class="mute" style="margin-bottom:8px">${rows.length} tarifas</div><div class="xlwrap"><table class="xl" style="min-width:1650px"><thead><tr><th>ID</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Capacidad</th><th>Importe</th><th>Q diésel</th><th>% comb.</th><th>Importe prov.</th><th>Q diésel prov.</th><th>% comb. prov.</th><th>Vigente desde</th><th>Vigente hasta</th><th>Estado</th><th>Creada por · fecha</th><th>Modificada por · fecha</th>${ed||dsv?'<th>Acciones</th>':''}</tr></thead><tbody>
-  ${rows.map(t=>`<tr class="${t.activa?'':'dim'}"><td><b>${t.id}</b></td><td>${esc((PROYECTOS.find(p=>p.id===t.cliente)||{}).cliente||t.cliente)}</td><td>${esc(t.proyecto)}</td><td style="white-space:normal;min-width:240px">${esc(rutaTxt(t.rutaId))}</td><td>${esc(t.capacidad)}</td><td style="text-align:right"><b>${qfmt(t.importe)}</b></td><td style="text-align:right">${t.qDieselPactado!=null&&t.qDieselPactado!==''?esc(t.qDieselPactado):'<span class="mute">—</span>'}</td><td style="text-align:right">${t.combustiblePct!=null&&t.combustiblePct!==''?esc(t.combustiblePct)+'%':'<span class="mute">—</span>'}</td><td style="text-align:right">${t.importeOpl!=null&&t.importeOpl!==''?qfmt(t.importeOpl):'<span class="mute">—</span>'}</td><td style="text-align:right">${t.dieselPactadoOpl!=null&&t.dieselPactadoOpl!==''?esc(t.dieselPactadoOpl):'<span class="mute">—</span>'}</td><td style="text-align:right">${t.combustiblePctOpl!=null&&t.combustiblePctOpl!==''?esc(t.combustiblePctOpl)+'%':'<span class="mute">—</span>'}</td><td>${fmtDate(t.vigenteDesde)}</td><td>${t.vigenteHasta?fmtDate(t.vigenteHasta):'<span class="mute">sin fin</span>'}</td><td>${chip(t.activa?'done':'neutral',t.activa?'Activa':'Inactiva')}</td><td>${esc(t.creadoPor)}<br><span class="mute">${fmtDT(t.creadoEn)}</span></td><td>${t.modificadoPor?`${esc(t.modificadoPor)}<br><span class="mute">${fmtDT(t.modificadoEn)}</span>`:'—'}</td>
+  ${pg.filas.map(t=>`<tr class="${t.activa?'':'dim'}"><td><b>${t.id}</b></td><td>${esc((PROYECTOS.find(p=>p.id===t.cliente)||{}).cliente||t.cliente)}</td><td>${esc(t.proyecto)}</td><td style="white-space:normal;min-width:240px">${esc(rutaTxt(t.rutaId))}</td><td>${esc(t.capacidad)}</td><td style="text-align:right"><b>${qfmt(t.importe)}</b></td><td style="text-align:right">${t.qDieselPactado!=null&&t.qDieselPactado!==''?esc(t.qDieselPactado):'<span class="mute">—</span>'}</td><td style="text-align:right">${t.combustiblePct!=null&&t.combustiblePct!==''?esc(t.combustiblePct)+'%':'<span class="mute">—</span>'}</td><td style="text-align:right">${t.importeOpl!=null&&t.importeOpl!==''?qfmt(t.importeOpl):'<span class="mute">—</span>'}</td><td style="text-align:right">${t.dieselPactadoOpl!=null&&t.dieselPactadoOpl!==''?esc(t.dieselPactadoOpl):'<span class="mute">—</span>'}</td><td style="text-align:right">${t.combustiblePctOpl!=null&&t.combustiblePctOpl!==''?esc(t.combustiblePctOpl)+'%':'<span class="mute">—</span>'}</td><td>${fmtDate(t.vigenteDesde)}</td><td>${t.vigenteHasta?fmtDate(t.vigenteHasta):'<span class="mute">sin fin</span>'}</td><td>${chip(t.activa?'done':'neutral',t.activa?'Activa':'Inactiva')}</td><td>${esc(t.creadoPor)}<br><span class="mute">${fmtDT(t.creadoEn)}</span></td><td>${t.modificadoPor?`${esc(t.modificadoPor)}<br><span class="mute">${fmtDT(t.modificadoEn)}</span>`:'—'}</td>
   ${ed||dsv?`<td style="white-space:nowrap">${ed?`<button class="btn sm" data-act="tarifaOpen" data-id="${t.id}">Editar</button> `:''}${dsv?`<button class="btn sm ${t.activa?'fix':'ok'}" data-act="tarifaEstado" data-id="${t.id}">${t.activa?'Desactivar':'Activar'}</button>`:''}</td>`:''}</tr>`).join('')}
-  </tbody></table></div>`:empty('No hay tarifas con estos filtros','Crea una tarifa o cambia la búsqueda.');
+  </tbody></table></div>${paginador('tar',pg)}`:empty('No hay tarifas con estos filtros','Crea una tarifa o cambia la búsqueda.');
 };
 function tarifasVista(){
   let sin=[];try{sin=API.viajesSinTarifa(S.user.id);}catch(e){}
@@ -1014,12 +1035,13 @@ BODY.rutas=()=>{
     &&(!fr||(r.codigo+' '+r.nombre).toLowerCase().includes(fr))&&(!fo||String(txtO(r)).toLowerCase().includes(fo))&&(!fd||String(txtD(r)).toLowerCase().includes(fd))
     &&(!q||(r.codigo+' '+r.nombre+' '+r.cliente+' '+r.proyecto+' '+txtO(r)+' '+txtD(r)).toLowerCase().includes(q))).sort((a,b)=>({PENDIENTE:0,EN_TARIFACION:1,PENDIENTE_APROBACION:2,ACTIVA:3,RECHAZADA:4}[a.estado]-{PENDIENTE:0,EN_TARIFACION:1,PENDIENTE_APROBACION:2,ACTIVA:3,RECHAZADA:4}[b.estado])||a.cliente.localeCompare(b.cliente)||a.codigo.localeCompare(b.codigo));
   const val=hp('rutas_validar')||hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte');
+  const pg=paginar('rutas',rows);
   return rows.length?`<div class="mute" style="margin-bottom:8px">${rows.length} ${rows.length===1?'ruta':'rutas'}</div><div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr>${esEnc()?'':'<th>Código</th>'}<th>Ruta</th><th>Cliente</th><th>Proyecto</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Solicitada por · fecha</th><th>Validada por · fecha</th><th>Viajes</th>${val?'<th>Acciones</th>':''}</tr></thead><tbody>
-  ${rows.map(r=>`<tr class="${r.estado==='ACTIVA'?'':'warnrow'}">${esEnc()?'':`<td>${r.codigo?`<b>${esc(r.codigo)}</b>`:'<span class="mute">sin código</span>'}</td>`}<td style="white-space:normal;min-width:220px">${esc(r.nombre)}</td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)}</td><td>${esc(r.proyecto)}</td>
+  ${pg.filas.map(r=>`<tr class="${r.estado==='ACTIVA'?'':'warnrow'}">${esEnc()?'':`<td>${r.codigo?`<b>${esc(r.codigo)}</b>`:'<span class="mute">sin código</span>'}</td>`}<td style="white-space:normal;min-width:220px">${esc(r.nombre)}</td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)}</td><td>${esc(r.proyecto)}</td>
   <td style="white-space:normal;min-width:150px">${r.origenId?esc(nombreOrigen(r.origenId)):(r.origenProp?`${esc(r.origenProp)} <span class="mute">(propuesto)</span>`:'<span class="mute">pendiente</span>')}</td><td style="white-space:normal;min-width:170px">${r.destinoId?esc(nombreDestino(r.destinoId)):(r.destinoProp?`${esc(r.destinoProp)} <span class="mute">(propuesto)</span>`:'<span class="mute">pendiente</span>')}</td>
   <td>${rutaChip(r.estado)}${r.rechazo?`<br><span class="mute" style="font-size:12px">“${esc(r.rechazo.motivo)}”</span>`:''}${r.aprobacionComercial?'<br><span class="mute">Comercial ✓</span>':''}${r.aprobacionTransporte?'<br><span class="mute">Transporte ✓</span>':''}</td><td>${esc(r.solicitadaPor)}<br><span class="mute">${fmtDT(r.solicitadaEn)}${r.fuente==='VIAJE'?' · desde un viaje':''}</span></td><td>${r.validadaPor?`${esc(r.validadaPor)}<br><span class="mute">${fmtDT(r.validadaEn)}</span>`:'—'}</td><td>${r.viajes||0}</td>
   ${val?`<td style="white-space:nowrap">${r.estado==='PENDIENTE'&&hp('rutas_validar')?`<button class="btn sm primary" data-act="rutaValidarOpen" data-id="${r.id}">Validar</button> <button class="btn sm fix" data-act="rutaRechazarOpen" data-id="${r.id}">Rechazar</button>`:''}${r.estado==='PENDIENTE_APROBACION'&&hp('rutas_aprobar_comercial')&&!r.aprobacionComercial?`<button class="btn sm ok" data-act="rutaAprobarComOpen" data-id="${r.id}">Aprobar Comercial</button>`:''}${r.estado==='PENDIENTE_APROBACION'&&hp('rutas_aprobar_transporte')&&!r.aprobacionTransporte?`<button class="btn sm ok" data-act="rutaAprobarTraOpen" data-id="${r.id}">Aprobar Transporte</button>`:''}</td>`:''}</tr>`).join('')}
-  </tbody></table></div>`:(esAdm()?rutasVacioAdmin(todas):empty('No hay rutas con estos filtros','Cambia la búsqueda o registra una ruta nueva.'));
+  </tbody></table></div>${paginador('rutas',pg)}`:(esAdm()?rutasVacioAdmin(todas):empty('No hay rutas con estos filtros','Cambia la búsqueda o registra una ruta nueva.'));
 };
 VIEWS.rutas=()=>{
   const all=rutasData(),pend=all.filter(r=>r.estado!=='ACTIVA'&&r.estado!=='RECHAZADA').length;
@@ -1076,20 +1098,22 @@ function opSelBar(selIds,porPagar,canPay){
 }
 function opSelTable(porPagar,prov,sel){
   if(!prov)return `<div class="alertbox info">Elige un <b>proveedor (OPL)</b> en el filtro de arriba para ver los viajes ya facturados al cliente que se le pueden pagar.</div>`;
-  const elig=porPagar.filter(r=>r.proveedor===prov),list=elig.slice(0,500);
-  if(!list.length)return `<div class="mute">No hay viajes por pagar de ${esc(prov)} (facturados al cliente, con tarifa OPL, sin orden activa).</div>`;
+  const elig=porPagar.filter(r=>r.proveedor===prov);
+  if(!elig.length)return `<div class="mute">No hay viajes por pagar de ${esc(prov)} (facturados al cliente, con tarifa OPL, sin orden activa).</div>`;
+  const pg=paginar('opsel',elig);
   return `<div class="xlwrap"><table class="xl" style="min-width:900px"><thead><tr><th></th><th>Viaje</th><th>Cliente · proyecto</th><th>Fecha plan</th><th>Importe a pagar</th></tr></thead><tbody>
-    ${list.map(r=>`<tr><td><input type="checkbox" data-act="opTog" data-id="${r.id}" ${sel[r.id]?'checked':''}></td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)} · ${esc(r.proyecto)}</td><td>${fmtDate(r.fecha)}</td><td style="text-align:right">${r.sinTarifa?'<span class="warnl">sin tarifa OPL</span>':qfmt(r.importe)}</td></tr>`).join('')}
-    </tbody></table></div>${elig.length>list.length?`<div class="mute">Mostrando 500 de ${elig.length} viajes por pagar de ${esc(prov)}.</div>`:''}`;
+    ${pg.filas.map(r=>`<tr><td><input type="checkbox" data-act="opTog" data-id="${r.id}" ${sel[r.id]?'checked':''}></td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)} · ${esc(r.proyecto)}</td><td>${fmtDate(r.fecha)}</td><td style="text-align:right">${r.sinTarifa?'<span class="warnl">sin tarifa OPL</span>':qfmt(r.importe)}</td></tr>`).join('')}
+    </tbody></table></div>${paginador('opsel',pg)}`;
 }
 function opOrdenesTable(ordenes,canPay){
   if(!ordenes.length)return `<div class="mute">Aún no hay órdenes de pago.</div>`;
+  const pg=paginar('op',ordenes.slice().reverse());
   return `<div class="xlwrap"><table class="xl" style="min-width:1250px"><thead><tr><th>Orden</th><th>Proveedor</th><th>Viajes</th><th>Importe</th><th>Estado</th><th>Emitida</th><th>Documento</th><th>Pago · evidencia · factura del proveedor</th>${canPay?'<th class="stkR">Acciones</th>':''}</tr></thead><tbody>
-    ${ordenes.slice().reverse().map(o=>{const pag=o.fase==='PAGADA';return `<tr class="${o.estado==='ANULADA'?'dim':''}"><td><b>${o.id}</b></td><td>${esc(o.proveedor)}</td><td>${o.viajeIds.slice(0,6).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${o.viajeIds.length>6?' <span class="mute">…</span>':''} <b class="mute">[${o.viajeIds.length}]</b></td><td style="text-align:right">${qfmt(o.importe)}</td><td>${chip(o.estado==='ANULADA'?'neutral':(pag?'done':'progress'),o.estado==='ANULADA'?'Anulada':(pag?'Pagada':'Emitida'))}</td><td>${o.fechaEmision?fmtDate(o.fechaEmision):'—'}</td>
+    ${pg.filas.map(o=>{const pag=o.fase==='PAGADA';return `<tr class="${o.estado==='ANULADA'?'dim':''}"><td><b>${o.id}</b></td><td>${esc(o.proveedor)}</td><td>${o.viajeIds.slice(0,6).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${o.viajeIds.length>6?' <span class="mute">…</span>':''} <b class="mute">[${o.viajeIds.length}]</b></td><td style="text-align:right">${qfmt(o.importe)}</td><td>${chip(o.estado==='ANULADA'?'neutral':(pag?'done':'progress'),o.estado==='ANULADA'?'Anulada':(pag?'Pagada':'Emitida'))}</td><td>${o.fechaEmision?fmtDate(o.fechaEmision):'—'}</td>
     <td>${o.emision&&o.emision.documentoUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.emision.documentoUrl)}">Ver documento</button>`:(o.emision?'<span class="mute">sin documento</span>':'—')}</td>
     <td>${pag&&o.transferencia?`${fmtDate(o.transferencia.fecha)} · ${qfmt(o.transferencia.monto)} · ${esc(o.transferencia.referencia)}${o.transferencia.evidenciaUrl||o.transferencia.facturaUrl?'<br>':''}${o.transferencia.evidenciaUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.transferencia.evidenciaUrl)}">Evidencia</button> `:''}${o.transferencia.facturaUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.transferencia.facturaUrl)}">Factura proveedor</button>`:''}`:'<span class="mute">Pendiente de pago</span>'}${o.anulada?`<br><span class="mute">Anulada por ${esc(o.anulada.por)} · “${esc(o.anulada.motivo)}”</span>`:''}</td>
     ${canPay?`<td class="stkR"><div class="acts-wrap">${o.estado==='ANULADA'?'<span class="mute">—</span>':(o.fase==='EMITIDA'?`<button class="btn sm ok" data-act="opTransferOpen" data-id="${o.id}">Registrar pago</button><button class="btn sm fix" data-act="opAnularOpen" data-id="${o.id}">Anular</button>`:'<span class="mute">Pagada</span>')}</div></td>`:''}</tr>`;}).join('')}
-    </tbody></table></div>`;
+    </tbody></table></div>${paginador('op',pg)}`;
 }
 /* ---- Sección OPL (proveedores): todo el proceso del operador logístico, sin exponer el cobro al cliente ---- */
 const OPLTABS=[{k:'prov',l:'Proveedores (OPL)'},{k:'tar',l:'Tarifas OPL'},{k:'pagar',l:'Viajes por pagar'},{k:'ord',l:'Órdenes de pago'}];
@@ -1141,7 +1165,8 @@ const nc='<span class="mute">No calculable</span>';
 const qOrNc=v=>v==null?nc:qfmt(v);
 function miniTable(cols,rows,foot){
   if(!rows.length)return '<div class="mute">Sin registros en este filtro.</div>';
-  return `<div class="xlwrap" style="max-height:50vh"><table class="xl" style="min-width:560px"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>${foot?`<tfoot><tr>${foot.map(c=>`<td><b>${c}</b></td>`).join('')}</tr></tfoot>`:''}</table></div>`;
+  const pg=paginar('mini',rows);
+  return `<div class="xlwrap" style="max-height:50vh"><table class="xl" style="min-width:560px"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${pg.filas.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>${foot?`<tfoot><tr>${foot.map(c=>`<td><b>${c}</b></td>`).join('')}</tr></tfoot>`:''}</table></div>${paginador('mini',pg)}`;
 }
 function finDetail(k,R){
   const M=R.M,ar=R.agrRows,tr=R.tripRows,T=(cols,rows,foot)=>miniTable(cols,rows,foot);
@@ -1195,10 +1220,11 @@ VIEWS.finanzas=()=>{
   }else if(k==='prov'){
     const rows=R.tripRows.filter(r=>r.proveedor).sort((a,b)=>a.proveedor.localeCompare(b.proveedor)||a.id.localeCompare(b.id));
     const by={};rows.forEach(r=>{const p=by[r.proveedor]=by[r.proveedor]||{por:0,pag:0,sal:0,sin:0,n:0};p.n++;if(r.costo==null)p.sin++;else{p.por+=r.costo;p.sal+=r.saldoProv;}p.pag+=r.pagadoProv;});
+    const pg=paginar('finprov',rows);
     body=`<h2 style="margin-bottom:10px">Saldo por proveedor</h2>${miniTable(['Proveedor','Viajes','Por pagar','Pagado','Saldo pendiente','Sin costo registrado'],Object.keys(by).sort().map(p=>[esc(p),by[p].n,qfmt(r2(by[p].por)),qfmt(r2(by[p].pag)),`<b>${qfmt(r2(by[p].sal))}</b>`,by[p].sin||'—']))}
       <h2 style="margin:22px 0 10px">Detalle por viaje</h2>${rows.length?`<div class="xlwrap"><table class="xl" style="min-width:1300px"><thead><tr><th>Proveedor</th><th>Periodo</th><th>Cliente · proyecto</th><th>Viaje</th><th>Importe por pagar</th><th>Pagado</th><th>Saldo</th><th>Estado de pago</th><th>Fecha del pago</th><th>Referencia</th>${canPay||canCost?'<th>Acciones</th>':''}</tr></thead><tbody>
-      ${rows.map(r=>`<tr><td>${esc(r.proveedor)}</td><td>${r.periodo}</td><td>${esc(r.cliente)} · ${esc(r.proyecto)}</td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td style="text-align:right">${r.costo==null?sinReg:qfmt(r.costo)}</td><td style="text-align:right">${qfmt(r.pagadoProv)}</td><td style="text-align:right">${r.saldoProv==null?'—':qfmt(r.saldoProv)}</td><td>${pagoBadge(r.estadoProv)}</td><td>${r.fechaProv?fmtDate(r.fechaProv):'—'}</td><td>${esc(r.refProv)||'—'}</td>${canCost?`<td>${canCost?`<button class="btn sm" data-act="importeOpen" data-id="${r.id}" data-k="costoProveedor">Costo</button>`:''}</td>`:''}</tr>`).join('')}
-      </tbody></table></div>`:empty('Sin servicios de proveedores en este filtro','Solo se listan viajes finalizados con proveedor (OPL).')}
+      ${pg.filas.map(r=>`<tr><td>${esc(r.proveedor)}</td><td>${r.periodo}</td><td>${esc(r.cliente)} · ${esc(r.proyecto)}</td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td style="text-align:right">${r.costo==null?sinReg:qfmt(r.costo)}</td><td style="text-align:right">${qfmt(r.pagadoProv)}</td><td style="text-align:right">${r.saldoProv==null?'—':qfmt(r.saldoProv)}</td><td>${pagoBadge(r.estadoProv)}</td><td>${r.fechaProv?fmtDate(r.fechaProv):'—'}</td><td>${esc(r.refProv)||'—'}</td>${canCost?`<td>${canCost?`<button class="btn sm" data-act="importeOpen" data-id="${r.id}" data-k="costoProveedor">Costo</button>`:''}</td>`:''}</tr>`).join('')}
+      </tbody></table></div>${paginador('finprov',pg)}`:empty('Sin servicios de proveedores en este filtro','Solo se listan viajes finalizados con proveedor (OPL).')}
       <div class="mute" style="margin-top:8px;font-size:13px">El pago a proveedores se hace con <b>órdenes de pago</b> (pestaña «Órdenes de pago»): primero se emite la orden y, cuando el proveedor factura, se registra la transferencia con su evidencia y la factura del proveedor.</div>`;
   }else if(k==='fact'){
     const nAg=R.agrRows.length;
@@ -1216,9 +1242,10 @@ VIEWS.finanzas=()=>{
       <div class="alertbox info" style="margin-top:14px"><b>Etapa 2 · Registrar el pago:</b> cuando el proveedor factura, se registra la transferencia con <b>dos archivos esenciales</b>: la evidencia de la transferencia y la factura del proveedor. Con ambos la orden queda <b>Pagada</b>.</div>`;
   }else{
     const rows=R.tripRows.sort((a,b)=>a.pilotoId.localeCompare(b.pilotoId)||a.id.localeCompare(b.id));
+    const pg=paginar('finpil',rows);
     body=`${rows.length?`<div class="xlwrap"><table class="xl" style="min-width:1250px"><thead><tr><th>Piloto</th><th>Viaje</th><th>Cliente · proyecto</th><th>Ingreso del viaje</th><th>Importe a pagar</th><th>Pagado</th><th>Saldo</th><th>Estado de pago</th><th>Fecha del pago</th><th>Referencia</th>${canPay?'<th>Acciones</th>':''}</tr></thead><tbody>
-      ${rows.map(r=>`<tr><td>${esc((PILOTOS.find(p=>p.id===r.pilotoId)||{}).nombre)}</td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td>${esc(r.cliente)} · ${esc(r.proyecto)}</td><td style="text-align:right">${r.ingreso==null?sinReg:qfmt(r.ingreso)}</td><td style="text-align:right">${r.viaticos==null?sinReg:qfmt(r.viaticos)}</td><td style="text-align:right">${qfmt(r.pagadoPil)}</td><td style="text-align:right">${r.saldoPil==null?'—':qfmt(r.saldoPil)}</td><td>${pagoBadge(r.estadoPil)}</td><td>${r.fechaPil?fmtDate(r.fechaPil):'—'}</td><td>${esc(r.refPil)||'—'}</td>${canPay?`<td>${r.viaticos!=null&&r.saldoPil>0.004?`<button class="btn sm ok" data-act="pagoOpen" data-id="${r.id}" data-tipo="PILOTO">Pagar</button>`:''}</td>`:''}</tr>`).join('')}
-      </tbody></table></div>`:empty('Sin viajes en este filtro')}
+      ${pg.filas.map(r=>`<tr><td>${esc((PILOTOS.find(p=>p.id===r.pilotoId)||{}).nombre)}</td><td><button class="linkbtn" data-act="detalle" data-id="${r.id}">#${r.id}</button></td><td>${esc(r.cliente)} · ${esc(r.proyecto)}</td><td style="text-align:right">${r.ingreso==null?sinReg:qfmt(r.ingreso)}</td><td style="text-align:right">${r.viaticos==null?sinReg:qfmt(r.viaticos)}</td><td style="text-align:right">${qfmt(r.pagadoPil)}</td><td style="text-align:right">${r.saldoPil==null?'—':qfmt(r.saldoPil)}</td><td>${pagoBadge(r.estadoPil)}</td><td>${r.fechaPil?fmtDate(r.fechaPil):'—'}</td><td>${esc(r.refPil)||'—'}</td>${canPay?`<td>${r.viaticos!=null&&r.saldoPil>0.004?`<button class="btn sm ok" data-act="pagoOpen" data-id="${r.id}" data-tipo="PILOTO">Pagar</button>`:''}</td>`:''}</tr>`).join('')}
+      </tbody></table></div>${paginador('finpil',pg)}`:empty('Sin viajes en este filtro')}
       <div class="mute" style="margin-top:8px;font-size:13px">El importe a pagar al piloto es el valor de Q_VIATICOS del viaje. Tu hoja no tiene una tarifa de pago a pilotos y no se inventa; el ingreso mostrado es la tarifa enviada a facturar.</div>`;
   }
   return `<div class="inner" style="max-width:1500px">${pageHead('Finanzas','Control de ingresos, costos y rentabilidad · solo lectura salvo permisos de registro')}${tabs('fin',FINTABS,k,null)}<div style="height:12px"></div>${filt}${body}</div>`;
@@ -1227,9 +1254,10 @@ VIEWS.finanzas=()=>{
 /* ---- Usuarios y permisos ---- */
 VIEWS.usuarios=()=>{
   const grupos=[...new Set(PERMS.map(p=>p[2]))],roles=Object.keys(ROLES),canP=hp('permisos_gestionar');
+  const pg=paginar('usr',DB.usuarios);
   return `<div class="inner" style="max-width:1300px">${pageHead('Usuarios y permisos','Cada acción se valida contra esta matriz y contra las reglas fijas de separación de funciones',hp('usuarios_gestionar')?`<button class="btn primary" data-act="usuarioOpen" data-id="">${icon('plus',18)} Nuevo usuario</button>`:'')}
     <div class="tablewrap scrollx"><table class="resp"><thead><tr><th>ID</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Clientes asignados</th><th>Estado</th><th></th></tr></thead><tbody>
-    ${DB.usuarios.map(u=>`<tr><td data-l="ID"><code>${u.id}</code></td><td data-l="Nombre"><b>${esc(u.nombre)}</b></td><td data-l="Usuario"><code>${esc(u.usuario)}</code></td><td data-l="Rol">${esc(ROLES[u.rol].label)}</td><td data-l="Clientes">${clientesAsig(u).length?esc(clientesAsig(u).join(', ')):(u.rol==='ENCARGADO'?'<span class="mute">ninguno</span>':'<span class="mute">todos / no aplica</span>')}</td><td data-l="Estado">${u.activo?'<span class="badge st-COMERCIAL_REGISTRADA">Activo</span>':'<span class="badge st-PENDIENTE">Inactivo</span>'}</td><td data-l="">${hp('usuarios_gestionar')?`<button class="btn sm" data-act="usuarioOpen" data-id="${u.id}">Editar</button>`:''}</td></tr>`).join('')}</tbody></table></div>
+    ${pg.filas.map(u=>`<tr><td data-l="ID"><code>${u.id}</code></td><td data-l="Nombre"><b>${esc(u.nombre)}</b></td><td data-l="Usuario"><code>${esc(u.usuario)}</code></td><td data-l="Rol">${esc(ROLES[u.rol].label)}</td><td data-l="Clientes">${clientesAsig(u).length?esc(clientesAsig(u).join(', ')):(u.rol==='ENCARGADO'?'<span class="mute">ninguno</span>':'<span class="mute">todos / no aplica</span>')}</td><td data-l="Estado">${u.activo?'<span class="badge st-COMERCIAL_REGISTRADA">Activo</span>':'<span class="badge st-PENDIENTE">Inactivo</span>'}</td><td data-l="">${hp('usuarios_gestionar')?`<button class="btn sm" data-act="usuarioOpen" data-id="${u.id}">Editar</button>`:''}</td></tr>`).join('')}</tbody></table></div>${paginador('usr',pg)}
     <section class="section"><h2>Matriz de permisos por rol</h2><div class="mute" style="margin:-6px 0 10px;font-size:13px">${icon('lock',14)} = permiso que ese rol nunca puede tener (separación de funciones). Cada cambio queda en la auditoría.</div>
     <div class="tablewrap scrollx"><table class="pm"><thead><tr><th>Permiso</th>${roles.map(r=>`<th>${esc(ROLES[r].label)}</th>`).join('')}</tr></thead><tbody>
     ${grupos.map(g=>`<tr class="grp"><td colspan="${roles.length+1}">${g}</td></tr>${PERMS.filter(p=>p[2]===g).map(p=>`<tr><td>${p[1]}<br><code class="mute">${p[0]}</code></td>${roles.map(r=>{const proh=(PROHIBIDO[r]||[]).includes(p[0]),sie=(SIEMPRE[r]||[]).includes(p[0]),on=hasPerm({activo:true,rol:r},p[0]);return `<td>${proh?`<span class="mute" title="No permitido para este rol">${icon('lock',14)}</span>`:`<input type="checkbox" data-perm="${r}|${p[0]}" ${on?'checked':''} ${!canP||sie?'disabled':''} aria-label="${esc(p[1])} · ${esc(ROLES[r].label)}">`}</td>`;}).join('')}</tr>`).join('')}`).join('')}
@@ -1242,11 +1270,11 @@ function audList(){
   return ev.filter(e=>(!S.aEnt||e.entidad===S.aEnt)&&(!S.aRech||e.entidad==='SEGURIDAD')&&(!q||(e.viajeId+' '+e.accion+' '+e.campo+' '+e.por+' '+e.motivo+' '+e.ref+' '+e.anterior+' '+e.nuevo).toLowerCase().includes(q))).slice().reverse();
 }
 BODY.auditoria=()=>{
-  const ev=audList(),show=ev.slice(0,300);
-  return `<div class="mute" style="margin-bottom:8px">${ev.length} eventos${ev.length>300?' (se muestran los 300 más recientes)':''}</div>
+  const ev=audList(),pg=paginar('aud',ev);
+  return `<div class="mute" style="margin-bottom:8px">${ev.length} eventos</div>
   <div class="xlwrap"><table class="xl" style="min-width:1000px"><thead><tr><th>Fecha y hora</th><th>Evento</th><th>Viaje</th><th>Entidad</th><th>Acción</th><th>Campo</th><th>Valor anterior</th><th>Valor nuevo</th><th>Usuario</th><th>Motivo / ref.</th></tr></thead><tbody>
-  ${show.map(e=>`<tr class="${e.entidad==='SEGURIDAD'?'dim':''}"><td>${fmtDT(e.en)}</td><td><code>${e.id}</code></td><td>${e.viajeId?`<button class="linkbtn" data-act="detalle" data-id="${e.viajeId}">#${e.viajeId}</button>`:'—'}</td><td>${e.entidad}</td><td style="white-space:normal;min-width:170px">${esc(e.accion)}</td><td>${esc(e.campo)}</td><td style="white-space:normal;max-width:200px">${esc(e.anterior)}</td><td style="white-space:normal;max-width:200px">${esc(e.nuevo)}</td><td>${esc(e.por)}<br><span class="mute">${esc(rolL(e.rol))}</span></td><td style="white-space:normal;min-width:180px">${esc(e.motivo)}${e.ref?`<br><span class="mute">${esc(e.ref)}</span>`:''}</td></tr>`).join('')}
-  </tbody></table></div>`;
+  ${pg.filas.map(e=>`<tr class="${e.entidad==='SEGURIDAD'?'dim':''}"><td>${fmtDT(e.en)}</td><td><code>${e.id}</code></td><td>${e.viajeId?`<button class="linkbtn" data-act="detalle" data-id="${e.viajeId}">#${e.viajeId}</button>`:'—'}</td><td>${e.entidad}</td><td style="white-space:normal;min-width:170px">${esc(e.accion)}</td><td>${esc(e.campo)}</td><td style="white-space:normal;max-width:200px">${esc(e.anterior)}</td><td style="white-space:normal;max-width:200px">${esc(e.nuevo)}</td><td>${esc(e.por)}<br><span class="mute">${esc(rolL(e.rol))}</span></td><td style="white-space:normal;min-width:180px">${esc(e.motivo)}${e.ref?`<br><span class="mute">${esc(e.ref)}</span>`:''}</td></tr>`).join('')}
+  </tbody></table></div>${paginador('aud',pg)}`;
 };
 VIEWS.auditoria=()=>{
   const v=S.verif;
@@ -1431,6 +1459,7 @@ const ACT={
   async cbToggle(d){S.cb=S.cb===d.k?null:d.k;S.cbq='';render();const i=document.querySelector('.cb[data-cb="'+d.k+'"] .cb-q');if(i)i.focus();},
   async cbPick(d){if(d.k==='rtCat'){S.rtOrig='';S.rtDest='';}if(String(d.k).startsWith('m:')){const M=curModel();if(M)aplicarCampo(M,d.k.slice(2),d.v);}else S[d.k]=d.v;S.cb=null;S.cbq='';render();},
   async reintentarCatalogos(){try{await BACKEND.refrescar();toast('Datos actualizados desde el servidor.');}catch(e){toast(e.message||'No se pudo actualizar desde el servidor.','err');}render();},
+  async pagina(d){S.pag[d.k]=Math.max(1,Number(d.p)||1);render();topScroll();},
   async festado(d){S.fEstado=d.v;render();},
   async backdrop(d,el,e){if(e.target===el){S.modal=null;render();}},
   async closeModal(){S.modal=null;render();},
