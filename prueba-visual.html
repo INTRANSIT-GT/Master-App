@@ -35,6 +35,11 @@
 <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
 <script src="js/exportar.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/modulos/torre.js"></script>
+<script src="js/modulos/finanzas.js"></script>
+<script src="js/modulos/comercial.js"></script>
+<script src="js/modulos/transporte.js"></script>
+<script src="js/modulos/admin.js"></script>
 <script src="js/datos-prueba-visual.js"></script>
 <style>
 #pv-bar{position:fixed;left:8px;bottom:8px;z-index:99999;width:244px;max-width:calc(100vw - 16px);font:600 12px/1.3 system-ui,Segoe UI,Arial,sans-serif;background:#0b2a45;color:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.35);overflow:hidden}
@@ -50,7 +55,7 @@
 <script>
 (function(){
   var b=document.getElementById('pv-b'),bar=document.getElementById('pv-bar'),us=PRUEBA.usuarios();
-  var grupos=[['Encargado de proyecto (cambios a revisar)',us.filter(function(u){return u.rol==='ENCARGADO';})],['Otros perfiles (deben verse igual que antes)',us.filter(function(u){return u.rol!=='ENCARGADO';})]];
+  var grupos=[['Operativo (cambios a revisar)',us.filter(function(u){return u.rol==='OPERATIVO';})],['Otros perfiles (deben verse igual que antes)',us.filter(function(u){return u.rol!=='OPERATIVO';})]];
   grupos.forEach(function(g){var d=document.createElement('div');d.textContent=g[0];b.appendChild(d);g[1].forEach(function(u){var x=document.createElement('button');x.textContent=u.nombre;x.setAttribute('data-uid',u.id);x.onclick=function(){PRUEBA.verComo(u.id);b.querySelectorAll('button').forEach(function(y){y.classList.remove('act');});x.classList.add('act');};b.appendChild(x);});});
   document.getElementById('pv-t').onclick=function(){bar.classList.toggle('abierta');};
   b.querySelector('button').click();

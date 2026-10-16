@@ -14,7 +14,7 @@
    (Power Apps + Dataverse/SharePoint con roles, Power Automate, Apps Script
    u otro backend con control de acceso real). Ver INFORME-master-app.md.
    ===================================================================== */
-const DB_VERSION=7;
+const DB_VERSION=8;
 /* Ganchos del entorno (el servidor los reemplaza): verificación de archivos en el almacenamiento protegido */
 const ENV={storageExists:()=>false};
 let DB=null,PROYECTOS=[],PROYECTOS_X={},PREF={phone:false,arch:false},CLOCK=null;
@@ -60,6 +60,7 @@ const PERMS=[
   ['viajes_crear','Crear viajes','Viajes'],
   ['viajes_editar_datos','Editar datos operativos (no fechas)','Viajes'],
   ['viajes_editar_tiempos','Editar fechas y horas','Viajes'],
+  ['viajes_editar_estado','Modificar manualmente el estado del viaje','Viajes'],
   ['viajes_iniciar','Enviar viaje a ruta (Planificado → En ruta)','Estados'],
   ['viajes_finalizar','Confirmar entrega (En ruta → Entregado)','Estados'],
   ['viajes_aprobar_duplicado','Aprobar Shipment duplicado','Estados'],
@@ -85,37 +86,45 @@ const PERMS=[
   ['pagos_registrar','Registrar y anular pagos a proveedores y pilotos','Finanzas'],
   ['viajes_estatus_torre','Avanzar el estado del viaje de los clientes autorizados (Torre)','Estados'],
   ['facturas_emitir','Marcar una factura como emitida (con evidencia)','Comercial'],
-  ['tarifas_ver','Consultar tarifas','Tarifas'],
-  ['tarifas_crear','Crear tarifas','Tarifas'],
-  ['tarifas_editar','Editar tarifas','Tarifas'],
-  ['tarifas_desactivar','Activar o desactivar tarifas','Tarifas'],
+  ['tarifas_ver','Consultar tarifas cliente','Tarifas'],
+  ['tarifas_crear','Crear tarifas cliente','Tarifas'],
+  ['tarifas_editar','Editar tarifas cliente','Tarifas'],
+  ['tarifas_desactivar','Activar o desactivar tarifas cliente','Tarifas'],
+  ['tarifas_opl_ver','Consultar tarifas a proveedores (OPL)','Tarifas'],
+  ['tarifas_opl_crear','Crear/registrar tarifas OPL','Tarifas'],
+  ['tarifas_opl_autorizar','Autorizar tarifas OPL (Admin)','Tarifas'],
   ['rutas_ver','Consultar rutas','Rutas'],
   ['rutas_solicitar','Solicitar una ruta nueva','Rutas'],
   ['rutas_gestionar','Registrar rutas validadas en el catálogo','Rutas'],
   ['rutas_validar','Completar datos de una ruta pendiente','Rutas'],
   ['rutas_aprobar_comercial','Aprobar ruta y tarifa por Gerencia Comercial','Rutas'],
-  ['rutas_aprobar_transporte','Aprobar ruta por Gerencia de Transporte','Rutas']
+  ['rutas_aprobar_transporte','Aprobar ruta por Gerencia de Transporte','Rutas'],
+  ['unidades_asignar','Asignar unidades y pilotos a vehículos','Transporte']
 ];
 const PERM_KEYS=PERMS.map(p=>p[0]);
 const ROLES={
   ADMIN:{label:'Administradora',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
-  ENCARGADO:{label:'Encargado de proyecto',home:'inicio',nav:['inicio','nuevo','viajes','liquidaciones','rutas'],alcance:'Solo los clientes y proyectos que tiene asignados (viajes, rutas y solicitudes)'},
-  TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Todos los proyectos · avanza el estado de los viajes de Coca-Cola y Frito Lay'},
-  LIQUIDACIONES:{label:'Revisión de liquidaciones',home:'liquidaciones',nav:['liquidaciones'],alcance:'Todos los proyectos · solo liquidaciones'},
-  COMERCIAL:{label:'Facturación',home:'comercial',nav:['comercial','rutas'],alcance:'Viajes aceptados · facturas y tarifas'},
-  GERENCIA_COMERCIAL:{label:'Gerencia Comercial',home:'rutas',nav:['viajes','comercial','rutas'],alcance:'Aprueba rutas, tarifas y consulta la facturación'},
-  CONTABILIDAD:{label:'Contabilidad',home:'comercial',nav:['comercial','opl'],alcance:'Registra depósitos y cobros de facturas emitidas'},
-  GERENCIA_TRANSPORTE:{label:'Gerencia de Transporte',home:'viajes',nav:['viajes','rutas','liquidaciones'],alcance:'Aprueba rutas, duplicados de Shipment y consulta operativa'}
+  GERENTE_TRANSPORTE:{label:'Gerente de Transporte',home:'todos',nav:['todos','rutas','opl','liquidaciones','catalogos'],alcance:'Ver todo, asignar unidades/pilotos, autorizar/crear tarifas OPL'},
+  VALIDADOR:{label:'Validador',home:'liquidaciones',nav:['viajes','liquidaciones'],alcance:'Revisar/aprobar liquidaciones de clientes asignados'},
+  OPERATIVO:{label:'Operativo',home:'inicio',nav:['inicio','nuevo','viajes','liquidaciones'],alcance:'Registrar, editar y liquidar viajes de clientes asignados'},
+  ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
+  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'rutas',nav:['proyectos','rutas','opl'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
+  FACTURACION:{label:'Facturación',home:'comercial',nav:['todos','comercial'],alcance:'Cargar facturas, revisar viajes por facturar'},
+  COBROS:{label:'Cobros / Contabilidad',home:'comercial',nav:['comercial'],alcance:'Registrar cobros y pagos'},
+  PAGO_OPL:{label:'Pago OPL',home:'opl',nav:['opl'],alcance:'Registrar OPL y tarifas a proveedores (requieren autorización)'},
+  TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Editar horas y marcar Completado para viajes en ruta'}
 };
 const PERM_DEFAULT={
   ADMIN:PERM_KEYS.slice(),
-  ENCARGADO:['viajes_ver','viajes_crear','viajes_editar_datos','viajes_editar_tiempos','viajes_iniciar','viajes_finalizar','liq_ver','liq_enviar','historial_ver','rutas_ver','rutas_solicitar'],
-  TORRE:['viajes_ver_todos','viajes_estatus_torre'],
-  LIQUIDACIONES:['viajes_ver_todos','liq_ver','liq_aprobar','liq_devolver','historial_ver'],
-  COMERCIAL:['comercial_ver','comercial_agrupar','facturas_emitir','tarifa_registrar','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_solicitar','rutas_validar'],
-  GERENCIA_COMERCIAL:['viajes_ver_todos','historial_ver','comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_validar','rutas_aprobar_comercial'],
-  CONTABILIDAD:['comercial_ver','cobros_registrar'],
-  GERENCIA_TRANSPORTE:['viajes_ver_todos','historial_ver','liq_ver','rutas_ver','rutas_validar','rutas_aprobar_transporte','viajes_aprobar_duplicado']
+  GERENTE_TRANSPORTE:['viajes_ver_todos','historial_ver','liq_ver','rutas_ver','rutas_validar','rutas_aprobar_transporte','viajes_aprobar_duplicado','unidades_asignar','tarifas_opl_ver','tarifas_opl_crear','viajes_editar_estado','tarifas_ver','liq_aprobar','liq_devolver'],
+  VALIDADOR:['viajes_ver','liq_ver','liq_aprobar','liq_devolver','historial_ver'],
+  OPERATIVO:['viajes_ver','viajes_crear','viajes_editar_datos','viajes_editar_tiempos','viajes_iniciar','viajes_finalizar','liq_ver','liq_enviar','historial_ver','rutas_ver','rutas_solicitar'],
+  ANALISTA_COMERCIAL:['comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_solicitar','rutas_validar','historial_ver','clientes_gestionar'],
+  GERENTE_COMERCIAL:['viajes_ver_todos','historial_ver','comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_validar','rutas_aprobar_comercial','clientes_gestionar','tarifas_opl_ver','tarifas_opl_autorizar'],
+  FACTURACION:['viajes_ver_todos','comercial_ver','comercial_agrupar','facturas_emitir','tarifas_ver'],
+  COBROS:['comercial_ver','cobros_registrar','finanzas_ver'],
+  PAGO_OPL:['finanzas_ver','tarifas_opl_ver','tarifas_opl_crear'],
+  TORRE:['viajes_ver_todos','viajes_estatus_torre']
 };
 /* Separación de funciones: permisos que NUNCA se pueden conceder a un rol, ni siquiera desde la matriz. */
 const OPERATIVOS=['viajes_crear','viajes_editar_datos','viajes_iniciar','viajes_finalizar','liq_enviar'];
@@ -126,21 +135,22 @@ const TARIFAS_TODO=['tarifas_crear','tarifas_editar','tarifas_desactivar','tarif
 const RUTAS_ADM=['rutas_gestionar','rutas_validar','rutas_aprobar_comercial','rutas_aprobar_transporte'];
 const PROHIBIDO={
   ADMIN:[],
-  ENCARGADO:['liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre'],
-  TORRE:[...OPERATIVOS,'viajes_editar_tiempos','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar'],
-  LIQUIDACIONES:[...OPERATIVOS,'viajes_editar_tiempos',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','viajes_estatus_torre'],
-  COMERCIAL:[...OPERATIVOS,'viajes_editar_tiempos','liq_aprobar','liq_devolver',...ADMIN_TODO,'historial_ver','finanzas_ver','costos_registrar','cobros_registrar','pagos_registrar','viajes_estatus_torre','rutas_gestionar'],
-  GERENCIA_COMERCIAL:['permisos_gestionar','usuarios_gestionar','clientes_gestionar','liq_aprobar','liq_devolver','viajes_aprobar_duplicado','rutas_aprobar_transporte'],
-  CONTABILIDAD:[...OPERATIVOS,'viajes_editar_tiempos','liq_aprobar','liq_devolver',...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre'],
-  GERENCIA_TRANSPORTE:['permisos_gestionar','usuarios_gestionar','clientes_gestionar','liq_aprobar','liq_devolver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_aprobar_comercial']
+  GERENTE_TRANSPORTE:['permisos_gestionar','usuarios_gestionar','clientes_gestionar','liq_aprobar','liq_devolver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_aprobar_comercial'],
+  VALIDADOR:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','viajes_estatus_torre'],
+  OPERATIVO:['liq_aprobar','liq_devolver','viajes_editar_estado',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre'],
+  ANALISTA_COMERCIAL:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver','usuarios_gestionar','permisos_gestionar','auditoria_ver','finanzas_ver','costos_registrar','cobros_registrar','pagos_registrar','viajes_estatus_torre','rutas_gestionar'],
+  GERENTE_COMERCIAL:['permisos_gestionar','usuarios_gestionar','liq_aprobar','liq_devolver','viajes_aprobar_duplicado','rutas_aprobar_transporte','viajes_editar_estado'],
+  FACTURACION:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...ADMIN_TODO,'costos_registrar','cobros_registrar','pagos_registrar','viajes_estatus_torre','rutas_gestionar','tarifas_crear','tarifas_editar','tarifas_desactivar'],
+  COBROS:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre'],
+  PAGO_OPL:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','viajes_estatus_torre','tarifas_opl_autorizar'],
+  TORRE:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar']
 };
 /* Permisos que no se pueden quitar (evita bloquearse a sí misma) */
 const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']};
-const VIEW_PERM={proyectos:'tablero_ver',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'finanzas_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
+const VIEW_PERM={proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
 const NAVLBL={proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
 
-/* Campos editables */
-const DATA_KEYS=['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
+const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origenId:'Origen',destinoId:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos'});
@@ -150,7 +160,7 @@ const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos'];
 const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1}});
 function syncRefs(){
   PROYECTOS=DB.clientes.map(c=>({id:c.id,nombre:c.nombre,cliente:c.cliente,activo:c.activo!==false,
-    encargado:DB.usuarios.filter(u=>u.rol==='ENCARGADO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
+    encargado:DB.usuarios.filter(u=>u.rol==='OPERATIVO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
   PROYECTOS_X={};DB.clientes.forEach(c=>{PROYECTOS_X[c.id]=c.proyectos||[];if(!CAT.clientes.includes(c.cliente))CAT.clientes.push(c.cliente);});
   /* El catálogo de proyectos se completa con los proyectos reales que ya existen en los datos:
      así los selectores y la validación no quedan limitados a la lista de ejemplo. */
@@ -163,7 +173,7 @@ let STORAGE_OK=true,LAST=null,SIN_DEMO=false;
 function loadAll(){
   DB=null;
   try{localStorage.setItem('__probe','1');localStorage.removeItem('__probe');STORAGE_OK=true;}catch(e){STORAGE_OK=false;}
-  try{const raw=localStorage.getItem(LS);const o=JSON.parse(raw||'null');if(o&&Array.isArray(o.trips)&&(o.v===DB_VERSION||o.v===5||o.v===6)){DB=o;LAST=raw;if(o.v===5)migrar5a6(DB);if(DB.v===6)migrar6a7(DB);save();}}catch(e){}
+  try{const raw=localStorage.getItem(LS);const o=JSON.parse(raw||'null');if(o&&Array.isArray(o.trips)&&(o.v===DB_VERSION||o.v===5||o.v===6||o.v===7)){DB=o;LAST=raw;if(o.v===5)migrar5a6(DB);if(DB.v===6)migrar6a7(DB);if(DB.v===7)migrar7a8(DB);save();}}catch(e){}
   if(!DB){if(typeof seedDB==='function')seedDB();else{DB=blankDB();SIN_DEMO=true;}}
   try{const p=JSON.parse(localStorage.getItem(LSP)||'null');if(p)PREF=Object.assign(PREF,p);}catch(e){}
   syncRefs();
@@ -176,6 +186,18 @@ function migrar5a6(db){
   db.v=6;
   const adm=db.usuarios.find(u=>u.rol==='ADMIN');
   if(adm){DB=db;auditAdd({entidad:'USUARIO',accion:'Perfiles unificados: IMPLAN pasa a Encargado de proyecto',campo:'Rol',anterior:'IMPLAN',nuevo:'ENCARGADO',por:adm,ref:n+' usuario(s) migrado(s)'});}
+}
+function migrar7a8(db){
+  const map = {
+    'ENCARGADO': 'OPERATIVO',
+    'LIQUIDACIONES': 'VALIDADOR',
+    'COMERCIAL': 'FACTURACION',
+    'CONTABILIDAD': 'COBROS'
+  };
+  db.usuarios.forEach(u => {
+    if(map[u.rol]) u.rol = map[u.rol];
+  });
+  db.v = 8;
 }
 function migrar6a7(db){
   const estados={PENDIENTE:'PLANIFICADO',EN_CURSO:'EN_RUTA',FINALIZADO:'ENTREGADO',PENDIENTE_LIQUIDACION:'ENTREGADO',EN_REVISION:'LIQUIDADO',PENDIENTE_CORRECCION:'RECHAZADO',APROBADA:'ACEPTADO',PENDIENTE_COMERCIAL:'ACEPTADO',COMERCIAL_REGISTRADA:'FACTURADO'};
@@ -639,6 +661,8 @@ const API={
     const keys=[...DATA_KEYS,...TIEMPO_KEYS,'rutaRef'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origenId'||k==='destinoId'?'El origen y el destino se completan solos a partir de la ruta: no se escriben a mano.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
+    /* Estado inicial: Planificado por defecto; solo quien tiene permiso puede fijar otro (y siempre uno válido). */
+    if(!v.estado||!ESTADOS[v.estado]||!hasPerm(A,'viajes_editar_estado'))v.estado='PLANIFICADO';
     if(!v.rutaId)deny('Falta Ruta.','VALIDACION');
     keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
     let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
@@ -653,7 +677,7 @@ const API={
     const P=PILOTOS.find(p=>p.id===v.pilotoId);
     const t=Object.assign({id,proyecto:cliente,unidadId:P?P.unidad:'',estado:'PLANIFICADO',creadoPor:A.nombre,creadoPorId:A.id,creadoEn:nowIso(),comentarioRevision:'',rechazos:0,duplicadoAprobado:false,liqIntentos:0,liqActualId:'',liqAprobadaEn:'',agrupacionId:'',numeroFactura:'',tarifaCliente:'',tarifaId:'',costoProveedor:''},v,{rutaId,origenId:ruta?ruta.origenId:'',destinoId:ruta?ruta.destinoId:'',rutaRef:pend?v.rutaRef:''});
     DB.trips.push(t);
-    auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS.PLANIFICADO.l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}`});
+    auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}`});
     return t;
   });},
 
@@ -662,7 +686,10 @@ const API={
     const ks=Object.keys(cambios||{});if(!ks.length)return {cambios:0};
     const esAsig=asignado(A,t),todos=hasPerm(A,'viajes_ver_todos'),cl=DB.clientes.find(x=>x.id===t.proyecto)||{};
     ks.forEach(k=>{
-      if(TIEMPO_KEYS.includes(k)){
+      if(k==='estado'){
+        need(A,'viajes_editar_estado','modificar manualmente el estado del viaje');
+        if(!(cambios[k]===''||cambios[k]==null)&&!ESTADOS[cambios[k]])deny('Estado no válido.','VALIDACION');
+      }else if(TIEMPO_KEYS.includes(k)){
         need(A,'viajes_editar_tiempos','editar fechas y horas');
         if(!todos&&!esAsig)deny('Solo puedes editar viajes de tus clientes asignados.');
         if(!esAsig)deny('Solo el encargado del cliente puede editar fechas y horas.','CAMPO_NO_AUTORIZADO');
@@ -679,6 +706,7 @@ const API={
     ks.forEach(k=>{
       const nv=typeof cambios[k]==='string'?cambios[k].trim():cambios[k];
       const ov=t[k]==null?'':t[k];
+      if(k==='estado'&&(nv===''||nv==null))return;   /* sin estado elegido: se conserva el actual */
       if(String(nv==null?'':nv)===String(ov))return;
       if(['proyectoCat','fechaPlan','pilotoId','rutaId'].includes(k)&&(nv===''||nv==null))deny(`${LBL[k]} es obligatorio.`,'VALIDACION');
       if(k!=='rutaId'){const m=valKey(t.proyecto,k,nv);if(m)deny(m,'VALIDACION');}
@@ -998,7 +1026,7 @@ const API={
 
   /* ----- órdenes de pago a proveedores (OPL) ----- */
   /* Viajes facturados al cliente que aún no están en una orden de pago activa, con su tarifa de OPL. */
-  viajesPorPagar(uid){const A=actor(uid);need(A,'finanzas_ver','ver lo que se debe pagar a proveedores');
+  viajesPorPagar(uid){const A=actor(uid);if(!hasPerm(A,'finanzas_ver'))need(A,'tarifas_opl_ver','ver lo que se debe pagar a proveedores');
     return DB.trips.filter(t=>['FACTURADO','COBRADO'].includes(t.estado)&&t.opl)
       .filter(t=>!DB.ordenesPago.some(o=>o.estado==='ACTIVA'&&o.viajeIds.includes(t.id)))
       .map(t=>({id:t.id,proveedor:t.opl,cliente:t.proyecto,proyecto:t.proyectoCat,fecha:(t.fechaPlan||'').slice(0,10),
@@ -1080,7 +1108,7 @@ const API={
   });},
 
   resumenFinanciero(uid,f){
-    const A=actor(uid);need(A,'finanzas_ver','consultar el control financiero');
+    const A=actor(uid); if(!hasPerm(A,'finanzas_ver')) need(A,'tarifas_opl_ver','consultar el control financiero (OPL)');
     return JSON.parse(JSON.stringify(finCalc(DB.trips,DB.agrupaciones,DB.pagos,f)));
   },
   pagosDeViaje(uid,id){const A=actor(uid);need(A,'finanzas_ver','consultar pagos');return DB.pagos.filter(p=>p.viajeId===id).map(p=>Object.assign({},p));},
@@ -1255,7 +1283,7 @@ const API={
     if(nombre.length<3)deny('Escribe el nombre completo.','VALIDACION');
     if(DB.usuarios.some(u=>u.usuario===usuario&&u.id!==d.id))deny('Ese usuario ya existe.','VALIDACION');
     const clientes=(d.clientes||[]).filter(c=>DB.clientes.some(x=>x.id===c));
-    if(d.rol==='ENCARGADO'&&!clientes.length)deny('Este perfil necesita al menos un cliente asignado.','VALIDACION');
+    if(d.rol==='OPERATIVO'&&!clientes.length)deny('Este perfil necesita al menos un cliente asignado.','VALIDACION');
     /* Se acepta el proyecto si pertenece a alguno de los clientes elegidos; si el cliente todavía no
        tiene proyectos definidos, no se descarta lo que la administradora marcó (no se pierde en silencio). */
     const proys=(d.proyectos||[]).filter(p=>clientes.some(c=>{const cp=proyectosDe(c);return !cp.length||cp.includes(p);}));
