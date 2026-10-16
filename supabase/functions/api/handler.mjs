@@ -6,7 +6,7 @@ import { loadState, saveState, fotografia } from './store.mjs';
 
 export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'actualizarFactura', 'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
-  'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre'];
+  'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'cambiarClave'];
 export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
@@ -17,7 +17,7 @@ function rutasDeArchivos(args) {
   visita(args); return [...new Set(out)];
 }
 
-/* deps: { transaccion(fn(q)), firmar(paths)→Map, crearUsuarioAuth({email,password})→id, borrarUsuarioAuth(id) } */
+/* deps: { transaccion(fn(q)), firmar(paths)→Map, crearUsuarioAuth({email,password})→id, borrarUsuarioAuth(id), cambiarClaveAuth({id,password}) } */
 export async function ejecutar(deps, actorId, { op, args } = {}) {
   if (![...OPS_ESCRITURA, ...OPS_LECTURA].includes(op)) return falla('OP_INVALIDA', 'Operación no reconocida.');
   args = args == null ? [] : args;
@@ -72,6 +72,20 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
             authCreado = await deps.crearUsuarioAuth({ email: String(d.email).trim().toLowerCase(), password: String(d.clave) });
             args = [{ ...d, authId: authCreado, clave: '' }, ...args.slice(1)];
           }
+        }
+      }
+      /* reasignar la contraseña de un usuario: el cambio real vive en Supabase Auth (clave de servicio del servidor).
+         Primero se valida aqui; el evento queda en la auditoria al ejecutar la operacion del motor. */
+      if (op === 'cambiarClave' && !rechazo) {
+        if (!E.hasPerm(A, 'usuarios_gestionar')) rechazo = falla('SIN_PERMISO', 'Tu perfil no puede gestionar usuarios.');
+        else {
+          const u = db.usuarios.find(x => x.id === String(args[0] || ''));
+          if (!u) rechazo = falla('NO_EXISTE', 'Usuario no encontrado.');
+          else if (!u.email) rechazo = falla('VALIDACION', 'Ese usuario no tiene correo de acceso.');
+          else if (String(args[1] || '').length < 8) rechazo = falla('VALIDACION', 'La contraseña debe tener al menos 8 caracteres.');
+          else if (String(args[1] || '').length > 72) rechazo = falla('VALIDACION', 'La contraseña es demasiado larga (máximo 72 caracteres).');
+          else if (typeof deps.cambiarClaveAuth !== 'function') rechazo = falla('SERVIDOR', 'El servidor no tiene configurado el cambio de contraseñas.');
+          else await deps.cambiarClaveAuth({ id: u.id, password: String(args[1]) });
         }
       }
       if (rechazo) return { resp: rechazo, commit: false };

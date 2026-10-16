@@ -1289,6 +1289,17 @@ const API={
     syncRefs();return u;
   });},
 
+  cambiarClave(uid,id,clave){return exec(uid,'cambiarClave','',A=>{
+    need(A,'usuarios_gestionar','reasignar contraseñas de acceso');
+    const u=DB.usuarios.find(x=>x.id===String(id||''));if(!u)deny('Usuario no encontrado.','NO_EXISTE');
+    if(!u.email)deny('Ese usuario no tiene correo de acceso: créale uno desde Supabase.','VALIDACION');
+    const c=String(clave||'');
+    if(c.length<8)deny('La contraseña debe tener al menos 8 caracteres.','VALIDACION');
+    if(c.length>72)deny('La contraseña es demasiado larga (máximo 72).','VALIDACION');
+    auditAdd({entidad:'USUARIO',accion:'Contraseña de acceso reasignada por la administración',campo:'Contraseña',anterior:'(oculta)',nuevo:'(oculta)',por:A,ref:u.id});
+    return {id:u.id,usuario:u.usuario,email:u.email};
+  });},
+
   guardarReglasTorre(uid,d){return exec(uid,'guardarReglasTorre','',A=>{
     need(A,'clientes_gestionar','administrar las reglas de Torre de Control');
     const c=DB.clientes.find(x=>x.id===(d&&d.cliente));if(!c)deny('Cliente no válido.','VALIDACION');

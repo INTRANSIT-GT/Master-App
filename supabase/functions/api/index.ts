@@ -29,6 +29,11 @@ const deps = {
     return j.id as string;
   },
   async borrarUsuarioAuth(id: string) { await fetch(`${URL_}/auth/v1/admin/users/${id}`, { method: "DELETE", headers: adminHeaders }); },
+  /* Reasignar la contraseña de un usuario existente (Administración). Solo con la clave de servicio del servidor. */
+  async cambiarClaveAuth({ id, password }: { id: string; password: string }) {
+    const r = await fetch(`${URL_}/auth/v1/admin/users/${id}`, { method: "PUT", headers: adminHeaders, body: JSON.stringify({ password }) });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.msg || j.message || "No se pudo cambiar la contraseña en Supabase Auth"); }
+  },
 };
 
 function usuarioDelToken(req: Request): string | null {
