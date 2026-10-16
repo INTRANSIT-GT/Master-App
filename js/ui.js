@@ -1381,19 +1381,34 @@ function headerHTML(){
    v: pantalla existente · l: etiqueta si difiere de la habitual · k: clave propia cuando dos opciones abren la misma pantalla · tab: pestaña con la que abre */
 const ADM_MODULOS=[
   {t:'VIAJES',    items:[{v:'nuevo'},{v:'liquidaciones'},{v:'todos'},{v:'viajes',l:'Viajes por estado'}]},
-  {t:'TORRE',     items:[{v:'torre',l:'Viajes'}]},
+  {t:'TORRE',     items:[{v:'torre',k:'torre',l:'Viajes',tab:['torre','curso']},{v:'torre',k:'horarios',l:'Horarios y fechas',ic:'clock',tab:['torre','todos']}]},
   {t:'COMERCIAL', items:[{v:'comercial'},{v:'proyectos'},{v:'finanzas'},{v:'catalogos'}]},
   {t:'OPL',       items:[{v:'opl',l:'Proveedores'}]},
-  {t:'FLOTAS',    items:[{v:'catalogos',k:'pilotos',l:'Pilotos',ic:'users',tab:['cat','pil']}]}
+  {t:'FLOTAS',    items:[{v:'catalogos',k:'pilotos',l:'Pilotos',ic:'users',tab:['cat','pil']}]},
+  {t:'ADMINISTRACIÓN', items:[{v:'rutas'},{v:'usuarios'},{v:'auditoria'},{v:'modelo'}]}   /* pantallas que existen y no pertenecen a los otros módulos: siguen accesibles */
 ];
-const ADM_OTROS=['rutas','usuarios','auditoria','modelo'];      /* pantallas que existen y no pertenecen a los cinco módulos: siguen accesibles */
+const CHEV='<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 function admNavHTML(items,act){
   const pilAct=S.navK==='pilotos'&&(S.tab.cat||'pil')==='pil';
-  const on=it=>it.v!==act?false:(it.k==='pilotos'?pilAct:(it.v==='catalogos'?!pilAct:true));
-  const btn=it=>`<button data-act="nav" data-v="${it.v}" ${it.k?`data-k="${it.k}"`:''} ${it.tab?`data-tabk="${it.tab[0]}" data-tabv="${it.tab[1]}"`:''} ${on(it)?'aria-current="page"':''}>${icon(it.ic||NAVLBL[it.v][1],18)}${esc(it.l||NAVLBL[it.v][0])}</button>`;
-  const grupo=(titulo,its,id)=>its.length?`<div class="grp" role="group" aria-labelledby="gm_${id}"><div class="grp-t" id="gm_${id}">${esc(titulo)}</div>${its.map(btn).join('')}</div>`:'';
   const ok=its=>its.filter(it=>items.includes(it.v));
-  return `<nav class="side" aria-label="Navegación principal">${ok([{v:'inicio'}]).map(btn).join('')}${ADM_MODULOS.map((m,i)=>grupo(m.t,ok(m.items),i)).join('')}${grupo('ADMINISTRACIÓN',ok(ADM_OTROS.map(v=>({v}))),'adm')}</nav>`;
+  /* opción activa: si dos opciones comparten pantalla, manda la clave k; la que no tiene k es la «por defecto» de esa pantalla */
+  const on=it=>{
+    if(it.v!==act)return false;
+    if(it.k==='pilotos')return pilAct;
+    const hermanas=ADM_MODULOS.flatMap(m=>m.items).filter(x=>x.v===it.v&&x.k);
+    if(it.k)return S.navK===it.k;
+    return it.v==='catalogos'?!pilAct:!hermanas.some(x=>S.navK===x.k);
+  };
+  const mods=ADM_MODULOS.map((m,i)=>({m,i,its:ok(m.items)})).filter(x=>x.its.length);
+  /* al llegar a una pantalla nueva se abre el módulo que la contiene; después el usuario abre/cierra a mano */
+  const clave=act+'|'+S.navK+'|'+(pilAct?1:0);
+  if(S.navKey!==clave){S.navKey=clave;const x=mods.find(x=>x.its.some(on));if(x)S.navOpen=x.i;}
+  if(S.navOpen===undefined)S.navOpen=-1;
+  const btn=it=>`<button data-act="nav" data-v="${it.v}" ${it.k?`data-k="${it.k}"`:''} ${it.tab?`data-tabk="${it.tab[0]}" data-tabv="${it.tab[1]}"`:''} ${on(it)?'aria-current="page"':''}>${icon(it.ic||NAVLBL[it.v][1],18)}${esc(it.l||NAVLBL[it.v][0])}</button>`;
+  const grupo=({m,i,its})=>{const ab=S.navOpen===i,act_=its.some(on);
+    return `<div class="grp${ab?' open':''}${act_?' has-cur':''}" data-mod="${i}"><button class="grp-t" id="gm_${i}" data-act="navMod" data-i="${i}" aria-expanded="${ab}" aria-controls="gp_${i}"><span>${esc(m.t)}</span>${CHEV}</button><div class="grp-p" id="gp_${i}" role="group" aria-labelledby="gm_${i}" ${ab?'':'hidden'}>${its.map(btn).join('')}</div></div>`;};
+  const ini=ok([{v:'inicio'}]).map(btn).join('');
+  return `<nav class="side side-acc" aria-label="Navegación principal">${ini}${mods.map(grupo).join('')}</nav>`;
 }
 function navHTML(){
   const items=navItems();
@@ -1468,6 +1483,8 @@ const ACT={
     render();toast('Datos de ejemplo reiniciados.');
   },
   async logout(){if(S.user)await BACKEND.logout();S.edit=null;S.user=null;S.view='login';S.menu=false;S.modal=null;S.form=null;S.loginErr='';S.loginU='';S.tab={};S.fEstado='';S.fProy='';S.tProy='';S.sel=[];try{history.pushState(null,'','#login');}catch(e){}render();},
+  navMod(d){const i=+d.i,ab=S.navOpen!==i;S.navOpen=ab?i:-1;
+    document.querySelectorAll('nav.side .grp').forEach(g=>{const o=ab&&+g.dataset.mod===i;g.classList.toggle('open',o);const h=g.querySelector('.grp-t'),p=g.querySelector('.grp-p');if(h)h.setAttribute('aria-expanded',o);if(p)p.hidden=!o;});},
   async nav(d){S.fEstado='';S.q='';S.fCli='';S.fPcat='';S.fProy='';S.fDesde='';S.fHasta='';S.fProv='';S.sortL=null;S.navK=d.k||'';if(d.tabk)S.tab[d.tabk]=d.tabv;go(d.v);},
   async detalle(d){go('detalle',d.id);},
   async back(){const f=S.from;if(f&&f.view&&allowed(f.view))go(f.view,f.param);else go(homeOf(S.user));},
