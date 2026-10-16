@@ -577,6 +577,8 @@ const optsProyectos=d=>d.cliente?proyectosAsig(S.user,d.cliente).map(p=>({id:p,n
 const optsDestinos=d=>DESTINOS.filter(x=>x.proyecto===d.cliente).map(x=>({id:x.id,nombre:x.nombre}));
 const optsOrigenes=()=>ORIGENES.map(o=>({id:o.id,nombre:o.nombre}));
 const ACT={
+  /* Entrar a la aplicación (botón INGRESAR del formulario de acceso) */
+  login:doLogin,
   /* mover elementos entre las dos listas (clientes / proyectos asignados) */
   async mvMove(d){
     const m=S.modal;if(!m||!d.k)return;
