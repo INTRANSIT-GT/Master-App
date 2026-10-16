@@ -94,19 +94,20 @@ const claveDe = (spec, r) => spec.key.map(k => r[k]).join('\u0001');
 
 export async function loadState(q, opts = {}) {
   const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], ordenesPago: [], rutas: [], tarifas: [], mem: [], notificaciones: [], config: {}, seq: {} };
-  for (const spec of TABLAS) {
+  /* Todas las lecturas se lanzan a la vez: el controlador las canaliza en un solo viaje de ida y vuelta, en vez de
+     una lectura por tabla con su latencia propia cada una. Cada tarea escribe una clave distinta de db/catalogos. */
+  const leerSpecs = Promise.all(TABLAS.map(async spec => {
     const orden = spec.key.map(k => spec.cols.find(c => c[0] === k)[1]).join(', ');
-    let rows;
     /* La auditoría es de solo agregar y crece sin límite. Para operaciones que escriben solo se necesita el último
        registro (para encadenar el hash de los eventos nuevos): se lee solo la cola. En lectura completa (snapshot,
        verificación de la cadena) se lee entera. */
+    let rows;
     if (spec.tabla === 'auditoria' && opts.auditoriaTail) {
       const cols = spec.cols.map(sel).join(', ') + (spec.sinExtra ? '' : ', extra');
       rows = (await q(`select ${cols} from master.auditoria order by id desc limit ${Number(opts.auditoriaTail)}`)).rows;
     } else rows = await leerTabla(q, spec.tabla, spec.cols, !spec.sinExtra, orden);
-    let partes = {};
+    const partes = {};
     for (const p of spec.partes || []) {
-      const idCol = spec.cols.find(c => c[0] === spec.key[0])[1];
       const pr = await q(`select ${p.fk}, ${p.cols.map(sel).join(', ')} from master.${p.tabla}`);
       partes[p.tabla] = new Map(pr.rows.map(r => [r[p.fk], r]));
     }
@@ -122,14 +123,15 @@ export async function loadState(q, opts = {}) {
       if (spec.lista === 'evidencias') o.dataUrl = '';
       return o;
     });
-  }
-  (await q('select clave, valor::bigint as valor from master.secuencias')).rows.forEach(r => { db.seq[r.clave] = Number(r.valor); });
-  (await q('select clave, valor from master.config')).rows.forEach(r => { db.config[r.clave] = typeof r.valor === 'string' ? JSON.parse(r.valor) : r.valor; });
+  }));
+  const leerSeq = q('select clave, valor::bigint as valor from master.secuencias').then(({ rows }) => rows.forEach(r => { db.seq[r.clave] = Number(r.valor); }));
+  const leerCfg = q('select clave, valor from master.config').then(({ rows }) => rows.forEach(r => { db.config[r.clave] = typeof r.valor === 'string' ? JSON.parse(r.valor) : r.valor; }));
   const catalogos = {};
-  for (const c of CATALOGOS) {
+  const leerCat = Promise.all(CATALOGOS.map(async c => {
     const rows = await leerTabla(q, c.tabla, c.cols, false, c.cols[0][1]);
     catalogos[c.lista] = rows.map(r => Object.fromEntries(c.cols.map(([f, col, t]) => [f, dec(t, r[col])])));
-  }
+  }));
+  await Promise.all([leerSpecs, leerSeq, leerCfg, leerCat]);
   return { db, catalogos };
 }
 
