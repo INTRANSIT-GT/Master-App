@@ -579,8 +579,24 @@ const API={
     const A=actor(uid),t=API.viaje(uid,id);
     const full=hasPerm(A,'historial_ver'),tiempos=hasPerm(A,'viajes_editar_tiempos');
     if(!full&&!(soloTiempos&&tiempos))throw new ApiError('SIN_PERMISO','Tu perfil no puede ver el historial completo.');
-    const verMoney=hasPerm(A,'finanzas_ver'),verViat=verMoney||hasPerm(A,'viajes_editar_datos');
-    return DB.audit.filter(e=>e.viajeId===t.id&&e.entidad!=='SEGURIDAD'&&(e.entidad!=='AGRUPACION'||hasPerm(A,'comercial_ver'))&&(e.entidad!=='FINANZAS'||verMoney)&&(!MONEY_LBL.includes(e.campo)||(e.campo==='Q viáticos'?verViat:verMoney))&&(!soloTiempos||TIEMPO_KEYS.some(k=>LBL[k]===e.campo)));
+    return (API.historiales(uid,soloTiempos).get(t.id)||[]).slice();
+  },
+  /* Igual que historial() pero para TODOS los viajes de una vez: recorre la auditoría UNA sola vez y la agrupa por
+     viaje. Evita el costo cuadrático (viajes × auditoría) al armar el snapshot. Devuelve un Map viajeId → eventos. */
+  historiales(uid,soloTiempos){
+    const A=actor(uid),porViaje=new Map();
+    const full=hasPerm(A,'historial_ver'),tiempos=hasPerm(A,'viajes_editar_tiempos');
+    if(!full&&!(soloTiempos&&tiempos))return porViaje;
+    const verMoney=hasPerm(A,'finanzas_ver'),verViat=verMoney||hasPerm(A,'viajes_editar_datos'),comercial=hasPerm(A,'comercial_ver');
+    for(const e of DB.audit){
+      if(e.entidad==='SEGURIDAD')continue;
+      if(e.entidad==='AGRUPACION'&&!comercial)continue;
+      if(e.entidad==='FINANZAS'&&!verMoney)continue;
+      if(MONEY_LBL.includes(e.campo)&&!(e.campo==='Q viáticos'?verViat:verMoney))continue;
+      if(soloTiempos&&!TIEMPO_KEYS.some(k=>LBL[k]===e.campo))continue;
+      let a=porViaje.get(e.viajeId);if(!a){a=[];porViaje.set(e.viajeId,a);}a.push(e);
+    }
+    return porViaje;
   },
   liquidaciones(uid,id){
     const A=actor(uid),t=API.viaje(uid,id);

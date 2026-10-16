@@ -104,7 +104,14 @@ async function armarSnapshot(E, uid, deps) {
   const vis = new Set(trips.map(t => t.id));
   const puedeLiq = has('liq_ver') || has('liq_enviar');
   const liquidaciones = [], evidencias = [], audit = new Map();
-  if (puedeLiq) for (const t of trips) seguro(() => API.liquidaciones(uid, t.id), []).forEach(l => { const { evidencia, ...r } = l; liquidaciones.push(r); });
+  if (puedeLiq) {
+    /* Agrupar las liquidaciones por viaje UNA sola vez. Antes se llamaba API.liquidaciones(uid,t.id) por cada viaje,
+       y cada llamada hacía un find lineal sobre los viajes y un filter lineal → O(viajes²). Con miles de viajes eso
+       revienta el límite de CPU de la Edge Function (error 546). */
+    const liqPorViaje = new Map();
+    for (const l of DB.liquidaciones) { let a = liqPorViaje.get(l.viajeId); if (!a) { a = []; liqPorViaje.set(l.viajeId, a); } a.push(l); }
+    for (const t of trips) for (const l of (liqPorViaje.get(t.id) || [])) { const { evidencia, ...r } = l; liquidaciones.push(r); }
+  }
   const evs = puedeLiq ? DB.evidencias.filter(e => vis.has(e.viajeId)) : [];
   const agr = (has('comercial_ver') || has('finanzas_ver')) ? seguro(() => API.agrupaciones(uid), []) : [];
   const puedeOrd = has('finanzas_ver') || has('comercial_ver') || has('pagos_registrar');
@@ -121,10 +128,9 @@ async function armarSnapshot(E, uid, deps) {
   if (has('auditoria_ver')) DB.audit.slice(-2000).forEach(e => audit.set(e.id, e));
   else {
     if (has('comercial_ver')) DB.audit.filter(e => e.entidad === 'AGRUPACION').forEach(e => audit.set(e.id, e));
-    for (const t of trips) {
-      const h = has('historial_ver') ? seguro(() => API.historial(uid, t.id), []) : has('viajes_editar_tiempos') ? seguro(() => API.historial(uid, t.id, true), []) : [];
-      h.forEach(e => audit.set(e.id, e));
-    }
+    /* Un solo recorrido de la auditoría para TODOS los viajes (antes: API.historial por viaje → O(viajes²)). */
+    const histPorViaje = API.historiales(uid, !has('historial_ver') && has('viajes_editar_tiempos'));
+    for (const t of trips) for (const e of (histPorViaje.get(t.id) || [])) audit.set(e.id, e);
   }
   const fiscal = has('clientes_gestionar') || has('comercial_ver') || has('finanzas_ver') || has('tablero_ver');
   const clientes = DB.clientes.map(c => fiscal ? c : { ...c, nit: '', direccionFiscal: '', correoFacturacion: '', contacto: '', telefono: '', creditoDias: '', observaciones: '' });
