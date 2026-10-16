@@ -234,7 +234,7 @@ function puedeVer(A,t){
    p. ej. creados por la administración). Admin/quién tiene «ver todos» no se ve limitado. */
 const esDueno=(A,t)=>{if(!t.creadoPorId)return true;if(t.creadoPorId===A.id)return true;const u=DB.usuarios.find(x=>x.id===t.creadoPorId);return !u||u.rol==='ADMIN';};
 const deny=(msg,code)=>{throw new ApiError(code||'DENEGADO',msg);};
-function need(A,p,label){if(!hasPerm(A,p))throw new ApiError('SIN_PERMISO',`Tu perfil (${ROLES[A.rol].label}) no puede ${label}.`);}
+function need(A,p,label){if(!hasPerm(A,p))throw new ApiError('SIN_PERMISO',`Tu perfil (${(ROLES[A.rol]||{label:A.rol||'sin rol'}).label}) no puede ${label}.`);}
 function getT(id){const t=DB.trips.find(x=>x.id===id);if(!t)throw new ApiError('NO_EXISTE','El viaje no existe.');return t;}
 /* Ejecuta una operación: valida actor, guarda si sale bien y registra los rechazos en la bitácora. */
 function exec(uid,nombre,viajeId,fn){
@@ -407,7 +407,7 @@ function activarRutaSiLista(r,A){
 function notificar(A,o){
   const n={id:'NOT-'+pad4(DB.seq.not++),tipo:o.tipo,destinatarios:o.destinatarios||[],usuarios:o.usuarios||[],asunto:o.asunto,detalle:o.detalle||{},creadaPor:A.nombre,creadaPorId:A.id,creadaEn:nowIso(),leidaPor:[],canal:'EN_APP',externo:{enviado:false,motivo:'No hay servicio de correo ni mensajería configurado: el aviso solo aparece dentro de la aplicación.'}};
   DB.notificaciones.push(n);
-  auditAdd({entidad:'NOTIFICACION',accion:'Notificación generada (solo dentro de la aplicación)',campo:'Destinatarios',nuevo:n.destinatarios.length?n.destinatarios.map(r=>ROLES[r].label).join(', '):'usuario solicitante',por:A,ref:`${n.id} · ${o.asunto}`});
+  auditAdd({entidad:'NOTIFICACION',accion:'Notificación generada (solo dentro de la aplicación)',campo:'Destinatarios',nuevo:n.destinatarios.length?n.destinatarios.map(r=>(ROLES[r]||{label:r}).label).join(', '):'usuario solicitante',por:A,ref:`${n.id} · ${o.asunto}`});
   return n;
 }
 function crearRutaPendiente(A,o){

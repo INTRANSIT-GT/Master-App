@@ -21,14 +21,15 @@ const J=t=>{
     origen:(ORIGENES.find(o=>o.id===t.origenId)||{}).nombre,
     destino:(DESTINOS.find(d=>d.id===t.destinoId)||{}).nombre});
 };
-const homeOf=u=>ROLES[u.rol].home;
+const rolDe=r=>(ROLES[r]||{label:String(r||'Sistema'),home:'inicio',nav:[]});
+const homeOf=u=>rolDe(u&&u.rol).home;
 function allowed(v){
   if(!S.user)return false;
   if(v==='detalle')return true;
   if(v==='proyecto')return allowed('proyectos');
-  return ROLES[S.user.rol].nav.includes(v)&&(!VIEW_PERM[v]||hp(VIEW_PERM[v]));
+  return rolDe(S.user.rol).nav.includes(v)&&(!VIEW_PERM[v]||hp(VIEW_PERM[v]));
 }
-const navItems=()=>ROLES[S.user.rol].nav.filter(v=>allowed(v));
+const navItems=()=>rolDe(S.user.rol).nav.filter(v=>allowed(v));
 
 /* ---------- Componentes ---------- */
 /* Colores de estado: UNA sola tabla. Cada estado del proceso trae su color en ESTADOS (clase CSS st-<ESTADO>). */
@@ -123,7 +124,7 @@ const VIEWS={},BODY={};
 function loginHTML(){
   const sb=BACKEND.modo==='supabase';
   let host='';if(sb){try{host=new URL(MASTER_CONFIG.SUPABASE_URL).host;}catch(e){}}
-  const demo=sb?'':DB.usuarios.filter(u=>u.activo).map(u=>`<button type="button" data-act="fill" data-u="${u.usuario}"><b>${esc(first(u.nombre))}</b><small>${esc(ROLES[u.rol].label)}${(u.rol!=='ADMIN'&&clientesAsig(u).length)?' · '+esc(clientesAsig(u).join(', ')):''}</small></button>`).join('');
+  const demo=sb?'':DB.usuarios.filter(u=>u.activo).map(u=>`<button type="button" data-act="fill" data-u="${u.usuario}"><b>${esc(first(u.nombre))}</b><small>${esc(rolL(u.rol))}${(u.rol!=='ADMIN'&&clientesAsig(u).length)?' · '+esc(clientesAsig(u).join(', ')):''}</small></button>`).join('');
   const inst=PWA.puedeMostrarInstalar()?`<button class="btn" type="button" data-act="${PWA.prompt?'instalar':'instalarAyuda'}" style="width:100%;margin-top:14px">${icon('phone',18)} ${PWA.prompt?'Instalar aplicación':'Cómo instalar la aplicación'}</button>`:'';
   return `<div class="login">
     <section class="lp">
@@ -366,7 +367,7 @@ VIEWS.proyectos=()=>{
 VIEWS.proyecto=()=>{
   const p=PROYECTOS.find(x=>x.id===S.param);if(!p)return empty('Proyecto no encontrado');
   const pt=vis().filter(t=>t.proyecto===p.id),list=pt.filter(t=>matchEst(t,S.fEstado));
-  return `<div class="inner"><button class="btn ghost sm" data-act="nav" data-v="${hp('tablero_ver')?'proyectos':ROLES[S.user.rol].home}" style="margin-bottom:12px">${icon('back',16)} Proyectos</button>
+  return `<div class="inner"><button class="btn ghost sm" data-act="nav" data-v="${hp('tablero_ver')?'proyectos':homeOf(S.user)}" style="margin-bottom:12px">${icon('back',16)} Proyectos</button>
     ${pageHead(esc(p.nombre),`${esc(p.cliente)} · Encargado: ${esc(p.encargado)}`)}<div class="card" style="margin-bottom:16px">${statBar(pt)}</div>${estadoChips()}${tableHTML(list,null,'proyecto')}</div>`;
 };
 function estadoChips(){
@@ -437,7 +438,7 @@ function menuHTML(){
   if(!S.menu)return'';
   const u=S.user;
   return `<div class="mback" data-act="menuClose"></div><div class="menu" role="menu">
-    ${u?`<div class="mh"><b>${esc(u.nombre)}</b><small>${esc(ROLES[u.rol].label)}</small></div>`:`<div class="mh"><b>Opciones</b></div>`}
+    ${u?`<div class="mh"><b>${esc(u.nombre)}</b><small>${esc(rolL(u.rol))}</small></div>`:`<div class="mh"><b>Opciones</b></div>`}
     <button data-act="togglePhone">${icon('phone',18)} Vista teléfono<span class="tag">${PREF.phone?'Activada':'Desactivada'}</span></button>
     <button data-act="toggleArch">${icon('code',18)} Notas de arquitectura<span class="tag">${PREF.arch?'Activadas':'Desactivadas'}</span></button>
     ${PWA.puedeMostrarInstalar()?`<button data-act="${PWA.prompt?'instalar':'instalarAyuda'}">${icon('phone',18)} ${PWA.prompt?'Instalar aplicación':'Cómo instalar la aplicación'}</button>`:''}
@@ -451,6 +452,18 @@ function fieldM(f,data){
   if(f.type==='select'){const op=f.optsFn?f.optsFn(data):f.opts;return `${W}${lab}<select id="${id}" data-mf="${f.k}"><option value="">${esc(f.ph||'Selecciona')}</option>${op.map(o=>`<option value="${esc(o.id)}" ${o.id===val?'selected':''}>${esc(o.nombre)}</option>`).join('')}</select></div>`;}
   if(f.type==='check')return `<div class="fgroup"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-mf="${f.k}" ${val?'checked':''}> ${f.label}</label></div>`;
     if(f.type==='multiselect'){const op=f.optsFn?f.optsFn(data):(f.opts||[]);return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><select id="${id}" data-mfm="${f.k}" multiple size="6" style="height:auto">${op.map(o=>`<option value="${esc(o.id)}" ${(val||[]).includes(o.id)?'selected':''}>${esc(o.nombre)}</option>`).join('')}</select><span class="hint">Mantén presionada la tecla Ctrl (o Cmd en Mac) para elegir varios proyectos.</span></div>`;}
+  if(f.type==='mover'){
+    const op=(f.optsFn?f.optsFn(data):(f.opts||[]));
+    const asg=(val||[]).filter(id=>op.some(o=>o.id===id));
+    const no=op.filter(o=>!asg.includes(o.id));
+    const col=(id,items,ph)=>`<select id="${id}" multiple size="8" aria-label="${esc(ph)}" style="width:100%;height:auto">${items.length?items.map(o=>`<option value="${esc(o.id)}">${esc(o.nombre)}</option>`).join(''):`<option disabled value="">${esc(ph)}</option>`}</select>`;
+    const b=(dir,lab,tip,cls)=>`<button type="button" class="btn sm ${cls||''}" data-act="mvMove" data-k="${f.k}" data-dir="${dir}" title="${esc(tip)}" aria-label="${esc(tip)}">${lab}</button>`;
+    return `${W}${lab}<div class="mv">
+      <div class="mv-col"><div class="mv-t">Sin asignar · ${no.length}</div>${col('mv_'+f.k+'_no',no,'No queda nada por asignar')}</div>
+      <div class="mv-btns">${b('to','\u203A','Asignar lo seleccionado')}${b('from','\u2039','Quitar lo seleccionado')}${b('toall','\u00BB','Asignar todo','ghost')}${b('fromall','\u00AB','Quitar todo','ghost')}</div>
+      <div class="mv-col"><div class="mv-t">Asignados · ${asg.length}</div>${col('mv_'+f.k+'_si',asg,'Todavía no hay nada asignado')}</div>
+    </div>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
+  }
   if(f.type==='checks'){const op=f.optsFn?f.optsFn(data):(f.opts||[]);return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><div class="chips">${op.length?op.map(o=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mfm="${f.k}" value="${esc(o.id)}" ${(val||[]).includes(o.id)?'checked':''}> ${esc(o.nombre)}</label>`).join(''):'<span class="mute">Primero elige el cliente para ver sus proyectos</span>'}</div></div>`;}
   if(f.type==='file')return `${W}${lab}<input type="file" id="${id}" data-mfile="${f.k}" accept="image/*,application/pdf">${val?`<span class="hint">✓ Archivo cargado</span>`:''}</div>`;
   return `${W}${lab}<input type="${f.type||'text'}" id="${id}" data-mf="${f.k}" value="${esc(val)}" autocomplete="off" ${f.ro?'readonly':''} ${f.type==='number'?'step="any" min="0" inputmode="decimal"':''}>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
@@ -485,7 +498,7 @@ function headerHTML(){
   const u=S.user;
   return `<header class="top"><div class="brand"><span class="isotile"><img src="${ISOLOGO}" alt="In Transit"></span><span>Control de viajes<small>In Transit · innovative outsourcing</small></span></div><span class="spacer"></span>${(BACKEND.modo==='demo'&&!SIN_DEMO)?'<span class="demotag" title="Los datos son de demostración y viven solo en este navegador">Modo demostración</span>':''}
     <button class="bell" data-act="notifOpen" aria-label="Notificaciones${notifData().filter(n=>!n.leida).length?' ('+notifData().filter(n=>!n.leida).length+' sin leer)':''}">${icon('bell',20)}${notifData().filter(n=>!n.leida).length?`<span class="bcount">${notifData().filter(n=>!n.leida).length}</span>`:''}</button>
-    <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(ROLES[u.rol].label)}${(!esEnc()&&u.rol!=='ADMIN'&&clientesAsig(u).length)?' · '+esc(clientesAsig(u).join(', ')):''}</span></span></button></header>`;
+    <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(rolL(u.rol))}${(!esEnc()&&u.rol!=='ADMIN'&&clientesAsig(u).length)?' · '+esc(clientesAsig(u).join(', ')):''}</span></span></button></header>`;
 }
 /* ---- Perfil «Administrador»: menú lateral agrupado por módulos. Solo reordena el acceso a pantallas que YA existen;
    cada opción respeta los mismos permisos de siempre (allowed) y los demás perfiles conservan su menú tal cual. ----
@@ -564,6 +577,26 @@ const optsProyectos=d=>d.cliente?proyectosAsig(S.user,d.cliente).map(p=>({id:p,n
 const optsDestinos=d=>DESTINOS.filter(x=>x.proyecto===d.cliente).map(x=>({id:x.id,nombre:x.nombre}));
 const optsOrigenes=()=>ORIGENES.map(o=>({id:o.id,nombre:o.nombre}));
 const ACT={
+  /* mover elementos entre las dos listas (clientes / proyectos asignados) */
+  async mvMove(d){
+    const m=S.modal;if(!m||!d.k)return;
+    const k=d.k,dir=d.dir||'to',cur=(m.data[k]||[]).slice();
+    const leer=id=>{const el=document.getElementById(id);return el?[...el.selectedOptions].map(o=>o.value).filter(Boolean):[];};
+    const op=(m.fields||[]).find(x=>x.k===k);
+    const todos=(op?(op.optsFn?op.optsFn(m.data):(op.opts||[])):[]).map(o=>o.id);
+    if(dir==='to')m.data[k]=[...new Set(cur.concat(leer('mv_'+k+'_no')))];
+    else if(dir==='from'){const q=leer('mv_'+k+'_si');m.data[k]=cur.filter(x=>!q.includes(x));}
+    else if(dir==='toall')m.data[k]=[...new Set(cur.concat(todos))];
+    else if(dir==='fromall')m.data[k]=[];
+    /* al cambiar los clientes, se quitan los proyectos que ya no corresponden */
+    if(k==='clientes'&&m.data.proyectos){
+      const val=new Set();(m.data.clientes||[]).forEach(c=>(PROYECTOS_X[c]||[]).forEach(p=>val.add(p)));
+      const pr=(m.fields||[]).find(x=>x.k==='proyectos');
+      const todosP=(pr?(pr.optsFn?pr.optsFn(m.data):(pr.opts||[])):[]).map(o=>o.id);
+      m.data.proyectos=m.data.proyectos.filter(p=>val.has(p)&&todosP.includes(p));
+    }
+    render();
+  },
   async fill(d){const u=DB.usuarios.find(x=>x.usuario===d.u);$('#u').value=u.usuario;$('#p').value=u.clave;S.loginU=u.usuario;},
   async instalar(){await PWA.instalar();render();},
   async instalarAyuda(){formM({title:'Instalar la aplicación',text:'Elige tu dispositivo. La instalación depende del navegador; no todos los navegadores la ofrecen.',summary:PWA.ayudaHTML(),noCancel:true,ok:'Cerrar',act:'closeModal',ancho:'640px'});},

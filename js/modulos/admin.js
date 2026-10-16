@@ -3,13 +3,20 @@
    Usuarios, permisos, auditoría, catálogos y modelo de datos.
    ===================================================================== */
 
+/* Columna «Clientes» del listado: los primeros 3 y, si hay más, un contador (+N) con el detalle al pasar el ratón. */
+function cliCelda(u){
+  const c=clientesAsig(u);
+  if(!c.length)return u.rol==='OPERATIVO'?'<span class="mute">ninguno</span>':'<span class="mute">todos / no aplica</span>';
+  const v=c.slice(0,3).map(esc).join(', ');
+  return c.length>3?v+' <span class="mute" title="'+esc(c.join(', '))+'">+'+String(c.length-3)+'</span>':v;
+}
 /* ---- Usuarios y permisos ---- */
 VIEWS.usuarios=()=>{
   const grupos=[...new Set(PERMS.map(p=>p[2]))],roles=Object.keys(ROLES),canP=hp('permisos_gestionar');
   const pg=paginar('usr',DB.usuarios);
   return `<div class="inner" style="max-width:1300px">${pageHead('Usuarios y permisos','Cada acción se valida contra esta matriz y contra las reglas fijas de separación de funciones',hp('usuarios_gestionar')?`<button class="btn primary" data-act="usuarioOpen" data-id="">${icon('plus',18)} Nuevo usuario</button>`:'')}
     <div class="tablewrap scrollx"><table class="resp"><thead><tr><th>ID</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Clientes asignados</th><th>Estado</th><th></th></tr></thead><tbody>
-    ${pg.filas.map(u=>`<tr><td data-l="ID"><code>${u.id}</code></td><td data-l="Nombre"><b>${esc(u.nombre)}</b></td><td data-l="Usuario"><code>${esc(u.usuario)}</code></td><td data-l="Rol">${esc(ROLES[u.rol].label)}</td><td data-l="Clientes">${clientesAsig(u).length?esc(clientesAsig(u).join(', ')):(u.rol==='OPERATIVO'?'<span class="mute">ninguno</span>':'<span class="mute">todos / no aplica</span>')}</td><td data-l="Estado">${u.activo?'<span class="badge st-COMERCIAL_REGISTRADA">Activo</span>':'<span class="badge st-PENDIENTE">Inactivo</span>'}</td><td data-l="">${hp('usuarios_gestionar')?`<button class="btn sm" data-act="usuarioOpen" data-id="${u.id}">Editar</button> ${u.email?`<button class="btn sm ghost" data-act="claveOpen" data-id="${u.id}">Contraseña</button>`:''}`:''}</td></tr>`).join('')}</tbody></table></div>${paginador('usr',pg)}
+    ${pg.filas.map(u=>`<tr><td data-l="ID"><code>${u.id}</code></td><td data-l="Nombre"><b>${esc(u.nombre)}</b></td><td data-l="Usuario"><code>${esc(u.usuario)}</code></td><td data-l="Rol">${esc(rolL(u.rol))}</td><td data-l="Clientes">${cliCelda(u)}</td><td data-l="Estado">${u.activo?'<span class="badge st-COMERCIAL_REGISTRADA">Activo</span>':'<span class="badge st-PENDIENTE">Inactivo</span>'}</td><td data-l="">${hp('usuarios_gestionar')?`<button class="btn sm" data-act="usuarioOpen" data-id="${u.id}">Editar</button> ${u.email?`<button class="btn sm ghost" data-act="claveOpen" data-id="${u.id}">Contraseña</button>`:''}`:''}</td></tr>`).join('')}</tbody></table></div>${paginador('usr',pg)}
     <section class="section"><h2>Matriz de permisos por rol</h2><div class="mute" style="margin:-6px 0 10px;font-size:13px">${icon('lock',14)} = permiso que ese rol nunca puede tener (separación de funciones). Cada cambio queda en la auditoría.</div>
     <div class="tablewrap scrollx"><table class="pm"><thead><tr><th>Permiso</th>${roles.map(r=>`<th>${esc(ROLES[r].label)}</th>`).join('')}</tr></thead><tbody>
     ${grupos.map(g=>`<tr class="grp"><td colspan="${roles.length+1}">${g}</td></tr>${PERMS.filter(p=>p[2]===g).map(p=>`<tr><td>${p[1]}<br><code class="mute">${p[0]}</code></td>${roles.map(r=>{const proh=(PROHIBIDO[r]||[]).includes(p[0]),sie=(SIEMPRE[r]||[]).includes(p[0]),on=hasPerm({activo:true,rol:r},p[0]);return `<td>${proh?`<span class="mute" title="No permitido para este rol">${icon('lock',14)}</span>`:`<input type="checkbox" data-perm="${r}|${p[0]}" ${on?'checked':''} ${!canP||sie?'disabled':''} aria-label="${esc(p[1])} · ${esc(ROLES[r].label)}">`}</td>`;}).join('')}</tr>`).join('')}`).join('')}
@@ -101,12 +108,12 @@ Object.assign(ACT,{
     const u=d.id?DB.usuarios.find(x=>x.id===d.id):null;
     formM({title:u?`Editar usuario ${u.id}`:'Nuevo usuario',text:'Contraseña de demostración: se guarda en el navegador y no es segura para producción.',
       fields:[{k:'nombre',label:'Nombre completo',req:1},{k:'usuario',label:'Usuario (nombre corto)',req:1},{k:'email',label:BACKEND.modo==='supabase'?'Correo con el que ingresa':'Correo (opcional)',type:'email',req:BACKEND.modo==='supabase'&&!u,ro:BACKEND.modo==='supabase'&&!!u},{k:'clave',label:u?(BACKEND.modo==='supabase'?'(usa el botón «Contraseña» de la lista para reasignarla)':'Nueva contraseña (opcional)'):(BACKEND.modo==='supabase'?'Contraseña inicial (mínimo 8 caracteres)':'Contraseña'),type:'password',req:!u,ro:BACKEND.modo==='supabase'&&!!u},
-        {k:'rol',label:'Rol',type:'select',req:1,opts:Object.keys(ROLES).map(r=>({id:r,nombre:ROLES[r].label}))},
-        {k:'clientes',label:'Clientes asignados (encargado de proyecto)',type:'checks',opts:DB.clientes.map(c=>({id:c.id,nombre:c.nombre}))},
-        {k:'proyectos',label:'Proyectos asignados (si eliges alguno, solo verá los viajes y rutas de esos proyectos)',type:'checks',optsFn:x=>{const set=new Set();(x.clientes||[]).forEach(c=>(PROYECTOS_X[c]||[]).forEach(p=>set.add(p)));const list=set.size?[...set]:CAT.proyectos;return list.map(p=>({id:p,nombre:p}));}},
+        {k:'rol',label:'Rol',type:'select',req:1,opts:(()=>{const ks=Object.keys(ROLES);if(u&&u.rol&&!ROLES[u.rol])ks.push(u.rol);return ks.map(r=>({id:r,nombre:rolL(r)}));})()},
+        {k:'clientes',label:'Clientes asignados',type:'mover',opts:DB.clientes.map(c=>({id:c.id,nombre:c.nombre})),hint:'Sin clientes asignados, el usuario no ve ningún viaje. Usa los botones del centro para moverlos.'},
+        {k:'proyectos',label:'Proyectos asignados',type:'mover',optsFn:x=>{const set=new Set();(x.clientes||[]).forEach(c=>(PROYECTOS_X[c]||[]).forEach(p=>set.add(p)));const list=set.size?[...set]:CAT.proyectos;return list.map(p=>({id:p,nombre:p}));},hint:'Si dejas la lista de asignados vacía, verá todos los proyectos de sus clientes.'},
         {k:'activo',label:'Usuario activo',type:'check'}],
       data:u?{nombre:u.nombre,usuario:u.usuario,email:u.email||'',clave:'',rol:u.rol,clientes:clientesAsig(u).slice(),proyectos:(u.proyectos||[]).slice(),activo:u.activo}:{nombre:'',usuario:'',email:'',clave:'',rol:'OPERATIVO',clientes:[],proyectos:[],activo:true},
-      rerender:['clientes'],ok:'GUARDAR',act:'usuarioSave',id:d.id});
+      rerender:['clientes'],ancho:'760px',ok:'GUARDAR',act:'usuarioSave',id:d.id});
   },
   async usuarioSave(d){const m=S.modal.data;const r=await run(()=>API.guardarUsuario(S.user.id,{id:d.id||'',nombre:m.nombre,usuario:m.usuario,email:m.email,clave:m.clave,rol:m.rol,clientes:m.clientes,proyectos:m.proyectos,activo:m.activo}),'Usuario guardado.',true);if(r.ok)afterWrite();},
   async verificarAud(){try{S.verif=await API.verificarAuditoria(S.user.id);}catch(e){toast(e.message,'err');}render();},
