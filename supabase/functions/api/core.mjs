@@ -13,18 +13,17 @@ const TKEYS=CAMPOS_TIEMPO.map(x=>x[0]);
 const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'No. de carga',producto:'Producto',fechaPlan:'Fecha plan',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
 CAMPOS_TIEMPO.forEach(([k,l])=>LBL[k]=l);
 const CAT={
-  clientes:['CMI','COLGATE','FRITO LAY','COCA-COLA'],
-  proyectos:['ABASA','EMBOCEN','LV','COLGATE','CARGAS GLOBAL','ALPASA','METRO','OCCIDENTE'],
-  tipoUnidad:['RAS S','RAS L','RAS A','RAS','FUR','5TON','10TON','12TON','53"'],
-  opl:['J&J','GRIJALVA','GTL','CATALAN','BATRES','INTRANSIT','TRANS. CHAVELITA','TRANS. GAEL','TRANS. MILITO JCR','TRANS. REGALO DE DIOS','TRANS. STEFANI','TRANS. FERS','TRANS. HERNANDEZ','TRANS. NUEVO MUNDO','TRANS. REYNOSO','TRANS. XICARA','DIEGO CHICHICASTENANGO'],
-  tipoCarga:['KG','CAJAS','TARIMAS'],
-  tipoViaje:['ONE WAY','ROUD TRIP','MAYOREO','DETALLE','NA'],
-  origen:['PET','SRG','VN','Z18','ATA','CHIM','CHIQ','EMB','GTY','ABASA','CENTRAL','INTRANSIT PETAPA','INTRANSIT Z11','SEREGUA','LP','LV','MZT','CMI DELTA BARCENAS','PLANTA INHSA','PLANTA MODERNOS','CG','CP','MALACATAN','XELA','OMNIA','HUEHUE','SANTA CATARINA']
+  clientes:[],      /* se arma con los clientes reales */
+  proyectos:[],     /* se arma con los proyectos reales */
+  tipoUnidad:[],
+  opl:[],
+  tipoCarga:[],
+  tipoViaje:[],
+  origen:[]
 };
-/* Supuesto: qué PROYECTO del catálogo corresponde a cada cliente (confirmar) */
 
 const FLOTA=[],PILOTOS=[],DESTINOS=[];   /* los carga el servidor desde las tablas flota, pilotos y destinos */
-const ORIGENES=CAT.origen.map(n=>({id:n,nombre:n}));
+const ORIGENES=[];
 function save(){return true;}            /* la persistencia la hace store.mjs dentro de una transacción */
 function rollback(){}
 
@@ -53,10 +52,8 @@ const nowIso=()=>CLOCK?CLOCK():new Date().toISOString();
 const nowLoc=()=>toLocal(new Date(nowIso()));
 const fnv=str=>{let h=0x811c9dc5;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193);}return (h>>>0).toString(16).padStart(8,'0');};
 
-/* Clientes nuevos (demostración): Coca-Cola y Frito Lay */
-PILOTOS.push({id:'P-021',nombre:'Roberto Aguilar',unidad:'T-4010',proyecto:'COCACOLA'},{id:'P-022',nombre:'Sergio Monzón',unidad:'T-4015',proyecto:'COCACOLA'},{id:'P-031',nombre:'Julio Cifuentes',unidad:'T-5010',proyecto:'FRITOLAY'},{id:'P-032',nombre:'Mario Estrada',unidad:'T-5015',proyecto:'FRITOLAY'});
-FLOTA.push({unidad:'T-4010',placa:'C-812ABC',tango:'TNG-0611',capacidad:'12 Ton',tipo:'12TON'},{unidad:'T-4015',placa:'C-835DEF',tango:'TNG-0617',capacidad:'10 Ton',tipo:'10TON'},{unidad:'T-5010',placa:'C-912GHI',tango:'TNG-0702',capacidad:'8 Ton',tipo:'RAS S'},{unidad:'T-5015',placa:'C-941JKL',tango:'TNG-0709',capacidad:'15 Ton',tipo:'RAS L'});
-DESTINOS.push({id:'D-K1',nombre:'Distribuidora Central · Mixco',proyecto:'COCACOLA'},{id:'D-K2',nombre:'Autoservicios Metro · Zona 7',proyecto:'COCACOLA'},{id:'D-F1',nombre:'Mayorista Occidente · Quetzaltenango',proyecto:'FRITOLAY'},{id:'D-F2',nombre:'Tiendas del Norte · Cobán',proyecto:'FRITOLAY'});
+/* Las listas del sistema y los catálogos (unidades, pilotos, destinos) vienen de Supabase:
+   ver master.catalogos y la tabla de cada catálogo. Aquí no se inventan datos. */
 
 /* ---------- Estados y transiciones ---------- */
 const ESTADOS={
@@ -129,9 +126,14 @@ const PERMS=[
   ['rutas_validar','Completar datos de una ruta pendiente','Rutas'],
   ['rutas_aprobar_comercial','Aprobar ruta y tarifa por Gerencia Comercial','Rutas'],
   ['rutas_aprobar_transporte','Aprobar ruta por Gerencia de Transporte','Rutas'],
-  ['unidades_asignar','Asignar unidades y pilotos a vehículos','Transporte']
+  ['unidades_asignar','Asignar unidades y pilotos a vehículos','Transporte'],
+  ['catalogos_editar','Editar las listas del sistema (tipo de unidad, OPL, orígenes, tipos)','Consulta']
 ];
 const PERM_KEYS=PERMS.map(p=>p[0]);
+/* Listas del sistema: viven en master.catalogos (Supabase) y se editan desde la pantalla Catálogos. */
+const LISTAS_SISTEMA=['tipoUnidad','opl','tipoCarga','tipoViaje','origen'];
+const LISTAS_ETIQUETA={tipoUnidad:'Tipo de unidad',opl:'OPL · Transportistas',tipoCarga:'Tipo de carga',tipoViaje:'Tipo de viaje',origen:'Orígenes'};
+function refrescarOrigenes(){ORIGENES.length=0;(CAT.origen||[]).forEach(n=>ORIGENES.push({id:n,nombre:n}));}
 const ROLES={
   ADMIN:{label:'Administradora',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
   GERENTE_TRANSPORTE:{label:'Gerente de Transporte',home:'todos',nav:['todos','rutas','opl','liquidaciones','catalogos'],alcance:'Ver todo, asignar unidades/pilotos, autorizar/crear tarifas OPL'},
@@ -183,14 +185,14 @@ const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']
 const VIEW_PERM={proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
 const NAVLBL={proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
 
-const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
+const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origenId:'Origen',destinoId:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos'});
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos'];
 
 /* ---------- Base de datos ---------- */
-const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1}});
+const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1}});
 function syncRefs(){
   PROYECTOS=DB.clientes.map(c=>({id:c.id,nombre:c.nombre,cliente:c.cliente,activo:c.activo!==false,
     encargado:DB.usuarios.filter(u=>u.rol==='OPERATIVO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
@@ -199,6 +201,10 @@ function syncRefs(){
      así los selectores y la validación no quedan limitados a la lista de ejemplo. */
   DB.clientes.forEach(c=>(c.proyectos||[]).forEach(p=>{if(p&&!CAT.proyectos.includes(p))CAT.proyectos.push(p);}));
   DB.trips.forEach(t=>{if(t.proyectoCat&&!CAT.proyectos.includes(t.proyectoCat))CAT.proyectos.push(t.proyectoCat);});
+  /* Las listas del sistema se aplican desde la base: si no hay nada cargado se conserva lo que ya había. */
+  const LS=(DB&&DB.catalogosListas)||{};
+  LISTAS_SISTEMA.forEach(k=>{if(Array.isArray(LS[k])&&LS[k].length)CAT[k]=LS[k].slice();});
+  refrescarOrigenes();
 }
 
 
@@ -281,6 +287,7 @@ function valKey(cliente,k,v){
     case 'tipoCarga':if(!vacio&&!CAT.tipoCarga.includes(v))return 'Tipo de carga no válido.';break;
     case 'noCarga':case 'qViaticos':if(!vacio&&!(isFinite(Number(v))&&Number(v)>=0))return `${LBL[k]}: escribe un número válido (0 o mayor).`;break;
     case 'shipment':case 'noViaje':case 'producto':case 'noDocRetorno':case 'placaArrastre':if(String(v).length>60)return `${LBL[k]}: máximo 60 caracteres.`;break;
+    case 'unidadId':{if(!FLOTA.some(f=>f.unidad===v))return 'La unidad no está en la flota.';if(!PILOTOS.some(p=>p.proyecto===cliente&&p.unidad===v))return 'Esa unidad no está asignada a este cliente.';break;}
     case 'pilotoId':{const P=PILOTOS.find(p=>p.id===v);if(!P)return 'Piloto no válido.';if(P.proyecto!==cliente)return 'El piloto no pertenece a este cliente.';if(!P.unidad)return `${P.nombre} no tiene unidad asignada.`;break;}
     case 'origenId':if(!ORIGENES.some(o=>o.id===v))return 'Origen no válido.';break;
     case 'destinoId':{const D=DESTINOS.find(o=>o.id===v);if(!D)return 'Destino no válido.';if(D.proyecto!==cliente)return 'El destino no pertenece a este cliente.';break;}
@@ -659,6 +666,7 @@ const API={
     if(pend){const rr=crearRutaPendiente(A,{cliente,proyecto:v.proyectoCat,nombre:v.rutaRef,fuente:'VIAJE',viajeRef:id});rutaId=rr.id;}
     const P=PILOTOS.find(p=>p.id===v.pilotoId);
     const t=Object.assign({id,proyecto:cliente,unidadId:P?P.unidad:'',estado:'PLANIFICADO',creadoPor:A.nombre,creadoPorId:A.id,creadoEn:nowIso(),comentarioRevision:'',rechazos:0,duplicadoAprobado:false,liqIntentos:0,liqActualId:'',liqAprobadaEn:'',agrupacionId:'',numeroFactura:'',tarifaCliente:'',tarifaId:'',costoProveedor:''},v,{rutaId,origenId:ruta?ruta.origenId:'',destinoId:ruta?ruta.destinoId:'',rutaRef:pend?v.rutaRef:''});
+    if(!t.unidadId)t.unidadId=P?P.unidad:'';            /* si no se eligió placa, se usa la unidad del piloto */
     DB.trips.push(t);
     auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}`});
     return t;
@@ -705,7 +713,7 @@ const API={
       const esT=TIEMPO_KEYS.includes(k);
       auditAdd({viajeId:t.id,accion:esT?'Fecha/hora modificada':'Dato modificado',campo:LBL[k]||k,anterior:k==='rutaId'?rutaNombre(ov):fmtVal(k,ov),nuevo:k==='rutaId'?rutaNombre(nv):fmtVal(k,nv),por:A,motivo:motivo||''});
       t[k]=nv;
-      if(k==='pilotoId'){const P=PILOTOS.find(p=>p.id===nv);const antes=t.unidadId;t.unidadId=P.unidad;auditAdd({viajeId:t.id,accion:'Dato modificado (por cambio de piloto)',campo:'Unidad',anterior:antes,nuevo:P.unidad,por:A,motivo:motivo||''});}
+      if(k==='pilotoId'){const P=PILOTOS.find(p=>p.id===nv);const antes=t.unidadId;if(!('unidadId' in cambios)){t.unidadId=P.unidad;auditAdd({viajeId:t.id,accion:'Dato modificado (por cambio de piloto)',campo:'Unidad',anterior:antes,nuevo:P.unidad,por:A,motivo:motivo||''});}}
       if(k==='rutaId'){const r=DB.rutas.find(x=>x.id===nv);const ao=t.origenId,ad=t.destinoId;t.origenId=r.origenId;t.destinoId=r.destinoId;t.rutaRef='';
         auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Origen y destino actualizados por cambio de ruta',campo:'Origen',anterior:ao?nombreOrigen(ao):'(pendiente)',nuevo:nombreOrigen(r.origenId),por:A,ref:r.id});
         auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Origen y destino actualizados por cambio de ruta',campo:'Destino',anterior:ad?nombreDestino(ad):'(pendiente)',nuevo:nombreDestino(r.destinoId),por:A,ref:r.id});}
@@ -1241,6 +1249,23 @@ const API={
     const n=DB.notificaciones.find(x=>x.id===id);if(!n)deny('La notificación no existe.','NO_EXISTE');
     if(!(A.rol==='ADMIN'||n.destinatarios.includes(A.rol)||(n.usuarios||[]).includes(A.id)))deny('Esa notificación no es para ti.');
     if(!n.leidaPor.includes(A.id))n.leidaPor.push(A.id);return n;
+  });},
+
+  /* ----- listas del sistema (catálogos) ----- */
+  guardarCatalogo(uid,clave,valores){return exec(uid,'guardarCatalogo','',A=>{
+    need(A,'catalogos_editar','editar las listas del sistema');
+    const k=String(clave||'');
+    if(!LISTAS_SISTEMA.includes(k))deny('Esa lista no existe.','VALIDACION');
+    const limpio=[...new Set((Array.isArray(valores)?valores:[]).map(v=>String(v==null?'':v).trim()).filter(Boolean))];
+    if(!limpio.length)deny('La lista no puede quedar vacía.','VALIDACION');
+    if(limpio.length>200)deny('La lista es demasiado larga (máximo 200 valores).','VALIDACION');
+    if(limpio.some(v=>v.length>60))deny('Hay un valor demasiado largo (máximo 60 caracteres).','VALIDACION');
+    const antes=(CAT[k]||[]).join(' · ');
+    DB.catalogosListas[k]=limpio.slice();
+    CAT[k]=limpio.slice();
+    refrescarOrigenes();
+    auditAdd({entidad:'CATALOGO',accion:'Lista del sistema actualizada',campo:LISTAS_ETIQUETA[k]||k,anterior:antes,nuevo:limpio.join(' · '),por:A,ref:k});
+    return {clave:k,valores:limpio};
   });},
 
   /* ----- administración ----- */

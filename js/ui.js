@@ -412,11 +412,11 @@ VIEWS.catalogos=()=>{
   const body={
     pil:tb(['Id','Piloto','Unidad asignada','Proyecto'],PILOTOS.map(p=>[p.id,esc(p.nombre),p.unidad?esc(p.unidad):'<span class="mute">Sin unidad</span>',pn(p.proyecto)]),'catpil'),
     flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)]),'catflo'),
-    ori:tb(['Origen'],ORIGENES.map(o=>[esc(o.nombre)]),'catori'),
-    cat:`<div class="grid g2">${Object.entries({'CLIENTES':CAT.clientes,'PROYECTOS':CAT.proyectos,'TIPO DE UNIDAD':CAT.tipoUnidad,'OPL':CAT.opl,'TIPO CARGA':CAT.tipoCarga,'TIPO DE VIAJE':CAT.tipoViaje}).map(([n,a])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${a.length}</span></h3><div class="bgs">${a.map(x=>`<span class="est">${esc(x)}</span>`).join('')}</div></div>`).join('')}</div>`,
+    ori:`${puedeEditarListas()?`<div style="margin-bottom:8px"><button class="btn sm" data-act="catalogoOpen" data-k="origen">Editar orígenes</button></div>`:''}${tb(['Origen'],ORIGENES.map(o=>[esc(o.nombre)]),'catori')}`,
+    cat:`<div class="grid g2">${Object.entries({'clientes':'CLIENTES','proyectos':'PROYECTOS','tipoUnidad':'TIPO DE UNIDAD','opl':'OPL · TRANSPORTISTAS','tipoCarga':'TIPO CARGA','tipoViaje':'TIPO DE VIAJE'}).map(([k,n])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${(CAT[k]||[]).length}</span>${puedeEditarListas()?` <button class="btn sm ghost" data-act="catalogoOpen" data-k="${k}">Editar</button>`:''}</h3><div class="bgs">${(CAT[k]||[]).map(x=>`<span class="est">${esc(x)}</span>`).join('')||'<span class="mute">Sin valores</span>'}</div>${LISTAS_SISTEMA.includes(k)?'<div class="mute" style="font-size:12px;margin-top:6px">Se guarda en la base y la app lo usa de inmediato.</div>':'<div class="mute" style="font-size:12px;margin-top:6px">Se arma solo con la ficha de cada cliente.</div>'}</div>`).join('')}</div>`,
     des:tb(['Id','Destino','Proyecto'],DESTINOS.map(d=>[d.id,esc(d.nombre),pn(d.proyecto)]),'catdes'),fle:flePanel()}[k];
-  return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; no se editan ni se duplican aquí')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
-    <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS, FLOTA y DESTINOS son ficticios (todavía no tengo esos archivos); las listas de CATALOGO y ORIGEN sí son las reales de tu hoja. En Power Apps cada catálogo se leerá directo de su hoja (Excel/SharePoint) y el filtro por proyecto asume una columna Proyecto en PILOTOS, ORIGEN y DESTINOS.</div></div>`;
+  return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; todos vienen de la base (Supabase)')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
+    <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS, FLOTA y DESTINOS se leen de sus tablas; las listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje y orígenes) se guardan en la tabla <code>catalogos</code> y se editan desde aquí. CLIENTES y PROYECTOS se arman con la ficha de cada cliente.</div></div>`;
 };
 
 /* ---- Notificaciones (solo dentro de la aplicación) ---- */
@@ -591,9 +591,26 @@ const optsClientes=()=>clientesAsig(S.user).map(id=>{const c=DB.clientes.find(x=
 const optsProyectos=d=>d.cliente?proyectosAsig(S.user,d.cliente).map(p=>({id:p,nombre:p})):[];
 const optsDestinos=d=>DESTINOS.filter(x=>x.proyecto===d.cliente).map(x=>({id:x.id,nombre:x.nombre}));
 const optsOrigenes=()=>ORIGENES.map(o=>({id:o.id,nombre:o.nombre}));
+const puedeEditarListas=()=>hp('catalogos_editar');
 const ACT={
   /* Entrar a la aplicación (botón INGRESAR del formulario de acceso) */
   login:doLogin,
+  /* editar una lista del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje, orígenes) */
+  async catalogoOpen(d){
+    if(!puedeEditarListas()){toast('Tu perfil no puede editar las listas.','err');return;}
+    const clave=String(d.k||'');
+    if(!LISTAS_SISTEMA.includes(clave))return;
+    formM({title:'Lista · '+(LISTAS_ETIQUETA[clave]||clave),
+      text:'Un valor por línea (o separados por coma). Se guarda en la base de datos y la aplicación lo usa de inmediato.',
+      fields:[{k:'valores',label:'Valores',type:'textarea',req:1}],
+      data:{valores:(CAT[clave]||[]).join('\n')},ancho:'620px',ok:'GUARDAR LISTA',act:'catalogoSave',id:clave});
+  },
+  async catalogoSave(d){
+    const m=S.modal;if(!m)return;
+    const valores=String(m.data.valores||'').split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean);
+    const r=await run(()=>API.guardarCatalogo(S.user.id,d.id,valores),v=>`Lista guardada (${v.valores.length} valores).`);
+    if(r.ok){try{await BACKEND.refrescar();}catch(e){/* la lista ya quedó guardada */}afterWrite();}
+  },
   /* mover elementos entre las dos listas (clientes / proyectos asignados) */
   async mvMove(d){
     const m=S.modal;if(!m||!d.k)return;

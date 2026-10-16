@@ -22,7 +22,7 @@ const curModel=()=>S.edit?S.edit.data:S.form;
 function initForm(){
   const d=new Date();d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
     const m={proyecto:esEnc()?(clientesAsig(S.user).length===1?clientesAsig(S.user)[0]:''):(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',estado:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',
-    fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',rutaId:'',rutaRef:'',noDocRetorno:'',qViaticos:'',savedId:null,err:''};
+    fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',placaSel:'',rutaId:'',rutaRef:'',noDocRetorno:'',qViaticos:'',savedId:null,err:''};
   TKEYS.forEach(k=>m[k]='');
   const pc=usaCombo()?(m.proyecto?proyectosAsig(S.user,m.proyecto):[]):PROYECTOS_X[m.proyecto];if(pc&&pc.length===1)m.proyectoCat=pc[0];
   return m;
@@ -30,6 +30,7 @@ function initForm(){
 function toModel(t){
   const m={proyecto:t.proyecto,fechaPlanD:planD(t),fechaPlanT:planT(t),err:''};
   ['proyectoCat','estado','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
+  m.placaSel=t.unidadId||'';                      /* la unidad del viaje se edita como «placa» */
   return m;
 }
 
@@ -89,7 +90,9 @@ function aplicarCampo(M,k,v){
     else{M.rutaRef='';const g=rutasGrupos(M).find(x=>x.key===v);if(g){if(M.proyecto!==g.cliente){M.proyecto=g.cliente;M.pilotoId='';M.placaSel='';}M.proyectoCat=g.proyecto;}resolverRuta(M);}   /* cliente y proyecto salen de la ruta elegida */
   }
   if(k==='rutaO'||k==='rutaD')resolverRuta(M);
-  if(k==='placaSel'){M.pilotoId='';const ps=pilotosDePlaca(M.proyecto,v);if(ps.length===1)M.pilotoId=ps[0].id;}   /* el piloto sale de la relación placa → unidad → piloto; no se elige a mano */
+  if(k==='placaSel'){const ps=pilotosDePlaca(M.proyecto,v);   /* el piloto se conserva si pertenece a esa placa */
+    if(esAdm()||!ps.some(p=>p.id===M.pilotoId)){M.pilotoId='';if(ps.length===1)M.pilotoId=ps[0].id;}}
+  if(k==='pilotoId'&&v&&!esAdm()){const P=PILOTOS.find(p=>p.id===v);if(P&&P.unidad)M.placaSel=P.unidad;}   /* arranca con la placa del piloto; se puede cambiar, siempre del mismo cliente */
   if(k==='pilotoAlt')M.pilotoId=v;                                                                              /* solo si la placa tiene más de un piloto asignado */
   if(k==='pilotoId'&&v)S.flash=true;
 }
@@ -123,6 +126,7 @@ function clientesAdminHTML(){
 
 /* ---- Nuevo viaje · placa del equipo: la relación placa → unidad → piloto se resuelve sola ---- */
 function pilotosDePlaca(cliente,unidad){return PILOTOS.filter(p=>p.proyecto===cliente&&p.unidad&&p.unidad===unidad);}
+const etiquetaPlaca=f=>f?(String(f.placa||f.unidad||'')+(f.capacidad?' · '+f.capacidad:'')):'';
 function placasDe(cliente){const m=new Map();PILOTOS.filter(p=>p.proyecto===cliente&&p.unidad).forEach(p=>{const f=FLOTA.find(x=>x.unidad===p.unidad);if(f&&!m.has(f.unidad))m.set(f.unidad,f);});return [...m.values()].sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'es'));}
 function autoPlaca(M,plSel,ps){
   const U=plSel?FLOTA.find(x=>x.unidad===plSel):null;
@@ -131,9 +135,6 @@ function autoPlaca(M,plSel,ps){
   const aviso=!ps.length?`<div class="auto" style="border-color:var(--fix);background:var(--fix-bg);margin-bottom:10px"><div class="ah" style="color:var(--fix)">${icon('alert',18)} Esta placa no tiene un piloto asignado para este cliente</div><div>El viaje necesita un piloto. Pide a administración que asigne la unidad ${esc(U.unidad)} a un piloto en la lista de pilotos.</div></div>`:'';
   return aviso+`<div class="auto ${S.flash?'flash':''}"><div class="ah">${icon('check',18)} Datos cargados automáticamente</div><div class="cells">
     <div class="cell"><small>Placa ${src('FLOTA')}</small><b>${esc(U.placa)}</b></div>
-    <div class="cell"><small>Unidad ${src('PILOTOS')}</small><b>${esc(U.unidad)}</b></div>
-    <div class="cell"><small>Tango ${src('FLOTA')}</small><b>${esc(U.tango)}</b></div>
-    <div class="cell"><small>Tipo de unidad ${src('FLOTA')}</small><b>${esc(U.tipo)}</b></div>
     <div class="cell"><small>Capacidad ${src('FLOTA')}</small><b>${esc(U.capacidad)}</b></div>
     <div class="cell"><small>Piloto asignado ${src('PILOTOS')}</small><b>${P?esc(P.nombre):'<span class="mute">por definir</span>'}</b></div></div></div>`;
 }
@@ -169,16 +170,15 @@ function rutasVacioAdmin(todas){
   return empty('No hay rutas con estos filtros','Cambia la búsqueda o limpia los filtros.');
 }
 function autoCard(M){
-  const P=PILOTOS.find(p=>p.id===M.pilotoId),U=P&&P.unidad?FLOTA.find(x=>x.unidad===P.unidad):null;
+  const P=PILOTOS.find(p=>p.id===M.pilotoId);
+  const U=(M.placaSel?FLOTA.find(x=>x.unidad===M.placaSel):null)||(P&&P.unidad?FLOTA.find(x=>x.unidad===P.unidad):null);
   let h;
-  if(!P)h=`<div class="auto empty2">Elige un piloto: la unidad, la placa, el Tango, el tipo de unidad y la capacidad se cargan solos.</div>`;
-  else if(!U)h=`<div class="auto" style="border-color:var(--fix);background:var(--fix-bg)"><div class="ah" style="color:var(--fix)">${icon('alert',18)} ${esc(P.nombre)} no tiene unidad asignada en PILOTOS</div><div>Pide a administración que actualice la asignación para poder registrar el viaje.</div></div>`;
+  if(!P)h=`<div class="auto empty2">Elige un piloto: se carga su placa y su capacidad. Puedes cambiarle la placa dentro del mismo cliente.</div>`;
+  else if(!U)h=`<div class="auto" style="border-color:var(--fix);background:var(--fix-bg)"><div class="ah" style="color:var(--fix)">${icon('alert',18)} La placa elegida no está en la flota</div><div>Elige otra placa de este cliente o pide a administración que revise la asignación.</div></div>`;
   else h=`<div class="auto ${S.flash?'flash':''}"><div class="ah">${icon('check',18)} Datos cargados automáticamente · no hay que escribirlos</div><div class="cells">
-    <div class="cell"><small>Unidad ${src('PILOTOS')}</small><b>${esc(U.unidad)}</b></div>
     <div class="cell"><small>Placa ${src('FLOTA')}</small><b>${esc(U.placa)}</b></div>
-    <div class="cell"><small>Tango ${src('FLOTA')}</small><b>${esc(U.tango)}</b></div>
-    <div class="cell"><small>Tipo de unidad ${src('FLOTA')}</small><b>${esc(U.tipo)}</b></div>
-    <div class="cell"><small>Capacidad ${src('FLOTA')}</small><b>${esc(U.capacidad)}</b></div></div></div>`;
+    <div class="cell"><small>Capacidad ${src('FLOTA')}</small><b>${esc(U.capacidad)}</b></div>
+    <div class="cell"><small>Piloto ${src('PILOTOS')}</small><b>${esc(P.nombre)}</b></div></div></div>`;
   S.flash=false;return h;
 }
 function dursHTML(M){
@@ -220,7 +220,7 @@ function fieldsHTML(M,groups,dis){
   if(has('unidad')&&esAdm()){
     const falla=catalogoFalla(),plSel=M.placaSel||((PILOTOS.find(p=>p.id===M.pilotoId)||{}).unidad||'');
     const placas=(ready&&!falla)?placasDe(M.proyecto):[],actual=(plSel&&!placas.some(x=>x.unidad===plSel))?FLOTA.find(x=>x.unidad===plSel):null;
-    const opts=placas.concat(actual?[actual]:[]).map(f=>({id:f.unidad,nombre:`${f.placa} · ${f.unidad}${f.capacidad?' · '+f.capacidad:''}`}));
+    const opts=placas.concat(actual?[actual]:[]).map(f=>({id:f.unidad,nombre:etiquetaPlaca(f)}));
     const ps=plSel?pilotosDePlaca(M.proyecto,plSel):[],sinPlacas=ready&&!falla&&!opts.length;
     h+=`<div class="card fsec"><h3>Placa y unidad</h3>
       ${falla?`<div class="alertbox" role="alert" style="margin-bottom:10px"><b>${esc(falla)}</b>${REINTENTAR}</div>`:''}
@@ -229,8 +229,13 @@ function fieldsHTML(M,groups,dis){
       ${autoPlaca(M,plSel,ps)}</div>`;
   }
   if(has('unidad')&&!esAdm()){
+    const falla=catalogoFalla(),plSel=M.placaSel||((PILOTOS.find(p=>p.id===M.pilotoId)||{}).unidad||'');
+    const placas=(ready&&!falla)?placasDe(M.proyecto):[],actual=(plSel&&!placas.some(x=>x.unidad===plSel))?FLOTA.find(x=>x.unidad===plSel):null;
+    const opts=placas.concat(actual?[actual]:[]).map(f=>({id:f.unidad,nombre:etiquetaPlaca(f)}));
+    const sinPlacas=ready&&!falla&&!opts.length;
     h+=`<div class="card fsec"><h3>Piloto y unidad</h3>
       ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?'Selecciona un piloto':'Primero elige el cliente'})}
+      ${fcombo('placaSel','Placa del equipo',opts,plSel,{req:1,src:'FLOTA',dis:!ready||!!falla||sinPlacas,ph:!ready?'Primero elige el cliente':(falla?'No disponible':(sinPlacas?'Sin placas disponibles':'Selecciona la placa')),hint:sinPlacas?'Este cliente no tiene placas disponibles: ninguno de sus pilotos tiene una unidad asignada en la flota.':'Puedes cambiar la placa (unidad) del piloto: siempre dentro de este cliente. El cliente no se cambia.'})}
       ${autoCard(M)}</div>`;
   }
   if(has('ruta')&&!usaCombo()){
@@ -283,7 +288,7 @@ VIEWS.nuevo=()=>{
     ${f.err?`<div class="alertbox" style="margin-bottom:16px" role="alert"><b>${esc(f.err)}</b></div>`:''}
     ${fieldsHTML(f,['cliente','plan','unidad','ruta','tiempos','otros'],dis)}
     <div class="formbtns">
-      ${f.savedId?`<button class="btn primary lg" data-act="otro">${icon('plus',18)} REGISTRAR OTRO VIAJE</button><button class="btn lg" data-act="detalle" data-id="${f.savedId}">Abrir viaje #${f.savedId}</button>`:`<button class="btn primary lg" data-act="guardar" ${Pl&&!Pl.unidad?'disabled':''}>GUARDAR VIAJE</button>`}
+      ${f.savedId?`<button class="btn primary lg" data-act="otro">${icon('plus',18)} REGISTRAR OTRO VIAJE</button><button class="btn lg" data-act="detalle" data-id="${f.savedId}">Abrir viaje #${f.savedId}</button>`:`<button class="btn primary lg" data-act="guardar" ${(!f.pilotoId||!f.placaSel)?'disabled':''}>GUARDAR VIAJE</button>`}
       <button class="btn lg" data-act="terminar">TERMINAR</button>
     </div></div>`;
 };
@@ -394,9 +399,12 @@ Object.assign(ACT,{
   async shipmentDupOk(d){const r=await run(()=>API.aprobarShipmentDuplicado(S.user.id,d.id),`Shipment aprobado como ${r.shipment}.`,true);if(r.ok)afterWrite();},
   async guardar(){
     const f=S.form;f.err='';
-    if(esAdm()&&!f.pilotoId){f.err=!f.placaSel?'Selecciona la placa del equipo.':(pilotosDePlaca(f.proyecto,f.placaSel).length>1?'Esta placa tiene más de un piloto asignado: elige el piloto de la placa.':'La placa seleccionada no tiene un piloto asignado para este cliente: no se puede guardar el viaje hasta que se relacione una unidad con un piloto.');render();topScroll();return;}
+    if(!f.placaSel){f.err='Selecciona la placa del equipo.';render();topScroll();return;}
+    if(!f.pilotoId){const ps=pilotosDePlaca(f.proyecto,f.placaSel);
+      f.err=ps.length>1?'Esta placa tiene más de un piloto asignado: elige el piloto de la placa.':'Esta placa no tiene un piloto asignado para este cliente: elige otra placa o pide a la administradora que asigne la unidad a un piloto.';render();topScroll();return;}
     const d={cliente:f.proyecto,fechaPlan:f.fechaPlanD&&f.fechaPlanT?f.fechaPlanD+'T'+f.fechaPlanT:'',rutaRef:f.rutaRef||''};
     [...DATA_KEYS,...TKEYS].forEach(k=>{d[k]=f[k];});
+    d.unidadId=f.placaSel||'';                     /* la placa elegida es la unidad del viaje */
     try{const t=await API.crearViaje(S.user.id,d);f.savedId=t.id;render();topScroll();toast(f.rutaId==='NO_ASIGNADA'?`Viaje #${t.id} guardado con ruta NO ASIGNADA. Se avisó a Comercial y Gerencia dentro de la aplicación.`:`Viaje #${t.id} guardado.`);}
     catch(e){f.err=sinPerfil(e.message);render();topScroll();}
   },
@@ -414,7 +422,7 @@ Object.assign(ACT,{
   async editSave(){
     const E=S.edit,M=E.data;let t;try{t=API.viaje(S.user.id,E.id);}catch(e){return;}
     const cambios={};
-    editGroups(t).flatMap(g=>GRUPOKEYS[g]).forEach(k=>{cambios[k]=k==='fechaPlan'?(M.fechaPlanD&&M.fechaPlanT?M.fechaPlanD+'T'+M.fechaPlanT:''):M[k];});
+    editGroups(t).flatMap(g=>GRUPOKEYS[g]).forEach(k=>{cambios[k]=k==='fechaPlan'?(M.fechaPlanD&&M.fechaPlanT?M.fechaPlanD+'T'+M.fechaPlanT:''):(k==='unidadId'?(M.placaSel||''):M[k]);});
     try{const r=await API.editarViaje(S.user.id,E.id,cambios,E.motivo);S.edit=null;render();topScroll();toast(r.cambios?`Viaje #${E.id} actualizado (${r.cambios} ${r.cambios===1?'cambio':'cambios'}).`:'No hubo cambios.');
       const t2=API.viaje(S.user.id,E.id);if(DUR.some(([l,a,b])=>diff(t2[a],t2[b])==='Revisar fechas'))toast('Ojo: hay horarios fuera de orden.','err');}
     catch(e){M.err=e.message;render();topScroll();}

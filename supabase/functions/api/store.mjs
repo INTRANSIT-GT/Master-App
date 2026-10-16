@@ -129,6 +129,12 @@ export async function loadState(q, opts = {}) {
     const rows = await leerTabla(q, c.tabla, c.cols, false, c.cols[0][1]);
     catalogos[c.lista] = rows.map(r => Object.fromEntries(c.cols.map(([f, col, t]) => [f, dec(t, r[col])])));
   }
+  /* Listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje, orígenes). */
+  catalogos.listas = {};
+  (await q('select clave, valores from master.catalogos')).rows.forEach(r => {
+    catalogos.listas[r.clave] = typeof r.valores === 'string' ? JSON.parse(r.valores) : r.valores;
+  });
+  db.catalogosListas = catalogos.listas;            /* el motor las aplica al catálogo en syncRefs */
   return { db, catalogos };
 }
 
@@ -141,6 +147,7 @@ export function fotografia(db) {
     foto[spec.tabla] = m;
   }
   foto.__seq = JSON.stringify(db.seq); foto.__config = JSON.stringify(db.config);
+  foto.__listas = JSON.stringify(db.catalogosListas || {});
   return foto;
 }
 function filas(spec, rec) {
@@ -196,4 +203,8 @@ export async function saveState(q, antes, db, rechazo) {
     for (const [k, v] of Object.entries(db.seq)) await q('insert into master.secuencias (clave, valor) values ($1,$2) on conflict (clave) do update set valor=excluded.valor', [k, v]);
   if (JSON.stringify(db.config) !== antes.__config)
     for (const [k, v] of Object.entries(db.config)) await q('insert into master.config (clave, valor) values ($1,$2::jsonb) on conflict (clave) do update set valor=excluded.valor', [k, JSON.stringify(v)]);
+  if (JSON.stringify(db.catalogosListas || {}) !== antes.__listas)
+    for (const [k, v] of Object.entries(db.catalogosListas || {}))
+      await q(`insert into master.catalogos (clave, etiqueta, valores, actualizado_en) values ($1,$1,$2::jsonb, now())
+               on conflict (clave) do update set valores = excluded.valores, actualizado_en = now()`, [k, JSON.stringify(v)]);
 }
