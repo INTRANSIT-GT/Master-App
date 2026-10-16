@@ -469,3 +469,15 @@ tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
   .side .grp-p{order:2;flex:0 0 100%;flex-direction:row;overflow-x:auto;margin:0;padding:6px 0 2px;border-left:0;border-top:1px solid var(--line2)}
   .side .grp-p[hidden]{display:none}
 }
+
+/* ---- Selector de dos listas (mover asignados): Usuarios → clientes y proyectos ---- */
+.mv{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:start;margin-top:4px}
+.mv-col{min-width:0}
+.mv-t{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--mute);padding:2px 0 5px;text-transform:uppercase}
+.mv select{width:100%;height:auto;font-size:13px}
+.mv-btns{display:flex;flex-direction:column;gap:6px;padding-top:22px}
+.mv-btns .btn{padding:3px 9px;line-height:1.1;font-size:15px;min-width:0}
+@container app (max-width:640px){
+  .mv{grid-template-columns:1fr;gap:8px}
+  .mv-btns{flex-direction:row;padding-top:0;justify-content:center;flex-wrap:wrap}
+}

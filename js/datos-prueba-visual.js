@@ -6,17 +6,17 @@
 (function(){
   DB=blankDB();
   const U=(id,usuario,nombre,rol)=>({id,usuario,clave:'',nombre,rol,activo:true,proyectos:[]});
-  const ROL_NOMBRE={ADMIN:'Administradora (ejemplo)',TORRE:'Torre de control (ejemplo)',LIQUIDACIONES:'Liquidaciones (ejemplo)',COMERCIAL:'Comercial (ejemplo)',GERENCIA_COMERCIAL:'Gerencia comercial (ejemplo)',CONTABILIDAD:'Contabilidad (ejemplo)',GERENCIA_TRANSPORTE:'Gerencia de transporte (ejemplo)'};
-  Object.keys(ROLES).filter(r=>r!=='ENCARGADO').forEach(r=>DB.usuarios.push(U('U-'+r,r.toLowerCase(),ROL_NOMBRE[r]||r,r)));
-  DB.usuarios.push(U('U-ENC1','encargado1','Pedro Chaperon (ejemplo)','ENCARGADO'),U('U-ENC2','nora','Nora Rivera (ejemplo, 58 clientes)','ENCARGADO'),U('U-ENC3','sinproy','Encargado sin proyectos (ejemplo)','ENCARGADO'));
+  const ROL_NOMBRE={ADMIN:'Administradora (ejemplo)',TORRE:'Torre de control (ejemplo)',VALIDADOR:'Validador (ejemplo)',FACTURACION:'Facturación (ejemplo)',GERENTE_COMERCIAL:'Gerencia comercial (ejemplo)',COBROS:'Cobros (ejemplo)',GERENTE_TRANSPORTE:'Gerencia de transporte (ejemplo)',ANALISTA_COMERCIAL:'Analista comercial (ejemplo)',PAGO_OPL:'Pago OPL (ejemplo)'};
+  Object.keys(ROLES).filter(r=>r!=='OPERATIVO').forEach(r=>DB.usuarios.push(U('U-'+r,r.toLowerCase(),ROL_NOMBRE[r]||r,r)));
+  DB.usuarios.push(U('U-OPE1','operativo1','Pedro Chaperon (ejemplo)','OPERATIVO'),U('U-OPE2','nora','Nora Rivera (ejemplo, 58 clientes)','OPERATIVO'),U('U-OPE3','sinproy','Operativo sin proyectos (ejemplo)','OPERATIVO'));
   /* permisos por rol: los valores iniciales del propio motor */
   Object.keys(ROLES).forEach(r=>PERM_KEYS.forEach(p=>{DB.permisos.push({rol:r,permiso:p,habilitado:r==='ADMIN'?true:((PERM_DEFAULT[r]||[]).includes(p)&&!((PROHIBIDO[r]||[]).includes(p)))});}));
   const cl=(id,n,pr)=>({id,nombre:n,cliente:n.toUpperCase(),proyectos:pr,torreEstatus:false,activo:true,nit:'',direccionFiscal:'',correoFacturacion:'',contacto:'',telefono:'',creditoDias:'',observaciones:''});
   DB.clientes.push(cl('COLGATE','Colgate',['COLGATE','LV']),cl('CMI','CMI',['ABASA']),cl('SINPROY','Cliente sin proyectos',[]));
-  DB.acceso.push({userId:'U-ENC1',cliente:'COLGATE'},{userId:'U-ENC3',cliente:'SINPROY'});
+  DB.acceso.push({userId:'U-OPE1',cliente:'COLGATE'},{userId:'U-OPE3',cliente:'SINPROY'});
   /* «Nora»: 58 clientes asignados con IDs técnicos (el caso de tu captura) */
   const ids=[];for(let i=1;i<=55;i++)ids.push('CIT-U'+String(i).padStart(4,'0'));['CLI-001','CLI-002','CLI-003'].forEach(x=>ids.push(x));
-  ids.forEach(id=>{DB.clientes.push(cl(id,id,['P-'+id]));DB.acceso.push({userId:'U-ENC2',cliente:id});});
+  ids.forEach(id=>{DB.clientes.push(cl(id,id,['P-'+id]));DB.acceso.push({userId:'U-OPE2',cliente:id});});
   const ruta=(id,cod,nom,cli,pr,o,d)=>({id,codigo:cod,nombre:nom,cliente:cli,proyecto:pr,origenId:o,destinoId:d,estado:'ACTIVA',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:'U-ADMIN',solicitadaPor:'Administradora (ejemplo)',solicitadaEn:'2026-01-01T00:00:00.000Z',validadaPor:'',validadaEn:'',rechazo:null,viajeRef:''});
   DB.rutas.push(
     ruta('R-0001','COL-001','CP → Mayorista Escuintla','COLGATE','COLGATE','CP','D-1'),ruta('R-0002','COL-001','CP → Mayorista Escuintla','COLGATE','COLGATE','CP','D-1'),ruta('R-0003','COL-001','CP → Mayorista Escuintla','COLGATE','COLGATE','CP','D-1'),   /* mismo nombre repetido: se verá una sola vez */
