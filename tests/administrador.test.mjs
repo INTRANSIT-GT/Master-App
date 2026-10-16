@@ -82,7 +82,7 @@ ev("S.cb=null;render()");
 /* formulario */
 await ev("ACT.clienteOpen({id:''})"); await tick();
 const modal = () => d.querySelector('.modal, [role="dialog"], .mdl') || d.body, tx = () => d.querySelector('#app').textContent;
-T('1.13 El formulario de cliente nuevo ya no tiene el campo redundante «Cliente» (ni la mención al catálogo)', !/como aparece en la lista/i.test(tx()) && !/cat[aá]logo/i.test(tx().split('Torre')[0]) && /Código del cliente/.test(tx()) && /Nombre corto/.test(tx()));
+T('1.13 El formulario de cliente nuevo ya no tiene el campo redundante «Cliente» (ni la mención al catálogo)', (dlg => !/como aparece en la lista/i.test(dlg) && !/cat[aá]logo/i.test(dlg) && /Código del cliente/.test(dlg) && /Nombre corto/.test(dlg))((d.querySelector('[role="dialog"]') || d.body).textContent));
 const antes = ev('DB.clientes.length');
 await ev("ACT.clienteSave({id:''})"); await tick();
 const err1 = ev('S.modal&&S.modal.err');

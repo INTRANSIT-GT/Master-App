@@ -452,3 +452,11 @@ tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
 .fsec .fgroup .cb-panel{left:0;right:0;width:auto;min-width:0;max-width:none}
 .fsec .cb-btn:disabled{opacity:.6;cursor:not-allowed;background:var(--surface2)}
 .fsec .cb-btn span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+
+/* ---- Administrador: menú lateral agrupado por módulos (solo añade reglas; el menú de los demás perfiles no cambia) ---- */
+.side .grp{display:flex;flex-direction:column;gap:2px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line2)}
+.side .grp-t{font-size:11px;font-weight:800;letter-spacing:.09em;color:var(--mute);padding:2px 12px 4px}
+@container app (max-width:900px){
+  .side .grp{flex-direction:row;align-items:center;margin-top:0;padding-top:0;border-top:0;border-left:1px solid var(--line);padding-left:8px;margin-left:4px;gap:4px}
+  .side .grp-t{white-space:nowrap;padding:0 6px 0 0}
+}

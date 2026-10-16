@@ -1376,10 +1376,30 @@ function headerHTML(){
     <button class="bell" data-act="notifOpen" aria-label="Notificaciones${notifData().filter(n=>!n.leida).length?' ('+notifData().filter(n=>!n.leida).length+' sin leer)':''}">${icon('bell',20)}${notifData().filter(n=>!n.leida).length?`<span class="bcount">${notifData().filter(n=>!n.leida).length}</span>`:''}</button>
     <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(ROLES[u.rol].label)}${(!esEnc()&&u.rol!=='ADMIN'&&clientesAsig(u).length)?' · '+esc(clientesAsig(u).join(', ')):''}</span></span></button></header>`;
 }
+/* ---- Perfil «Administrador»: menú lateral agrupado por módulos. Solo reordena el acceso a pantallas que YA existen;
+   cada opción respeta los mismos permisos de siempre (allowed) y los demás perfiles conservan su menú tal cual. ----
+   v: pantalla existente · l: etiqueta si difiere de la habitual · k: clave propia cuando dos opciones abren la misma pantalla · tab: pestaña con la que abre */
+const ADM_MODULOS=[
+  {t:'VIAJES',    items:[{v:'nuevo'},{v:'liquidaciones'},{v:'todos'},{v:'viajes',l:'Viajes por estado'}]},
+  {t:'TORRE',     items:[{v:'torre',l:'Viajes'}]},
+  {t:'COMERCIAL', items:[{v:'comercial'},{v:'proyectos'},{v:'finanzas'},{v:'catalogos'}]},
+  {t:'OPL',       items:[{v:'opl',l:'Proveedores'}]},
+  {t:'FLOTAS',    items:[{v:'catalogos',k:'pilotos',l:'Pilotos',ic:'users',tab:['cat','pil']}]}
+];
+const ADM_OTROS=['rutas','usuarios','auditoria','modelo'];      /* pantallas que existen y no pertenecen a los cinco módulos: siguen accesibles */
+function admNavHTML(items,act){
+  const pilAct=S.navK==='pilotos'&&(S.tab.cat||'pil')==='pil';
+  const on=it=>it.v!==act?false:(it.k==='pilotos'?pilAct:(it.v==='catalogos'?!pilAct:true));
+  const btn=it=>`<button data-act="nav" data-v="${it.v}" ${it.k?`data-k="${it.k}"`:''} ${it.tab?`data-tabk="${it.tab[0]}" data-tabv="${it.tab[1]}"`:''} ${on(it)?'aria-current="page"':''}>${icon(it.ic||NAVLBL[it.v][1],18)}${esc(it.l||NAVLBL[it.v][0])}</button>`;
+  const grupo=(titulo,its,id)=>its.length?`<div class="grp" role="group" aria-labelledby="gm_${id}"><div class="grp-t" id="gm_${id}">${esc(titulo)}</div>${its.map(btn).join('')}</div>`:'';
+  const ok=its=>its.filter(it=>items.includes(it.v));
+  return `<nav class="side" aria-label="Navegación principal">${ok([{v:'inicio'}]).map(btn).join('')}${ADM_MODULOS.map((m,i)=>grupo(m.t,ok(m.items),i)).join('')}${grupo('ADMINISTRACIÓN',ok(ADM_OTROS.map(v=>({v}))),'adm')}</nav>`;
+}
 function navHTML(){
   const items=navItems();
   if(items.length<2)return'';
   const act=S.view==='detalle'&&S.from?S.from.view:(S.view==='proyecto'?'proyectos':S.view);
+  if(S.user.rol==='ADMIN')return admNavHTML(items,act);
   return `<nav class="side" aria-label="Navegación principal">${items.map(v=>`${v==='catalogos'?'<div class="sep"></div>':''}<button data-act="nav" data-v="${v}" ${act===v?'aria-current="page"':''}>${icon(NAVLBL[v][1],18)}${NAVLBL[v][0]}</button>`).join('')}</nav>`;
 }
 function render(){
@@ -1448,7 +1468,7 @@ const ACT={
     render();toast('Datos de ejemplo reiniciados.');
   },
   async logout(){if(S.user)await BACKEND.logout();S.edit=null;S.user=null;S.view='login';S.menu=false;S.modal=null;S.form=null;S.loginErr='';S.loginU='';S.tab={};S.fEstado='';S.fProy='';S.tProy='';S.sel=[];try{history.pushState(null,'','#login');}catch(e){}render();},
-  async nav(d){S.fEstado='';S.q='';S.fCli='';S.fPcat='';S.fProy='';S.fDesde='';S.fHasta='';S.fProv='';S.sortL=null;go(d.v);},
+  async nav(d){S.fEstado='';S.q='';S.fCli='';S.fPcat='';S.fProy='';S.fDesde='';S.fHasta='';S.fProv='';S.sortL=null;S.navK=d.k||'';if(d.tabk)S.tab[d.tabk]=d.tabv;go(d.v);},
   async detalle(d){go('detalle',d.id);},
   async back(){const f=S.from;if(f&&f.view&&allowed(f.view))go(f.view,f.param);else go(homeOf(S.user));},
   async proj(d){S.fEstado='';go('proyecto',d.id);},
