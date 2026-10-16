@@ -453,12 +453,21 @@ tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
 .fsec .cb-btn:disabled{opacity:.6;cursor:not-allowed;background:var(--surface2)}
 .fsec .cb-btn span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 
-/* ---- Administrador: menú lateral agrupado por módulos (solo añade reglas; el menú de los demás perfiles no cambia) ---- */
-.side .grp{display:flex;flex-direction:column;gap:2px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line2)}
-.side .grp-t{font-size:11px;font-weight:800;letter-spacing:.09em;color:var(--mute);padding:2px 12px 4px}
+/* ---- Administrador: menú lateral en acordeón por módulos (solo añade reglas; el menú de los demás perfiles no cambia) ---- */
+.side .grp{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.side .grp-t{justify-content:space-between;font-size:12px;font-weight:800;letter-spacing:.08em;background:var(--surface2);border:1px solid var(--line2);color:var(--ink2)}
+.side .grp-t:hover{background:var(--brand-soft)}
+.side .grp.has-cur>.grp-t{color:var(--brand);border-color:var(--brand)}
+.side .chev{flex:none;transition:transform .18s}
+.side .grp.open>.grp-t .chev{transform:rotate(180deg)}
+.side .grp-p{display:flex;flex-direction:column;gap:2px;padding:2px 0 4px 10px;border-left:2px solid var(--line2);margin-left:8px}
+.side .grp-p[hidden]{display:none}
 @container app (max-width:900px){
-  .side .grp{flex-direction:row;align-items:center;margin-top:0;padding-top:0;border-top:0;border-left:1px solid var(--line);padding-left:8px;margin-left:4px;gap:4px}
-  .side .grp-t{white-space:nowrap;padding:0 6px 0 0}
+  .side.side-acc{flex-wrap:wrap;overflow-x:visible;align-items:center}
+  .side .grp{display:contents}
+  .side .grp-t{width:auto;gap:6px;order:1}
+  .side .grp-p{order:2;flex:0 0 100%;flex-direction:row;overflow-x:auto;margin:0;padding:6px 0 2px;border-left:0;border-top:1px solid var(--line2)}
+  .side .grp-p[hidden]{display:none}
 }
 
 /* ---- Selector de dos listas (mover asignados): Usuarios → clientes y proyectos ---- */
