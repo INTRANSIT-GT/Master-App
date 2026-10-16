@@ -1,26 +1,4 @@
-# Dependencias
-node_modules/
-
-# Sistema operativo / editor
-.DS_Store
-Thumbs.db
-*.log
-.idea/
-.vscode/
-
-# Supabase CLI (estado local de enlaces y secretos)
-supabase/.temp/
-supabase/.branches/
-.env
-.env.*
-
-# Artefactos de prueba / empaquetados (no son código fuente)
-prueba_encargado_proyecto.zip
-prueba_encargado_proyecto/
-
-# Copias/exportaciones del proyecto que no son fuente (evita que un zip las vuelva a colar)
-Master-App-main/
-MasterApp-administrador/
-MasterApp-administrador-v2/
-respaldo_original/
-respaldo_anterior/
+# Archivos generados o de trabajo que no deben versionarse
+_rebuild/
+__pycache__/
+*.pyc
