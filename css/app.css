@@ -1,8 +1,8 @@
 
 :root{
   box-sizing:border-box;
-  padding-top:env(safe-area-inset-top,0px);
-  padding-bottom:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
   --font-display:"Avenir Next","Nunito Sans",Arial,sans-serif; --font-body:Arial,"Helvetica Neue",Helvetica,sans-serif;
   --blue-range:#005697; --single-blue:#007DC5; --ocean:#14A1FF;
   --bg:#F4F7FA; --stage:#D5DCE5; --surface:#FFFFFF; --surface2:#F6F9FC; --ink:#005697; --ink2:#5E5E5E; --mute:#666666;
@@ -24,9 +24,10 @@
   --ok:#6CCB97; --ok-bg:#153326; --warn:#E6B650; --warn-bg:#382C10; --fix:#F0A275; --fix-bg:#3A2316;
   --rev:#A9A4F0; --rev-bg:#25234A; --pend:#A9B8CB; --pend-bg:#223244; --cur:#7DB4EE; --cur-bg:#17304D; --com:#5FD0C8; --com-bg:#12332F;
 }
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html{scroll-padding-top:var(--safe-t);background:var(--bg)}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
+@supports(height:100dvh){html,body{height:100dvh}}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
 h1,h2,h3{font-family:var(--font-display);margin:0;letter-spacing:0;color:var(--ink)}
 h1{font-size:28px;line-height:1.15;font-weight:700}
@@ -44,7 +45,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 body.phone{background:var(--stage)}
 body.phone #stage{padding:14px}
 body.phone #shell{width:392px;height:min(850px,100%);border-radius:40px;border:9px solid #0A1522}
-#app{height:100%;display:flex;flex-direction:column}
+#app{height:100%;display:flex;flex-direction:column;padding-top:var(--safe-t);padding-bottom:var(--safe-b)}
 
 /* Cabecera y navegación */
 .top{display:flex;align-items:center;gap:12px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line);flex:none}
