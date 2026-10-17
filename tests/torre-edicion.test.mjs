@@ -117,7 +117,7 @@ const f2 = await api('fel', 'torreEditarHorarios', vkid, { tIngresoPlanta: '2031
 const k2 = await trip('adm', vkid);
 T('04 Torre MODIFICA un horario y la fecha plan ya registrados', f2.ok && k2.tIngresoPlanta === '2031-02-01T08:45' && k2.fechaPlan === '2031-02-02T08:00', f2);
 const aud = (await snap('adm')).audit.filter(a => a.viajeId === vkid && /Torre de Control/.test(a.accion));
-const aIn = aud.find(a => a.campo === 'Ingreso a planta CP');
+const aIn = aud.find(a => a.campo === 'Ingreso a planta');
 T('05 Queda el historial: campo, valor anterior, valor nuevo, usuario y fecha de cada cambio', aud.length === 4 && aIn && /08:10/.test(aIn.anterior) && /08:45/.test(aIn.nuevo) && aIn.por === 'Felipe Torre' && !!aIn.en, aud.map(a => [a.campo, a.anterior, a.nuevo]));
 const aSal = aud.find(a => a.campo === 'Fecha y hora de salida');
 T('06 Un horario que estaba vacío se registra con anterior «(vacío)»', aSal && /vac/.test(aSal.anterior), aSal);

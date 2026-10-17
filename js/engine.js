@@ -148,7 +148,8 @@ const PROHIBIDO={
   FACTURACION:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...ADMIN_TODO,'costos_registrar','cobros_registrar','pagos_registrar','viajes_estatus_torre','rutas_gestionar','tarifas_crear','tarifas_editar','tarifas_desactivar'],
   COBROS:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre'],
   PAGO_OPL:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','viajes_estatus_torre','tarifas_opl_autorizar'],
-  TORRE:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar'],
+  /* Torre nunca ve importes: además de finanzas/tarifas, se le niega todo permiso que abra datos monetarios (facturación, tarifas OPL, tablero, gastos de flota) aunque se habilite en la matriz */
+  TORRE:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','comercial_ver','tarifas_opl_ver','tarifas_opl_crear','tarifas_opl_autorizar','tablero_ver','catalogos_ver'],
   PROYECTOS:['usuarios_gestionar','permisos_gestionar']
 };
 /* Permisos que no se pueden quitar (evita bloquearse a sí misma) */
@@ -785,7 +786,7 @@ const API={
       moveEstado(t,'ENTREGADO',A,'Viaje entregado (Torre de Control)');
       t.finalizadoPor=A.nombre;t.finalizadoEn=nowIso();
     }
-    return t;
+    return redact(A,t);   /* la respuesta pasa por el mismo filtro que las lecturas: Torre no recibe importes */
   });},
 
   /* Torre de Control: agrega o corrige fechas y horarios (los campos que el viaje ya tiene). No cambia el estado ni ningún otro dato.
