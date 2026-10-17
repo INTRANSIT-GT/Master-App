@@ -482,3 +482,20 @@ tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
   .mv{grid-template-columns:1fr;gap:8px}
   .mv-btns{flex-direction:row;padding-top:0;justify-content:center;flex-wrap:wrap}
 }
+
+/* ---- Menú en el teléfono: botón de tres líneas y cajón lateral ----
+   Solo se activa cuando la pantalla es angosta (clase `mob` que pone la aplicación).
+   En escritorio, el menú lateral se ve exactamente como antes. */
+.navbtn{display:none}
+body.mob .navbtn{display:inline-grid;place-items:center;width:44px;height:44px;flex:none;padding:0;border:1px solid var(--line);background:var(--surface);border-radius:10px;color:var(--ink)}
+body.mob .top{gap:8px;padding:8px 10px}
+body.mob .brand{gap:8px;min-width:0}
+body.mob .brand>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.mob .side{position:absolute;top:0;bottom:0;left:0;z-index:70;width:min(300px,84%);flex:none;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:2px;padding:14px 10px;background:var(--surface);border-right:1px solid var(--line);border-bottom:0;overflow:auto;box-shadow:0 14px 40px rgba(8,18,30,.35);transform:translateX(-102%);transition:transform .2s ease}
+body.mob.nav-open .side{transform:none}
+body.mob .side button{width:100%;white-space:normal;text-align:left;padding:11px 12px;min-height:44px}
+body.mob .side .sep{display:block}
+body.mob .side .grp{display:flex;flex-direction:column;gap:2px}
+body.mob .side .grp-p{flex-direction:column;overflow:visible;border-top:0;border-left:2px solid var(--line2);margin:0 0 0 8px;padding:2px 0 4px 10px}
+body.mob.nav-open .mback{background:rgba(8,18,30,.45)}
+@media (prefers-reduced-motion:reduce){body.mob .side{transition:none}}

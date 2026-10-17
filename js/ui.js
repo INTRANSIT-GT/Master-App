@@ -494,9 +494,18 @@ function bannerHTML(){
   if(BACKEND.modo==='supabase'&&!navigator.onLine)return `<div class="offbar" role="alert">Sin conexión con el servidor. <b>Nada de lo que hagas se guarda</b> hasta que vuelva la conexión; no se confirmará ninguna operación.</div>`;
   return '';
 }
+/* ¿Pantalla angosta? En el teléfono el menú se guarda en un botón de tres líneas.
+   En escritorio (y en las pruebas, que corren con ventana ancha) el menú se ve igual que siempre. */
+function esMovil(){
+  try{
+    if(typeof window.matchMedia==='function')return window.matchMedia('(max-width:899px)').matches||PREF.phone===true;
+    return (window.innerWidth||9999)<900;
+  }catch(e){return false;}
+}
 function headerHTML(){
   const u=S.user;
-  return `<header class="top"><div class="brand"><span class="isotile"><img src="${ISOLOGO}" alt="In Transit"></span><span>Control de viajes<small>In Transit · innovative outsourcing</small></span></div><span class="spacer"></span>${(BACKEND.modo==='demo'&&!SIN_DEMO)?'<span class="demotag" title="Los datos son de demostración y viven solo en este navegador">Modo demostración</span>':''}
+  const botonMenu=(esMovil()&&navItems().length>=2)?`<button class="navbtn" data-act="navToggle" aria-label="Abrir menú" aria-expanded="${S.nav?'true':'false'}">${icon('menu',22)}</button>`:'';
+  return `<header class="top">${botonMenu}<div class="brand"><span class="isotile"><img src="${ISOLOGO}" alt="In Transit"></span><span>Control de viajes<small>In Transit · innovative outsourcing</small></span></div><span class="spacer"></span>${(BACKEND.modo==='demo'&&!SIN_DEMO)?'<span class="demotag" title="Los datos son de demostración y viven solo en este navegador">Modo demostración</span>':''}
     <button class="bell" data-act="notifOpen" aria-label="Notificaciones${notifData().filter(n=>!n.leida).length?' ('+notifData().filter(n=>!n.leida).length+' sin leer)':''}">${icon('bell',20)}${notifData().filter(n=>!n.leida).length?`<span class="bcount">${notifData().filter(n=>!n.leida).length}</span>`:''}</button>
     <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(rolL(u.rol))}${(!esEnc()&&u.rol!=='ADMIN'&&clientesAsig(u).length)?' · '+esc(clientesAsig(u).join(', ')):''}</span></span></button></header>`;
 }
@@ -542,12 +551,15 @@ function navHTML(){
   return `<nav class="side" aria-label="Navegación principal">${items.map(v=>`${v==='catalogos'?'<div class="sep"></div>':''}<button data-act="nav" data-v="${v}" ${act===v?'aria-current="page"':''}>${icon(NAVLBL[v][1],18)}${NAVLBL[v][0]}</button>`).join('')}</nav>`;
 }
 function render(){
+  const movil=esMovil();
   document.body.classList.toggle('phone',PREF.phone);
+  document.body.classList.toggle('mob',movil);
+  document.body.classList.toggle('nav-open',!!(movil&&S.nav));
   const root=$('#app');
   if(!S.user||S.view==='login'){root.innerHTML=bannerHTML()+loginHTML()+menuHTML();return;}
   if(!allowed(S.view)){S.view=homeOf(S.user);S.param=null;}
   const prev=$('#main'),keep=prev&&S._lv===S.view&&S._lp===S.param,st=keep?prev.scrollTop:0;
-  root.innerHTML=bannerHTML()+headerHTML()+`<div class="body">${navHTML()}<main id="main" class="main">${archBar()}${VIEWS[S.view]()}</main></div>`+modalHTML()+menuHTML();
+  root.innerHTML=bannerHTML()+headerHTML()+`<div class="body">${navHTML()}${movil&&S.nav?'<div class="mback" data-act="navClose"></div>':''}<main id="main" class="main">${archBar()}${VIEWS[S.view]()}</main></div>`+modalHTML()+menuHTML();
   S._lv=S.view;S._lp=S.param;
   if(keep){const m=$('#main');if(m)m.scrollTop=st;}
 }
@@ -560,7 +572,7 @@ function go(view,param){
   if(!allowed(view)){toast(esEnc()?'No tienes acceso a esa pantalla.':'Tu perfil no tiene acceso a esa pantalla.','err');view=homeOf(S.user);param=null;}
   if(view==='detalle')S.from={view:S.view,param:S.param};
   if(view==='nuevo'&&S.view!=='nuevo')S.form=null;
-  S.view=view;S.param=param||null;S.menu=false;S.modal=null;S.edit=null;S._lv=null;
+  S.view=view;S.param=param||null;S.menu=false;S.nav=false;S.modal=null;S.edit=null;S._lv=null;
   try{history.pushState(null,'','#'+view+(param?'/'+param:''));}catch(e){}
   render();const m=$('#main');if(m)m.scrollTop=0;
 }
@@ -634,8 +646,11 @@ const ACT={
   async fill(d){const u=DB.usuarios.find(x=>x.usuario===d.u);$('#u').value=u.usuario;$('#p').value=u.clave;S.loginU=u.usuario;},
   async instalar(){await PWA.instalar();render();},
   async instalarAyuda(){formM({title:'Instalar la aplicación',text:'Elige tu dispositivo. La instalación depende del navegador; no todos los navegadores la ofrecen.',summary:PWA.ayudaHTML(),noCancel:true,ok:'Cerrar',act:'closeModal',ancho:'640px'});},
-  async menu(){S.menu=!S.menu;render();},
+  async menu(){S.menu=!S.menu;if(S.menu)S.nav=false;render();},
   async menuClose(){S.menu=false;render();},
+  /* menú lateral en el teléfono (botón de tres líneas) */
+  async navToggle(){S.nav=!S.nav;if(S.nav)S.menu=false;render();},
+  async navClose(){S.nav=false;render();},
   async togglePhone(){PREF.phone=!PREF.phone;savePref();S.menu=false;render();},
   async toggleArch(){PREF.arch=!PREF.arch;savePref();S.menu=false;render();},
   async reset(){
@@ -684,7 +699,7 @@ app.addEventListener('click',e=>{
 });
 app.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key===' ')&&e.target.matches('[role=button][data-act]')){e.preventDefault();e.target.click();}
-  if(e.key==='Escape'&&(S.modal||S.menu)){S.modal=null;S.menu=false;render();}
+  if(e.key==='Escape'&&(S.modal||S.menu||S.nav)){S.modal=null;S.menu=false;S.nav=false;render();}
   if(e.key==='Enter'&&(e.target.id==='u'||e.target.id==='p')){e.preventDefault();doLogin();}
 });
 app.addEventListener('submit',e=>{e.preventDefault();doLogin();});
@@ -740,8 +755,10 @@ app.addEventListener('input',e=>{
 window.addEventListener('popstate',()=>{
   if(!S.user)return;
   const h=(location.hash||'').replace('#','').split('/');const v=h[0]||homeOf(S.user);
-  S.view=VIEWS[v]&&allowed(v)?v:homeOf(S.user);S.param=h[1]||null;S.modal=null;S.menu=false;S.edit=null;S._lv=null;render();
+  S.view=VIEWS[v]&&allowed(v)?v:homeOf(S.user);S.param=h[1]||null;S.modal=null;S.menu=false;S.nav=false;S.edit=null;S._lv=null;render();
 });
+/* al girar el teléfono o cambiar de tamaño, se elige el menú que corresponde */
+window.addEventListener('resize',()=>{try{const m=esMovil();if(m!==document.body.classList.contains('mob'))render();}catch(e){}});
 setInterval(()=>{
   document.querySelectorAll('[data-since]').forEach(el=>{el.textContent=elapsed(el.dataset.since);});
   const c=$('#clock');if(c)c.textContent=new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit',hour12:false});

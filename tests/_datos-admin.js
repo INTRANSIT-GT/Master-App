@@ -12,6 +12,11 @@
   PILOTOS.length=0;PILOTOS.push({id:'P-1',nombre:'Piloto Uno',unidad:'T-1',proyecto:'COLGATE'},{id:'P-2',nombre:'Piloto Dos',unidad:'T-2',proyecto:'COLGATE'});
   FLOTA.length=0;FLOTA.push({unidad:'T-1',placa:'C-1',tango:'TG-1',capacidad:'10 Ton',tipo:'10TON'},{unidad:'T-2',placa:'C-2',tango:'TG-2',capacidad:'12 Ton',tipo:'12TON'});
   DESTINOS.length=0;DESTINOS.push({id:'D-1',nombre:'Mayorista Escuintla',proyecto:'COLGATE'},{id:'D-2',nombre:'Distribuidora Los Andes',proyecto:'COLGATE'});
+  /* Las listas del sistema ahora viven en la base (master.catalogos): sin esto la validación rechaza
+     el OPL, el tipo de viaje y el tipo de carga de los viajes de ejemplo. */
+  DB.catalogosListas=Object.assign({},DB.catalogosListas,{tipoUnidad:['RAS S','RAS L','RAS A','RAS','FUR','5TON','10TON','12TON','53"'],
+    opl:['J&J','GRIJALVA','GTL','CATALAN','BATRES','INTRANSIT','TRANS. CHAVELITA','TRANS. GAEL','TRANS. MILITO JCR','TRANS. REGALO DE DIOS','TRANS. STEFANI','TRANS. FERS','TRANS. HERNANDEZ','TRANS. NUEVO MUNDO','TRANS. REYNOSO','TRANS. XICARA','DIEGO CHICHICASTENANGO'],
+    tipoCarga:['KG','CAJAS','TARIMAS'],tipoViaje:['ONE WAY','ROUD TRIP','MAYOREO','DETALLE','NA']});
   syncRefs();
 })()
 
