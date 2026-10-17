@@ -34,16 +34,30 @@ function torreSheet(list){
     <td>${fmtL(t.fechaPlan)}</td><td>${t.tSalida?fmtL(t.tSalida):'—'}</td><td>${t.tFinDescarga?fmtL(t.tFinDescarga):'—'}</td></tr>`;}).join('')}
   </tbody></table></div>${paginador('torre',pg)}`;
 }
-BODY.torre=()=>`<div class="mute" style="margin-bottom:8px">${torreList().length} viajes</div>${torreSheet(torreList())}`;
+/* ---- Torre de Control: horarios y fechas (consultar, agregar y corregir) ---- */
+const torreHor=()=>S.navK==='horarios';
+/* Misma regla que el servidor (torreEditarHorarios): permiso de Torre + cliente autorizado + viaje aún no facturado */
+const torreEdita=t=>hp('viajes_estatus_torre')&&!!clienteDe(t).torreEstatus&&!['FACTURADO','COBRADO'].includes(t.estado);
+function torreHorarios(list){
+  if(!list.length)return empty('No hay viajes en esta pestaña','Cuando haya viajes aparecerán aquí con sus horarios.');
+  const pg=paginar('torre',list);
+  const celda=v=>v?fmtL(v):'<span class="mute" title="Sin registrar">—</span>';
+  return `<div class="xlwrap sheet"><table class="xl" id="tablaHorarios" style="min-width:${1100+CAMPOS_TIEMPO.length*130}px"><thead><tr><th class="stk">Viaje</th><th>Cliente</th><th>Proyecto</th><th>Placa</th><th>Fecha plan</th>${CAMPOS_TIEMPO.map(([k,l])=>`<th>${esc(l)}</th>`).join('')}<th>Estado</th><th>Acciones</th></tr></thead><tbody>
+  ${pg.filas.map(t=>{const j=J(t);
+    return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(j.f.placa||'—')}</td><td>${celda(t.fechaPlan)}</td>${CAMPOS_TIEMPO.map(([k])=>`<td>${celda(t[k])}</td>`).join('')}<td>${badge(t.estado)}</td>
+    <td style="white-space:nowrap">${torreEdita(t)?`<button class="btn primary sm" data-act="torreHorOpen" data-id="${t.id}">Editar horarios</button>`:`<span class="mute" style="font-size:12px">${['FACTURADO','COBRADO'].includes(t.estado)?'viaje facturado':'solo consulta'}</span>`}</td></tr>`;}).join('')}
+  </tbody></table></div>${paginador('torre',pg)}`;
+}
+BODY.torre=()=>`<div class="mute" style="margin-bottom:8px">${torreList().length} viajes</div>${torreHor()?torreHorarios(torreList()):torreSheet(torreList())}`;
 VIEWS.torre=()=>{
   const all=vis(),base=S.tProy?all.filter(t=>t.proyecto===S.tProy):all,k=S.tab.torre||'curso';
   const kp=(n,l,c)=>`<div class="kpi"><span class="n">${n}</span><span class="l"><i class="dot" style="background:${c}"></i>${l}</span></div>`;
   const chips=comboHTML('tProy',S.tProy,[{id:'',nombre:'Todos los clientes'},...PROYECTOS.map(p=>({id:p.id,nombre:p.nombre}))]);
   const aut=DB.clientes.filter(c=>c.torreEstatus).map(c=>c.nombre);
-  const rules=`<div class="rulebar"><span><b>Puedes avanzar el estado de:</b> ${esc(aut.join(', ')||'ningún cliente')}.</span><span class="mute">Torre solo mueve el estado (En ruta / Entregado); no edita otros datos.</span></div>`;
+  const rules=`<div class="rulebar"><span><b>Puedes avanzar el estado de:</b> ${esc(aut.join(', ')||'ningún cliente')}.</span><span class="mute">Torre mueve el estado (En ruta / Entregado) y puede agregar o corregir fechas y horarios; no edita otros datos.</span></div>`;
   return `<div class="inner" style="max-width:none">${pageHead('TORRE DE CONTROL','Hoja de viajes de todos los proyectos · avanza el estado de los clientes autorizados',`<span class="clock" id="clock">${new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit',hour12:false})}</span>`)}
     <div class="grid g4" style="margin-bottom:16px">${kp(cnt(base,t=>t.estado==='PLANIFICADO'),'Planificados',ESTADOS.PLANIFICADO.c)}${kp(cnt(base,t=>t.estado==='EN_RUTA'),'En ruta',ESTADOS.EN_RUTA.c)}${kp(cnt(base,t=>hp('viajes_estatus_torre')&&torreAccion(t)),'Con acción disponible',ESTADOS.ENTREGADO.c)}${kp(cnt(base,t=>t.estado==='ENTREGADO'),'Pendientes de liquidación',ESTADOS.LIQUIDADO.c)}</div>
-    ${chips}${rules}${tabs('torre',TT,k,base)}
+    ${chips}${rules}<div class="chips" role="group" aria-label="Vista de Torre" style="margin:0 0 10px"><button class="chip" data-act="torreVista" data-v="e" aria-pressed="${!torreHor()}">Viajes y estado</button><button class="chip" data-act="torreVista" data-v="h" aria-pressed="${torreHor()}">Horarios y fechas</button></div>${tabs('torre',TT,k,base)}
     <div style="margin:12px 0"><input type="text" id="q" placeholder="Buscar por viaje, piloto, placa, cliente, destino o estado" value="${esc(S.q)}" aria-label="Buscar" style="max-width:440px"></div>
     <div id="vb">${BODY.torre()}</div></div>`;
 };
@@ -68,6 +82,48 @@ async function torreEstadoSave(id,dest,btn){
 
 /* ---- Acciones (handlers) de este módulo ---- */
 Object.assign(ACT,{
+  async torreVista(d){S.navK=d.v==='h'?'horarios':'';render();},
+  /* Editar horarios: ventana con la identificación del viaje, todos sus campos de fecha/hora y el resumen de lo que cambia */
+  async torreHorOpen(d){
+    const t=DB.trips.find(x=>x.id===d.id);if(!t)return;
+    const j=J(t),ini={};TIEMPO_KEYS.forEach(k=>{ini[k]=t[k]||'';});
+    const difs=m=>TIEMPO_KEYS.filter(k=>String(m[k]||'')!==String(ini[k]||'')).map(k=>({campo:'chg:'+k,msg:`${LBL[k]||k}: ${ini[k]?fmtL(ini[k]):'(vacío)'} → ${m[k]?fmtL(m[k]):'(vacío)'}`}))
+      .concat(m.estadoNuevo?[{campo:'chg:estado',msg:`Estatus: ${ESTADOS[t.estado].l} → ${ESTADOS[m.estadoNuevo].l}`}]:[]);
+    /* Estatus: solo el paso siguiente que ya permite Torre (mismas reglas y validaciones que «Enviar a ruta / Confirmar entrega») */
+    const sig=TORRE_SIGUIENTE[t.estado];
+    const campoEstatus=sig?[{k:'estadoNuevo',label:'Estatus del viaje',type:'select',ph:`Mantener: ${ESTADOS[t.estado].l} (actual)`,opts:[{id:sig,nombre:ESTADOS[sig].l}],hint:'Pasar a «'+ESTADOS[sig].l+'» exige que el viaje tenga sus datos y horarios completos.'}]:[];
+    formM({title:`Horarios del viaje #${t.id}`,
+      text:`Escribe un horario que falte o corrige uno existente. Se guarda en el viaje y otros usuarios verán el cambio; queda registrado quién lo hizo y el valor anterior.`,
+      summary:`<div class="alertbox info" style="margin-bottom:10px"><b>Viaje #${esc(t.id)}</b> · ${esc(j.cliente)} · ${esc(t.proyectoCat)} · Placa <b>${esc(j.f.placa||'—')}</b> · ${esc(ESTADOS[t.estado].l)}</div>`,
+      fields:[...campoEstatus,{k:'fechaPlan',label:'Fecha plan',type:'datetime-local',req:1},...CAMPOS_TIEMPO.map(([k,l])=>({k,label:l,type:'datetime-local'}))],
+      data:Object.assign({estadoNuevo:''},ini),ancho:'760px',
+      live:difs,liveRender:f=>f.length?`<div class="alertbox info" style="margin:10px 0"><b>Cambios por guardar (${f.length}):</b><ul style="margin:4px 0 0 18px;padding:0">${f.map(x=>`<li>${esc(x.msg)}</li>`).join('')}</ul></div>`:`<div class="mute" style="margin:10px 0">Todavía no has cambiado ningún horario.</div>`,
+      ok:'GUARDAR CAMBIOS',act:'torreHorGuardar',id:t.id,ini});
+  },
+  async torreHorGuardar(d){
+    const m=S.modal;if(!m)return;
+    if(m.guardando)return;                                   /* un doble clic no guarda dos veces */
+    const cambios={};TIEMPO_KEYS.forEach(k=>{if(String(m.data[k]||'')!==String(m.ini[k]||''))cambios[k]=m.data[k]||'';});
+    const nuevo=m.data.estadoNuevo||'';
+    if(!Object.keys(cambios).length&&!nuevo){m.err='No hay cambios que guardar.';render();return;}
+    if('fechaPlan' in cambios&&!cambios.fechaPlan){m.err='La fecha plan es obligatoria.';render();return;}
+    m.guardando=true;
+    let nh=0;
+    try{
+      if(Object.keys(cambios).length){
+        const r=await API.torreEditarHorarios(S.user.id,d.id,cambios);nh=r.cambios;
+        Object.assign(m.ini,cambios);                         /* ya guardado: un reintento no lo vuelve a enviar */
+      }
+      if(nuevo)await API.torreMoverEstado(S.user.id,d.id,nuevo);
+      S.modal=null;render();refreshSheet();
+      toast(`Viaje #${d.id} guardado correctamente`+(nh?` · ${nh} ${nh===1?'horario':'horarios'}`:'')+(nuevo?` · estatus: ${ESTADOS[nuevo].l}`:'')+'.');
+    }catch(e){
+      m.guardando=false;
+      m.err=(nh?`Los horarios sí se guardaron, pero el estatus no cambió. `:'No se guardó nada. ')+(e.message||'Ocurrió un error.');
+      if(nh)refreshSheet();
+      render();
+    }
+  },
   async torreEstado(d,el){await torreEstadoSave(d.torreestado,d.dest,el);},
   async estadoRetry(d,el){const btn=document.querySelector('button[data-torreestado="'+d.id+'"]');await torreEstadoSave(d.id,d.dest,btn);}
 });

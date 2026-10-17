@@ -474,7 +474,7 @@ function liveHTML(f){
 function updateLive(){
   const m=S.modal;if(!m||!m.live)return;
   const f=m.live(m.data),box=document.getElementById('mlive');
-  if(box)box.innerHTML=liveHTML(f);
+  if(box)box.innerHTML=(m.liveRender||liveHTML)(f);
   document.querySelectorAll('.dlg [data-needs="1"]').forEach(b=>{b.disabled=f.length>0;});
   document.querySelectorAll('.dlg .fgroup[data-fk]').forEach(g=>g.classList.toggle('fmissing',f.some(x=>x.campo===g.dataset.fk)));
 }
@@ -486,9 +486,9 @@ function modalHTML(){
   return `<div class="back" data-act="backdrop"><div class="dlg" role="dialog" aria-modal="true" aria-label="${esc(m.title)}" style="${m.ancho?'max-width:'+m.ancho:''}"><h2>${esc(m.title)}</h2>${m.text?`<p>${m.text}</p>`:''}${m.summary||''}
     ${m.chips?`<div class="chips">${m.chips.map(c=>`<button class="chip" data-act="chip" data-t="${esc(c)}">${esc(c)}</button>`).join('')}</div>`:''}
     ${(m.fields||[]).map(f=>fieldM(f,m.data)).join('')}
-    ${live?`<div id="mlive">${liveHTML(live)}</div>`:''}
+    ${live?`<div id="mlive">${(m.liveRender||liveHTML)(live)}</div>`:''}
     ${m.err?`<div class="err" role="alert" style="margin-top:8px">${esc(m.err)}</div>`:''}
-    <div class="btns">${m.noCancel?'':'<button class="btn" data-act="closeModal">Cancelar</button>'}${btns}</div></div></div>`;
+    <div class="btns">${m.noCancel?'':`<button class="btn" data-act="closeModal">${esc(m.cancelLabel||'Cancelar')}</button>`}${btns}</div></div></div>`;
 }
 function bannerHTML(){
   if(BACKEND.modo==='supabase'&&!navigator.onLine)return `<div class="offbar" role="alert">Sin conexión con el servidor. <b>Nada de lo que hagas se guarda</b> hasta que vuelva la conexión; no se confirmará ninguna operación.</div>`;

@@ -767,6 +767,32 @@ const API={
     return t;
   });},
 
+  /* Torre de Control: agrega o corrige fechas y horarios (los campos que el viaje ya tiene). No cambia el estado ni ningún otro dato.
+     Mismo permiso y misma autorización por cliente que «avanzar el estado»; queda en la bitácora con valor anterior, nuevo, usuario y fecha. */
+  torreEditarHorarios(uid,id,cambios,motivo){return exec(uid,'torreEditarHorarios',id,A=>{
+    need(A,'viajes_estatus_torre','editar fechas y horarios desde Torre de Control');
+    const t=getT(id);if(!puedeVer(A,t))deny('No tienes acceso a este viaje.');
+    const cl=DB.clientes.find(x=>x.id===t.proyecto)||{};
+    if(!cl.torreEstatus)deny(`Torre de Control solo edita horarios de los clientes autorizados. ${cl.cliente||t.proyecto} es solo consulta.`,'CLIENTE_NO_AUTORIZADO');
+    if(['FACTURADO','COBRADO'].includes(t.estado))deny('El viaje ya fue facturado: sus fechas y horas ya no se pueden modificar.','ESTADO_BLOQUEADO');
+    const ks=Object.keys(cambios||{});if(!ks.length)deny('No hay cambios que guardar.','VALIDACION');
+    ks.forEach(k=>{if(!TIEMPO_KEYS.includes(k))deny(`El campo "${LBL[k]||k}" no es una fecha ni un horario: Torre de Control no puede editarlo.`,'CAMPO_NO_EDITABLE');});
+    const dif=[];
+    ks.forEach(k=>{
+      const nv=typeof cambios[k]==='string'?cambios[k].trim():cambios[k],ov=t[k]==null?'':t[k];
+      if(String(nv==null?'':nv)===String(ov))return;
+      const m=valKey(t.proyecto,k,nv);if(m)deny(m,'VALIDACION');
+      dif.push([k,ov,nv==null?'':nv]);
+    });
+    if(!dif.length)return {cambios:0};
+    dif.forEach(([k,ov,nv])=>{
+      auditAdd({viajeId:t.id,accion:'Fecha/hora modificada (Torre de Control)',campo:LBL[k]||k,anterior:fmtVal(k,ov),nuevo:fmtVal(k,nv),por:A,motivo:motivo||''});
+      t[k]=nv;
+    });
+    t.editadoPor=A.nombre;t.editadoEn=nowIso();
+    return {cambios:dif.length};
+  });},
+
   /* ----- liquidaciones ----- */
   enviarLiquidacion(uid,id,foto){return exec(uid,'enviarLiquidacion',id,A=>{
     need(A,'liq_enviar','enviar liquidaciones');
