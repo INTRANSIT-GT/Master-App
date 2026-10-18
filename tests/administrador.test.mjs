@@ -223,4 +223,12 @@ const rv = vi.ok && (await db.query('select piloto_id, unidad_id, ruta_id from m
 T('6.5 El viaje creado con piloto derivado de la placa guarda piloto, unidad (T-1) y ruta en la base', vi.ok && rv.piloto_id === 'P-1' && rv.unidad_id === 'T-1' && rv.ruta_id === 'R-0002', vi.message);
 const sn2 = (await srv('adm', 'snapshot')).snapshot;
 T('6.6 Al consultar de nuevo, el viaje conserva ruta y piloto', sn2.trips[0].rutaId === 'R-0002' && sn2.trips[0].pilotoId === 'P-1');
+/* ============ 7. EL ESTADO DEL VIAJE NO SE ELIGE AL CREAR ============ */
+comoAdmin(); ev("S.view='nuevo';S.form=null;S.edit=null;render()");
+T('7.1 Al crear un viaje no se ofrece el estado: el viaje nace Planificado', !d.querySelector('#m_estado'));
+const tEd = ev('DB.trips.find(t=>t.estado===\'PLANIFICADO\')?.id||DB.trips[0].id');
+ev(`S.form=null;S.edit={id:'${tEd}',data:toModel(DB.trips.find(t=>t.id==='${tEd}')),motivo:''};S.view='nuevo';render()`);
+T('7.2 Al editar un viaje la administradora sí puede corregir el estado', !!d.querySelector('#m_estado'));
+ev("S.edit=null;render()");
+
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

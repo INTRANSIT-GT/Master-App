@@ -160,6 +160,10 @@ const NAVLBL={proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],
 const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
+/* Estados que se pueden corregir a mano (con el permiso viajes_editar_estado). Los demás los genera el flujo:
+   LIQUIDADO (liquidación enviada), RECHAZADO (liquidación devuelta), ACEPTADO (liquidación aprobada),
+   FACTURADO y COBRADO (Comercial). Nunca se puede saltar un paso: la transición debe existir en EDGES. */
+const ESTADOS_MANUALES=['EN_RUTA','ENTREGADO'];
 Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origenId:'Origen',destinoId:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos'});
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos'];
 
@@ -294,6 +298,7 @@ function setAuto(t,k,nv,A,motivo){
 }
 function fmtVal(k,v){
   if(v===''||v==null)return '(vacío)';
+  if(k==='estado')return (ESTADOS[v]||{}).l||v;
   if(k==='pilotoId')return (PILOTOS.find(p=>p.id===v)||{}).nombre||v;
   if(k==='origenId')return (ORIGENES.find(o=>o.id===v)||{}).nombre||v;
   if(k==='destinoId')return (DESTINOS.find(o=>o.id===v)||{}).nombre||v;
@@ -695,8 +700,10 @@ const API={
     const keys=[...DATA_KEYS,...TIEMPO_KEYS,'rutaRef'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origenId'||k==='destinoId'?'El origen y el destino se completan solos a partir de la ruta: no se escriben a mano.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
-    /* Estado inicial: Planificado por defecto; solo quien tiene permiso puede fijar otro (y siempre uno válido). */
-    if(!v.estado||!ESTADOS[v.estado]||!hasPerm(A,'viajes_editar_estado'))v.estado='PLANIFICADO';
+    /* El viaje nace Planificado: los demás estados los produce el flujo paso a paso (en ruta, entregado,
+       liquidación, aprobación, facturación, cobro). No se puede crear un viaje ya entregado o facturado. */
+    if(v.estado&&v.estado!=='PLANIFICADO')deny('El viaje nuevo nace Planificado: los demás estados los pone el flujo (en ruta, entregado, liquidación, facturación).','ESTADO_NO_AUTORIZADO');
+    v.estado='PLANIFICADO';
     if(!v.rutaId)deny('Falta Ruta.','VALIDACION');
     keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
     let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
@@ -724,7 +731,18 @@ const API={
     ks.forEach(k=>{
       if(k==='estado'){
         need(A,'viajes_editar_estado','modificar manualmente el estado del viaje');
-        if(!(cambios[k]===''||cambios[k]==null)&&!ESTADOS[cambios[k]])deny('Estado no válido.','VALIDACION');
+        if(!esAsig)deny('Solo puedes cambiar el estado de viajes de tus clientes asignados.','CAMPO_NO_AUTORIZADO');
+        const nv=String(cambios[k]==null?'':cambios[k]).trim();
+        if(!nv)deny('Elige el estado del viaje.','VALIDACION');
+        if(!ESTADOS[nv])deny('Estado no válido.','VALIDACION');
+        if(nv===t.estado)deny(`El viaje ya está en "${ESTADOS[nv].l}".`,'VALIDACION');
+        if(!ESTADOS_MANUALES.includes(nv))deny(`El estado "${ESTADOS[nv].l}" no se fija a mano: lo pone el flujo (liquidación, aprobación, facturación o cobro).`,'ESTADO_NO_AUTORIZADO');
+        if(!(EDGES[t.estado]||[]).includes(nv))deny(`No se puede pasar de "${ESTADOS[t.estado].l}" a "${ESTADOS[nv].l}" a mano: sigue el flujo paso a paso.`,'TRANSICION_INVALIDA');
+        const prop=Object.assign({},t,cambios);      /* el estado y los datos se validan juntos: se puede completar y pasar de estado en un solo guardado */
+        if(nv==='EN_RUTA'){
+          requerido(prop,['shipment','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','placaArrastre'],'En ruta');
+          if(!prop.unidadId)deny('No se puede pasar a En ruta: falta la unidad.','FALTAN_CAMPOS');
+        }else requerido(prop,TKEYS,'Entregado');
       }else if(TIEMPO_KEYS.includes(k)){
         need(A,'viajes_editar_tiempos','editar fechas y horas');
         if(!todos&&!esAsig)deny('Solo puedes editar viajes de tus clientes asignados.');
@@ -756,13 +774,18 @@ const API={
     else if(dif.some(x=>x[0]==='proyectoCat')&&rActual&&rActual.estado==='ASIGNADA'&&rActual.proyecto!==proyFinal)deny('La ruta del viaje no corresponde al proyecto elegido: selecciona otra ruta.','VALIDACION');
     dif.forEach(([k,ov,nv])=>{
       const esT=TIEMPO_KEYS.includes(k);
-      auditAdd({viajeId:t.id,accion:esT?'Fecha/hora modificada':'Dato modificado',campo:LBL[k]||k,anterior:k==='rutaId'?rutaNombre(ov):fmtVal(k,ov),nuevo:k==='rutaId'?rutaNombre(nv):fmtVal(k,nv),por:A,motivo:motivo||''});
+      auditAdd({viajeId:t.id,accion:esT?'Fecha/hora modificada':(k==='estado'?'Estado corregido a mano':'Dato modificado'),campo:LBL[k]||k,anterior:k==='rutaId'?rutaNombre(ov):fmtVal(k,ov),nuevo:k==='rutaId'?rutaNombre(nv):fmtVal(k,nv),por:A,motivo:motivo||''});
       t[k]=nv;
       if(k==='pilotoId'){const P=PILOTOS.find(p=>p.id===nv);const antes=t.unidadId;if(P&&!('unidadId' in cambios)){t.unidadId=P.unidad||'';auditAdd({viajeId:t.id,accion:'Dato modificado (por cambio de piloto)',campo:'Unidad',anterior:antes,nuevo:t.unidadId,por:A,motivo:motivo||''});}}
       if(k==='rutaId'){const r=DB.rutas.find(x=>x.id===nv);const ao=t.origenId,ad=t.destinoId;t.origenId=r.origenId;t.destinoId=r.destinoId;t.rutaRef='';
         auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Origen y destino actualizados por cambio de ruta',campo:'Origen',anterior:ao?nombreOrigen(ao):'(pendiente)',nuevo:nombreOrigen(r.origenId),por:A,ref:r.id});
         auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Origen y destino actualizados por cambio de ruta',campo:'Destino',anterior:ad?nombreDestino(ad):'(pendiente)',nuevo:nombreDestino(r.destinoId),por:A,ref:r.id});}
     });
+    if(dif.some(x=>x[0]==='estado'&&x[2]==='ENTREGADO')){
+      /* Corrección manual a Entregado: se registra la fecha de entrega, igual que al entregar por el flujo */
+      t.finalizadoPor=A.nombre;t.finalizadoEn=nowIso();
+      auditAdd({viajeId:t.id,accion:'Fecha de entrega registrada al marcar Entregado',campo:'Finalizó',anterior:'(vacío)',nuevo:t.finalizadoEn,por:A,motivo:'El estado se corrigió a mano'});
+    }
     if(dif.length){t.editadoPor=A.nombre;t.editadoEn=nowIso();}
     t.notaPiloto=notaPilotoDe(t);                        /* se actualiza la constancia piloto/unidad */
     return {cambios:dif.length};

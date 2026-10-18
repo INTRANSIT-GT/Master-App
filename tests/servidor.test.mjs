@@ -275,6 +275,24 @@ const fOld21 = (await q1('select finalizado_en from viajes where id=$1', [vOldId
 T('80 La migración 021 completa la fecha de entrega de los viajes viejos (la toma de la auditoría)', !!fOld21.finalizado_en, fOld21);
 T('81 La migración no inventa fechas en los viajes que todavía no se entregaron', (await q1("select count(*)::int n from viajes where estado in ('PLANIFICADO','EN_RUTA') and finalizado_en is not null"))[0].n === 0);
 
+/* ---- 12. El estado no se salta: a mano solo En ruta / Entregado, paso a paso ---- */
+const vEst = await api('ped', 'crearViaje', viaje({ shipment: 'S-EST-1', fechaPlan: '2031-05-01T08:00' }));
+const vEstId = vEst.result?.id;
+const saltoCob = await api('adm', 'editarViaje', vEstId, { estado: 'COBRADO' }, 'prueba');
+T('82 El estado de un paso del flujo (Cobrado) no se puede fijar a mano', saltoCob.ok === false && saltoCob.code === 'ESTADO_NO_AUTORIZADO', saltoCob);
+const saltoEnt = await api('adm', 'editarViaje', vEstId, { estado: 'ENTREGADO' }, 'prueba');
+T('83 No se puede saltar de Planificado a Entregado (ni un paso de más)', saltoEnt.ok === false && saltoEnt.code === 'TRANSICION_INVALIDA', saltoEnt);
+const naceCob = await api('adm', 'crearViaje', viaje({ shipment: 'S-EST-2', estado: 'COBRADO', fechaPlan: '2031-05-02T08:00' }));
+T('84 Un viaje nuevo no puede nacer en otro estado que Planificado', naceCob.ok === false && naceCob.code === 'ESTADO_NO_AUTORIZADO', naceCob);
+const sinPerm = await api('ped', 'editarViaje', vEstId, { estado: 'EN_RUTA' }, 'prueba');
+T('85 Quien no tiene el permiso no cambia el estado (Pedro)', sinPerm.ok === false && sinPerm.code === 'SIN_PERMISO', sinPerm);
+const aRuta = await api('adm', 'editarViaje', vEstId, { estado: 'EN_RUTA' }, 'Corrección de la torre');
+T('86 El paso permitido (Planificado → En ruta) sí se aplica', aRuta.ok === true && (await q1('select estado from viajes where id=$1', [vEstId]))[0].estado === 'EN_RUTA', aRuta);
+const aEnt = await api('adm', 'editarViaje', vEstId, { estado: 'ENTREGADO' }, 'Corrección de la torre');
+const fEst = (await q1('select estado,finalizado_en from viajes where id=$1', [vEstId]))[0];
+T('87 En ruta → Entregado queda con su fecha de entrega', aEnt.ok === true && fEst.estado === 'ENTREGADO' && !!fEst.finalizado_en, [aEnt.message, fEst]);
+T('88 Los dos cambios quedan en la bitácora como corrección a mano', (await q1("select count(*)::int n from auditoria where viaje_id=$1 and accion='Estado corregido a mano'", [vEstId]))[0].n === 2);
+
 console.log(filas.join('\n'));
 console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`);
 process.exit(mal ? 1 : 0);
