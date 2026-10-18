@@ -1281,7 +1281,14 @@ const API={
   },
 
   /* ----- rutas ----- */
-  rutas(uid){const A=actor(uid);need(A,'rutas_ver','consultar rutas');return DB.rutas.filter(r=>rutaVisible(A,r)).map(r=>Object.assign({},r,{viajes:DB.trips.filter(t=>t.rutaId===r.id).length}));},
+  /* El conteo de viajes por ruta se arma en UNA pasada. Antes era rutas × viajes dentro del map, y esto
+     corre en cada lectura de rutas (y en cada snapshot): con miles de rutas y viajes se vuelve el cuello de botella. */
+  rutas(uid){
+    const A=actor(uid);need(A,'rutas_ver','consultar rutas');
+    const porRuta=new Map();
+    for(const t of DB.trips){if(!t.rutaId)continue;porRuta.set(t.rutaId,(porRuta.get(t.rutaId)||0)+1);}
+    return DB.rutas.filter(r=>rutaVisible(A,r)).map(r=>Object.assign({},r,{viajes:porRuta.get(r.id)||0}));
+  },
   rutasParaViaje(uid,cliente,proyecto){const A=actor(uid);return DB.rutas.filter(r=>r.estado==='ACTIVA'&&r.cliente===cliente&&r.proyecto===proyecto&&rutaVisible(A,r)).map(r=>Object.assign({},r));},
   solicitarRuta(uid,d){return exec(uid,'solicitarRuta','',A=>{
     need(A,'rutas_solicitar','solicitar rutas nuevas');

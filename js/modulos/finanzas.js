@@ -127,6 +127,17 @@ VIEWS.finanzas=()=>{
   try{R=API.resumenFinanciero(S.user.id,finFilters());}catch(e){err=e.message;}
   if(!R)return `<div class="inner">${empty('Sin acceso al control financiero',esc(err))}</div>`;
   const M=R.M,canPay=hp('pagos_registrar'),canCost=hp('costos_registrar');
+  /* Los totales de costos y margen se calculan sobre los viajes cargados en pantalla (la ventana), así que
+     se piden al servidor los de TODO el histórico y se muestran esos. Con filtros puestos mandan los del filtro. */
+  const sinFiltro=!S.fDesde&&!S.fHasta&&!S.fCli&&!S.fPcat&&!S.fProv;
+  const H=sinFiltro&&S.finHist&&S.finHist.financiero?S.finHist.financiero.M:null;
+  if(H)['porPagarProv','pendProv','porPagarPil','pendPil','costoTotal','costoIncompletos','provSinCosto','pilSinImporte','margenEst','margenPct','margenIngreso','margenCostos'].forEach(x=>{if(x in H)M[x]=H[x];});
+  if(S.finHist===undefined&&!S.finHistCargando&&typeof API.resumenHistorico==='function'){
+    S.finHistCargando=true;
+    API.resumenHistorico(S.user.id,{}).then(h=>{S.finHist=h||null;S.finHistCargando=false;if(S.view==='finanzas')render();}).catch(()=>{S.finHist=null;S.finHistCargando=false;});
+  }
+  const histNota=H?`<div class="alertbox info" style="margin-bottom:10px">Costos y margen: <b>toda la base</b> (histórico completo), no solo los viajes cargados en pantalla. Los detalles de cada total listan los viajes que están cargados.</div>`
+    :(S.finHistCargando?'<div class="mute" style="margin-bottom:10px">Calculando los totales del histórico…</div>':'');
   const filt=`<div class="lfilters" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde)}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta)}"></label>
     <select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>
     <select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
@@ -183,7 +194,7 @@ VIEWS.finanzas=()=>{
       </tbody></table></div>${paginador('finpil',pg)}`:empty('Sin viajes en este filtro')}
       <div class="mute" style="margin-top:8px;font-size:13px">El importe a pagar al piloto es el valor de Q_VIATICOS del viaje. Tu hoja no tiene una tarifa de pago a pilotos y no se inventa; el ingreso mostrado es la tarifa enviada a facturar.</div>`;
   }
-  return `<div class="inner" style="max-width:1500px">${pageHead('Finanzas','Control de ingresos, costos y rentabilidad · solo lectura salvo permisos de registro')}${tabs('fin',FINTABS,k,null)}<div style="height:12px"></div>${filt}${body}</div>`;
+  return `<div class="inner" style="max-width:1500px">${pageHead('Finanzas','Control de ingresos, costos y rentabilidad · solo lectura salvo permisos de registro')}${tabs('fin',FINTABS,k,null)}<div style="height:12px"></div>${filt}${histNota}${body}</div>`;
 };
 
 
@@ -250,5 +261,5 @@ Object.assign(ACT,{
   async pagoOk(d){const m=S.modal.data,tipo=S.modal.tipo;const r=await run(()=>API.registrarPago(S.user.id,{tipo,viajeId:d.id,monto:m.monto,fecha:m.fecha,referencia:m.referencia}),p=>`Pago ${p.id} registrado.`,true);if(r.ok)afterWrite();},
   async anularPagoOpen(d){formM({title:`Anular pago ${d.id}`,text:'El pago se conserva marcado como anulado y deja de contar en los saldos.',fields:[{k:'motivo',label:'Motivo',type:'textarea',req:1}],ok:'ANULAR PAGO',okCls:'fix',act:'anularPagoOk',id:d.id});},
   async anularPagoOk(d){const r=await run(()=>API.anularPago(S.user.id,d.id,S.modal.data.motivo),'Pago anulado.',true);if(r.ok)afterWrite();},
-  async finDet(d){let R;try{R=API.resumenFinanciero(S.user.id,finFilters());}catch(e){toast(e.message,'err');return;}const [title,html]=finDetail(d.k,R);formM({title,text:'Detalle que explica este total.',summary:html,noCancel:true,ok:'Cerrar',act:'closeModal'});}
+  async finDet(d){let R;try{R=API.resumenFinanciero(S.user.id,finFilters());}catch(e){toast(e.message,'err');return;}const [title,html]=finDetail(d.k,R);formM({title,text:DB.ventana?'El detalle lista los viajes cargados en pantalla (los más recientes); el total de arriba es de toda la base.':'Detalle que explica este total.',summary:html,noCancel:true,ok:'Cerrar',act:'closeModal'});}
 });

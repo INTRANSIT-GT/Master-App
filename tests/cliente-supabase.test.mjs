@@ -120,4 +120,19 @@ T('23 Sin configuración ni datos de ejemplo, la app lo dice claramente y no inv
 /* archivos del proyecto */
 const noSecretos = ['index.html', 'js/backend.js', 'js/ui.js', 'js/engine.js', 'manifest.json', 'service-worker.js'].every(f => !/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/.test(leer(f)));
 T('24 Ningún JWT ni clave privada incrustada en el código de la interfaz', noSecretos);
+/* ---------- 8. Escala: ventana de viajes, página de histórico y totales del histórico ---------- */
+await login('admin@intransit.test', 'clave123');
+await db.query("update viajes set estado='COBRADO', fecha_plan='2019-05-01T08:00' where id=$1", [V1]);
+await ev('BACKEND.refrescar()');
+T('25 El servidor informa la ventana (6 meses) y cuántos viajes hay en la base', ev('DB.ventana&&DB.ventana.meses') === 6 && ev('DB.ventana.enBase') >= 2, ev('DB.ventana'));
+T('26 El viaje de 2019 no viaja en la pantalla; el reciente sí', !ev(`DB.trips.some(t=>t.id==="${V1}")`) && ev('DB.trips.length') >= 1, ev('DB.trips.map(t=>t.id)'));
+await ev("go('viajes')");
+T('27 La pantalla de Viajes avisa la ventana y ofrece cargar los anteriores', /Cargados/.test(d.querySelector('#app').textContent) && !!d.querySelector('[data-act="cargarViejos"]'));
+await ev('ACT.cargarViejos()'); await flush();
+T('28 Al cargar anteriores el viaje viejo queda en pantalla con su liquidación', !!ev(`DB.trips.find(t=>t.id==="${V1}")`) && !!ev(`DB.liquidaciones.some(l=>l.viajeId==="${V1}")`), ev(`DB.trips.map(t=>t.id)`));
+const H = await ev(`API.resumenHistorico(S.user.id,{}).then(r=>r,e=>e.code)`);
+T('29 Los totales del histórico incluyen el viaje viejo (no dependen de la ventana)', H && H.viajes >= 2 && (H.porEstado.COBRADO || 0) >= 1, H && H.porEstado);
+await ev("go('finanzas')"); await flush(); await flush();
+T('30 Finanzas avisa que los totales de costos y margen son de toda la base', /toda la base/.test(d.querySelector('#app').textContent));
+
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

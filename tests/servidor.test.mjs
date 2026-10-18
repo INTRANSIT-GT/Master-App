@@ -293,6 +293,22 @@ const fEst = (await q1('select estado,finalizado_en from viajes where id=$1', [v
 T('87 En ruta → Entregado queda con su fecha de entrega', aEnt.ok === true && fEst.estado === 'ENTREGADO' && !!fEst.finalizado_en, [aEnt.message, fEst]);
 T('88 Los dos cambios quedan en la bitácora como corrección a mano', (await q1("select count(*)::int n from auditoria where viaje_id=$1 and accion='Estado corregido a mano'", [vEstId]))[0].n === 2);
 
+/* ---- 13. Ventana de viajes: en pantalla lo diario, el histórico a pedido ---- */
+await q1("update viajes set estado='COBRADO', fecha_plan='2019-01-01T08:00' where id=$1", [v1id]);
+const snV = (await api('adm', 'snapshot')).snapshot;
+T('89 Un viaje de 2019 ya no viaja en la pantalla (ventana de 6 meses)', !snV.trips.some(t => t.id === v1id) && snV.ventana && snV.ventana.meses === 6 && !!snV.ventana.desde, [snV.trips.length, snV.ventana]);
+T('90 La pantalla informa cuántos viajes ve en toda la base', snV.ventana.enBase >= (await q1('select count(*)::int n from viajes'))[0].n && snV.ventana.enBase >= snV.ventana.viajes, snV.ventana);
+const rH = await api('adm', 'resumenHistorico');
+T('91 Los totales del histórico SÍ siguen contando el viaje viejo', rH.ok && (rH.result.porEstado.COBRADO || 0) >= 1 && rH.result.viajes >= (await q1('select count(*)::int n from viajes'))[0].n, rH.result && rH.result.porEstado);
+const sumSql = Number((await q1("select coalesce(sum(coalesce(tv.tarifa_opl, vc.costo_proveedor)),0)::float8 s from viajes v left join viajes_tarifa tv on tv.viaje_id=v.id left join viajes_costos vc on vc.viaje_id=v.id where v.estado in ('ENTREGADO','LIQUIDADO','ACEPTADO','RECHAZADO','FACTURADO','COBRADO')"))[0].s);
+T('92 El total histórico «por pagar a proveedores» coincide con la base', rH.ok && Math.abs(rH.result.financiero.M.porPagarProv - sumSql) < 0.01, [rH.result && rH.result.financiero.M.porPagarProv, sumSql]);
+const pAnt = await api('adm', 'viajesAnteriores', { antesDe: '2020-01-01' });
+T('93 La página de histórico trae los viajes anteriores con su liquidación y su bitácora', pAnt.ok && pAnt.result.trips.some(t => t.id === v1id) && pAnt.result.liquidaciones.some(l => l.viajeId === v1id) && pAnt.result.audit.some(a => a.viajeId === v1id), pAnt.result && pAnt.result.trips.map(t => t.id));
+const pSin = await api('adm', 'viajesAnteriores', { antesDe: '2019-01-01' });
+T('94 La página avanza: al pedir antes de 2019 ya no repite el viaje de 2019', pSin.ok && pSin.result.antesDe === '2019-01-01' && !pSin.result.trips.some(t => t.id === v1id), [pSin.result && pSin.result.antesDe, pSin.result && pSin.result.trips.map(t => [t.id, t.fechaPlan])]);
+const pLim = await api('adm', 'viajesAnteriores', { antesDe: '2031-01-01', limite: 2 });
+T('95 La página respeta el límite pedido', pLim.ok && pLim.result.trips.length <= 2, pLim.result && pLim.result.trips.length);
+
 console.log(filas.join('\n'));
 console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`);
 process.exit(mal ? 1 : 0);

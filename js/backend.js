@@ -14,6 +14,9 @@ const BACKEND={modo:'demo',sb:null,bloqueado:'',
 };
 if(!API.mantenimientos)API.mantenimientos=async()=>[];
 if(!API.gastos)API.gastos=async()=>[];
+/* Sin servidor (demostración) no hay ventana ni histórico que cargar: lo que hay en pantalla es todo lo que hay. */
+if(!API.viajesAnteriores)API.viajesAnteriores=async()=>({trips:[],liquidaciones:[],evidencias:[],audit:[],antesDe:'',pagina:0});
+if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinanciero(uid,o);
 (function(){
   const C=MASTER_CONFIG;
   if(!(C.SUPABASE_URL&&C.SUPABASE_PUBLISHABLE_KEY))return;                       /* sin configurar → demostración */
@@ -42,10 +45,30 @@ if(!API.gastos)API.gastos=async()=>[];
     if(!r.data||r.data.ok===false)throw err(r.data||{});
     return r.data;
   }
+  /* La ventana de viajes se puede ampliar a pedido (viajesAnteriores). Al refrescar —y se refresca después de
+     cada guardado— se conserva lo que el usuario ya había cargado, para no perder su consulta. */
+  function conservarViejos(db,previo){
+    const pedidos=new Set(S.cargadosViejos||[]);      /* solo lo que el usuario pidió a mano con «cargar anteriores» */
+    if(!pedidos.size||!previo||!previo.trips||!previo.trips.length)return;
+    const actual=new Set((db.trips||[]).map(t=>t.id));
+    const viejos=(previo.trips||[]).filter(t=>pedidos.has(t.id)&&!actual.has(t.id));
+    if(!viejos.length)return;
+    db.trips.push(...viejos);
+    for(const k of ['liquidaciones','evidencias','audit']){
+      const ya=new Set((db[k]||[]).map(x=>x.id));
+      for(const x of (previo[k]||[])) if(!ya.has(x.id)) (db[k]=db[k]||[]).push(x);
+    }
+    if(db.audit)db.audit.sort((a,b)=>a.id<b.id?-1:1);
+  }
   function hidratar(sn){
+    const previo=DB;
     const db=blankDB();
     ['usuarios','acceso','permisos','clientes','liquidaciones','evidencias','agrupaciones','audit','pagos','ordenesPago','rutas','tarifas','mem','notificaciones'].forEach(k=>{db[k]=sn[k]||[];});
     db.trips=sn.trips||[];db.config=sn.config||{};
+    /* Ventana de viajes que llegó del servidor (null en demostración): la pantalla la muestra y ofrece cargar más. */
+    db.ventana=sn.ventana||null;
+    conservarViejos(db,previo);
+    S.finHist=undefined;                       /* los totales del histórico se vuelven a pedir al servidor */
     db.catalogosListas=(sn.catalogos&&sn.catalogos.listas)||{};   /* las listas del sistema vienen de la base */
     DB=db;
     [[PILOTOS,sn.catalogos.pilotos],[FLOTA,sn.catalogos.flota],[DESTINOS,sn.catalogos.destinos]].forEach(([a,n])=>{a.length=0;a.push(...(n||[]));});
@@ -80,6 +103,20 @@ if(!API.gastos)API.gastos=async()=>[];
   };});
   API.verificarAuditoria=async()=>(await llamar('verificarAuditoria',[])).result;
   API.mantenimientos=async(uid,o)=>(await llamar('mantenimientos',[o||{}])).result;
+  /* Totales de TODO el histórico (los calcula el servidor con el mismo motor): no dependen de la ventana cargada. */
+  API.resumenHistorico=async(uid,o)=>(await llamar('resumenHistorico',[o||{}])).result;
+  /* Página del histórico: se une a lo que ya está en pantalla (viajes, liquidaciones, evidencias y bitácora). */
+  API.viajesAnteriores=async(uid,o)=>{
+    const r=(await llamar('viajesAnteriores',[o||{}])).result||{};
+    const unir=(arr,clave)=>{const m=new Map((DB[clave]||[]).map(x=>[x.id,x]));for(const x of (arr||[]))m.set(x.id,x);DB[clave]=[...m.values()];};
+    unir(r.trips,'trips');unir(r.liquidaciones,'liquidaciones');unir(r.evidencias,'evidencias');unir(r.audit,'audit');
+    DB.audit.sort((a,b)=>a.id<b.id?-1:1);
+    if(DB.ventana)DB.ventana.cargados=(DB.trips||[]).length;
+    /* Se recuerda lo que el usuario cargó a mano para no perderlo en los refrescos (cada guardado refresca). */
+    S.cargadosViejos=[...new Set([...(S.cargadosViejos||[]),...(r.trips||[]).map(t=>t.id)])];
+    syncRefs();
+    return r;
+  };
   API.gastos=async(uid,o)=>(await llamar('gastos',[o||{}])).result;
   BACKEND.sincronizarFlota=async()=>{
     let r;try{r=await sb.functions.invoke('sync-flota',{body:{}});}catch(e){throw new ApiError('SIN_CONEXION','No se pudo contactar al servidor.');}

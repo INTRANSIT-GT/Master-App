@@ -95,6 +95,9 @@ const claveDe = (spec, r) => spec.key.map(k => r[k]).join('\u0001');
 export async function loadState(q, opts = {}) {
   const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], ordenesPago: [], rutas: [], tarifas: [], mem: [], notificaciones: [], config: {}, seq: {} };
   for (const spec of TABLAS) {
+    /* opts.solo: carga solo esas tablas (para cálculos de conjunto que no necesitan todo el estado, como
+       los totales del histórico financiero). */
+    if (opts.solo && !opts.solo.includes(spec.tabla)) continue;
     const orden = spec.key.map(k => spec.cols.find(c => c[0] === k)[1]).join(', ');
     let rows;
     /* La auditoría es de solo agregar y crece sin límite. Para operaciones que escriben solo se necesita el último
@@ -103,6 +106,11 @@ export async function loadState(q, opts = {}) {
     if (spec.tabla === 'auditoria' && opts.auditoriaTail) {
       const cols = spec.cols.map(sel).join(', ') + (spec.sinExtra ? '' : ', extra');
       rows = (await q(`select ${cols} from master.auditoria order by id desc limit ${Number(opts.auditoriaTail)}`)).rows;
+    } else if (spec.tabla === 'viajes' && opts.viajesFiltro) {
+      /* Carga solo los viajes que cumplen la condición (ventana de trabajo o página de histórico), para no leer
+         toda la tabla en cada lectura. Las condiciones vienen del handler y los valores van parametrizados. */
+      const f = opts.viajesFiltro;
+      rows = (await q(`select ${spec.cols.map(sel).join(', ')}${spec.sinExtra ? '' : ', extra'} from master.viajes v where ${f.sql} order by ${f.orden || orden}${f.limite ? ` limit ${Number(f.limite)}` : ''}`, f.params || [])).rows;
     } else rows = await leerTabla(q, spec.tabla, spec.cols, !spec.sinExtra, orden);
     const partes = {};
     for (const p of spec.partes || []) {

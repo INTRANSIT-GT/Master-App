@@ -7,9 +7,73 @@ import { loadState, saveState, fotografia } from './store.mjs';
 export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
   'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'cambiarClave', 'guardarCatalogo'];
-export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos'];
+export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
+
+/* ---- Escala: con ~3.000 viajes al mes, cargar y enviar TODO el histórico en cada lectura es inviable
+   (decenas de MB de respuesta y la Edge Function al límite de CPU). Se separa en tres:
+     · snapshot         → los viajes que se trabajan: en curso (sin importar la fecha), los últimos
+                          VENTANA_MESES de los cerrados y los Facturados pendientes de pago al proveedor.
+     · viajesAnteriores → páginas del histórico, a pedido.
+     · resumenHistorico → totales de TODO el histórico, calculados por el mismo motor sobre los viajes visibles. */
+const VENTANA_MESES = 6;
+const VIAJES_PAGINA = 400;
+const ESTADOS_EN_CURSO = ['PLANIFICADO', 'EN_RUTA', 'ENTREGADO', 'LIQUIDADO', 'RECHAZADO', 'ACEPTADO'];
+const COLA_AUDITORIA = 4000;                 /* eventos recientes que se leen por lectura (la tabla crece sin límite) */
+const SOLO_RESUMEN = ['perfiles', 'permisos', 'acceso_cliente', 'clientes', 'viajes', 'agrupaciones', 'pagos'];
+const SOLO_HISTORICO = ['perfiles', 'permisos', 'acceso_cliente', 'clientes', 'viajes', 'liquidaciones', 'evidencias'];
+/* Condiciones SQL de la ventana y de la página de histórico. Son un superconjunto deliberado de la regla final,
+   que se aplica en memoria (enVentana): así el SQL no repite el criterio completo y no hay dos reglas que se separen. */
+const COND_VENTANA = `(v.estado = any($1::text[]) or coalesce(v.fecha_plan,'') >= $2 or (v.estado = 'FACTURADO' and exists (select 1 from master.viajes_tarifa tv where tv.viaje_id = v.id and tv.tarifa_opl > 0)))`;
+/* Página del histórico por clave (fecha plan + id): así ninguna página repite ni se salta viajes,
+   ni siquiera cuando muchos comparten la misma fecha (los que no tienen fecha van al final). */
+const condAntes = (conId) => `(coalesce(v.fecha_plan,'') < $1${conId ? ` or (coalesce(v.fecha_plan,'') = $1 and v.id < $2)` : ''}) and not (v.estado = any($${conId ? 3 : 2}::text[]))`;
+const idAntes = a => { const v = String(argsDe(a).antesId || '').trim(); return /^[A-Za-z0-9._-]{1,40}$/.test(v) ? v : ''; };
+const desdeVentana = () => { const d = new Date(); d.setMonth(d.getMonth() - VENTANA_MESES); return d.toISOString().slice(0, 10); };
+/* Los argumentos llegan como lista: se toma el primer objeto (si lo hay). */
+const argsDe = a => Array.isArray(a)
+  ? (a[0] && typeof a[0] === 'object' && !Array.isArray(a[0]) ? a[0] : {})
+  : (a && typeof a === 'object' ? a : {});
+const antesDe = a => /^\d{4}-\d{2}-\d{2}$/.test(String(argsDe(a).antesDe || '')) ? String(argsDe(a).antesDe) : desdeVentana();
+const limitePagina = a => Math.min(Math.max(Number(argsDe(a).limite) || VIAJES_PAGINA, 1), 1000);
+
+/* Regla exacta de la ventana (el SQL de arriba trae un superconjunto): lo que falta cerrar siempre, lo reciente
+   por fecha y lo Facturado que todavía no tiene orden de pago (pendiente de pagar al proveedor). */
+function enVentana(t, desde, enOrden) {
+  if (ESTADOS_EN_CURSO.includes(t.estado)) return true;
+  const f = String(t.fechaPlan || '').slice(0, 10);
+  if (f && f >= desde) return true;
+  return t.estado === 'FACTURADO' && Number(t.tarifaOpl) > 0 && !enOrden.has(t.id);
+}
+function aplicarVentana(E) {
+  const DB = E.getDB(), enOrden = new Set();
+  for (const o of DB.ordenesPago) if (o.estado === 'ACTIVA') for (const id of o.viajeIds) enOrden.add(id);
+  const desde = desdeVentana();
+  DB.trips = DB.trips.filter(t => enVentana(t, desde, enOrden));
+  return { desde, meses: VENTANA_MESES };
+}
+/* La bitácora de los viajes que sí se envían se lee aparte (no se carga la tabla completa). */
+async function auditoriaDeViajes(q, ids) {
+  if (!ids.length) return [];
+  const { rows } = await q('select id,entidad,viaje_id,accion,campo,anterior,nuevo,por_id,por,rol,en,motivo,ref,prev,hash,extra from master.auditoria where viaje_id = any($1::text[])', [ids]);
+  return rows.map(r => Object.assign({
+    id: r.id, entidad: r.entidad, viajeId: r.viaje_id, accion: r.accion, campo: r.campo, anterior: r.anterior, nuevo: r.nuevo,
+    porId: r.por_id, por: r.por, rol: r.rol, en: r.en instanceof Date ? r.en.toISOString() : r.en, motivo: r.motivo, ref: r.ref, prev: r.prev, hash: r.hash,
+  }, r.extra && typeof r.extra === 'object' ? r.extra : {}));
+}
+const fusionarAuditoria = (cola, viajes) => {
+  const m = new Map();
+  for (const e of cola) m.set(e.id, e);
+  for (const e of viajes) m.set(e.id, e);
+  return [...m.values()].sort((x, y) => x.id < y.id ? -1 : 1);
+};
+/* Cuántos viajes ve este usuario en TODA la base (para poder decir «N de M» en la pantalla). */
+async function contarVisibles(q, uid) {
+  await q(`select set_config('request.jwt.claim.sub',$1,true)`, [uid]);
+  const { rows } = await q('select count(*)::int n from master.viajes v where app.ve_viaje(v.cliente_id, v.proyecto_cat, v.estado)');
+  return rows[0] ? rows[0].n : 0;
+}
 
 function rutasDeArchivos(args) {
   const out = [];
@@ -32,17 +96,52 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
          arma sobre un estado consistente sin bloquear a las demás lecturas). */
       const soloLectura = OPS_LECTURA.includes(op);
       await q(`select pg_advisory_xact_lock${soloLectura ? '_shared' : ''}(727001)`);
-      /* La auditoría solo se necesita completa para el snapshot y para verificar la cadena; el resto de operaciones
-         (incluidas las de escritura, que solo encadenan el hash del último evento) leen solo la cola. */
-      const fullAudit = op === 'snapshot' || op === 'verificarAuditoria';
-      const { db, catalogos } = await loadState(q, fullAudit ? {} : { auditoriaTail: 1 });
+      /* La auditoría crece sin límite: para verificar la cadena se lee entera; en el snapshot se lee la cola (más
+         la bitácora de los viajes que se envían, que se agrega después); al escribir basta el último evento. */
+      const fullAudit = op === 'verificarAuditoria';
+      const opciones = op === 'resumenHistorico' ? { solo: SOLO_RESUMEN }
+        : op === 'viajesAnteriores' ? { solo: SOLO_HISTORICO, auditoriaTail: COLA_AUDITORIA, viajesFiltro: idAntes(args)
+            ? { sql: condAntes(true), params: [antesDe(args), idAntes(args), ESTADOS_EN_CURSO], orden: 'v.fecha_plan desc, v.id desc', limite: limitePagina(args) }
+            : { sql: condAntes(false), params: [antesDe(args), ESTADOS_EN_CURSO], orden: 'v.fecha_plan desc, v.id desc', limite: limitePagina(args) } }
+          : fullAudit ? {}
+            : op === 'snapshot' ? { auditoriaTail: COLA_AUDITORIA, viajesFiltro: { sql: COND_VENTANA, params: [ESTADOS_EN_CURSO, desdeVentana()] } }
+              : { auditoriaTail: 1 };
+      const { db, catalogos } = await loadState(q, opciones);
       const E = createEngine();
       E.PILOTOS.push(...catalogos.pilotos); E.FLOTA.push(...catalogos.flota); E.DESTINOS.push(...catalogos.destinos);
       E.setDB(db);
       const A = db.usuarios.find(u => u.id === actorId);
       if (!A || !A.activo) return { resp: falla('NO_AUTENTICADO', 'Tu cuenta no tiene un perfil activo en la aplicación.'), commit: false };
       let resultado = null, rechazo = null;
-      if (op === 'snapshot') return { resp: { ok: true, snapshot: await armarSnapshot(E, actorId, deps) }, commit: false };
+      if (op === 'snapshot') {
+        const ventana = aplicarVentana(E);
+        const ids = E.getDB().trips.map(t => t.id);
+        if (ids.length) E.getDB().audit = fusionarAuditoria(E.getDB().audit, await auditoriaDeViajes(q, ids));
+        const enBase = await contarVisibles(q, actorId);
+        return { resp: { ok: true, snapshot: await armarSnapshot(E, actorId, deps, Object.assign(ventana, { viajes: ids.length, enBase })) }, commit: false };
+      }
+      /* Totales de TODO el histórico (no de la ventana que se ve en pantalla): los calcula el mismo motor sobre
+         los viajes que este usuario puede ver. Respuesta pequeña y no se guarda nada. */
+      if (op === 'resumenHistorico') {
+        const vis = new Set(E.API.listarViajes(actorId).map(t => t.id));
+        const B = E.getDB();
+        B.trips = B.trips.filter(t => vis.has(t.id));
+        if (!(E.hasPerm(A, 'comercial_ver') || E.hasPerm(A, 'finanzas_ver'))) B.agrupaciones = [];
+        if (!E.hasPerm(A, 'finanzas_ver')) B.pagos = [];
+        const porEstado = {};
+        for (const t of B.trips) porEstado[t.estado] = (porEstado[t.estado] || 0) + 1;
+        const financiero = E.API.resumenFinanciero(actorId, argsDe(args));
+        return { resp: { ok: true, result: { financiero, porEstado, viajes: B.trips.length } }, commit: false };
+      }
+      /* Una página del histórico (los viajes que quedan fuera de la ventana), con su liquidación, su evidencia
+         y su bitácora, para que la pantalla los muestre igual que los recientes. */
+      if (op === 'viajesAnteriores') {
+        const B = E.getDB();
+        const ids = B.trips.map(t => t.id);
+        if (ids.length) B.audit = fusionarAuditoria(B.audit, await auditoriaDeViajes(q, ids));
+        const s = await armarSnapshot(E, actorId, deps, null);
+        return { resp: { ok: true, result: { trips: s.trips, liquidaciones: s.liquidaciones, evidencias: s.evidencias, audit: s.audit, antesDe: antesDe(args), limite: limitePagina(args), pagina: ids.length } }, commit: false };
+      }
       /* flota (Fleetio): se consultan bajo demanda, NO entran al snapshot (pueden ser miles de filas) */
       if (op === 'mantenimientos' || op === 'gastos') {
         if (!(E.hasPerm(A, 'catalogos_ver') || E.hasPerm(A, 'finanzas_ver'))) return { resp: falla('SIN_PERMISO', 'Tu perfil no puede consultar la flota.'), commit: false };
@@ -111,7 +210,7 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
 }
 
 /* ---------- Foto de datos que ve ESTE usuario (misma autorización del motor + enlaces firmados de las evidencias) ---------- */
-async function armarSnapshot(E, uid, deps) {
+async function armarSnapshot(E, uid, deps, ventana) {
   const DB = E.getDB(), A = DB.usuarios.find(u => u.id === uid), has = p => E.hasPerm(A, p), API = E.API;
   const seguro = (f, d) => { try { return f(); } catch (e) { return d; } };
   const trips = seguro(() => API.listarViajes(uid), []);
@@ -151,7 +250,7 @@ async function armarSnapshot(E, uid, deps) {
   const admin = has('usuarios_gestionar');
   const usuarios = DB.usuarios.map(u => admin ? { ...u, clave: '' } : { id: u.id, usuario: u.usuario, nombre: u.nombre, rol: u.rol, activo: u.activo, proyectos: u.proyectos, clave: '' });
   return {
-    yo: uid, usuarios, acceso: DB.acceso, permisos: DB.permisos, clientes, trips, liquidaciones, evidencias, agrupaciones,
+    yo: uid, ventana: ventana || null, usuarios, acceso: DB.acceso, permisos: DB.permisos, clientes, trips, liquidaciones, evidencias, agrupaciones,
     audit: [...audit.values()].sort((a, b) => a.id < b.id ? -1 : 1),
     pagos: has('finanzas_ver') ? DB.pagos : [],
     ordenesPago: ord.map(o => { const c = JSON.parse(JSON.stringify(o));

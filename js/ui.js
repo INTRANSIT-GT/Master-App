@@ -194,11 +194,29 @@ function accionesViaje(t){
   if(['ENTREGADO','RECHAZADO'].includes(t.estado)&&hp('viajes_aprobar_duplicado')&&String(t.shipment||'').trim()&&!/^DUP-/i.test(t.shipment))a+=b('shipmentDupOpen','Aprobar DUP','fix');
   return a;
 }
+/* ---- Ventana de viajes: qué está cargado y poder traer los anteriores ----
+   Solo aparece cuando el servidor informa la ventana (Supabase). En demostración no hay ventana: se ve todo. */
+const PAGINA_VIEJOS=400;
+function ventanaBar(){
+  const v=DB.ventana;if(!v)return '';
+  const restantes=Math.max(0,(v.enBase||0)-(DB.trips||[]).length);
+  const btn=S.cargandoViejos?'<button class="btn sm ghost" disabled>Cargando…</button>'
+    :(restantes&&!S.viejoFin?`<button class="btn sm" data-act="cargarViejos">Cargar anteriores (${Math.min(restantes,PAGINA_VIEJOS)})</button>`:'<span class="mute">Histórico completo cargado</span>');
+  return `<div class="alertbox info" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+    <span>Cargados <b>${(DB.trips||[]).length}</b> de <b>${v.enBase||(DB.trips||[]).length}</b> viajes · últimos ${v.meses||VENTANA_MESES_PANTALLA} meses y los que están en curso${restantes?` · <b>${restantes}</b> más antiguos sin cargar`:''}</span>
+    <span style="margin-left:auto">${btn}</span></div>`;
+}
+const VENTANA_MESES_PANTALLA=6;
 function viajesTable(list,key='viajes'){
   if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
   const pg=paginar(key,list);
-  return `<div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr><th class="stk">Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Piloto</th><th>Unidad · placa</th><th>Estado</th><th class="stkR">Acciones</th></tr></thead><tbody>
-  ${pg.filas.map(t=>{const j=J(t),dup=String(t.shipment||'').trim()&&!/^DUP-/i.test(t.shipment)&&DB.trips.some(x=>x.id!==t.id&&String(x.shipment||'').trim().toLowerCase()===String(t.shipment||'').trim().toLowerCase());return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td class="${dup?'warnl':''}">${badge(t.estado)}${dup?' <b>Shipment duplicado</b>':''}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
+  /* Los Shipment duplicados se cuentan UNA vez por pantalla: antes se recorría toda la tabla de viajes por cada
+     fila dibujada, y con miles de viajes eso se notaba en cada render. */
+  const cuenta=new Map();
+  for(const t of DB.trips){const s=String(t.shipment||'').trim().toLowerCase();if(!s||s.startsWith('dup-'))continue;cuenta.set(s,(cuenta.get(s)||0)+1);}
+  const esDup=t=>{const s=String(t.shipment||'').trim().toLowerCase();return !!s&&!s.startsWith('dup-')&&(cuenta.get(s)||0)>1;};
+  return ventanaBar()+`<div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr><th class="stk">Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Piloto</th><th>Unidad · placa</th><th>Estado</th><th class="stkR">Acciones</th></tr></thead><tbody>
+  ${pg.filas.map(t=>{const j=J(t),dup=esDup(t);return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td class="${dup?'warnl':''}">${badge(t.estado)}${dup?' <b>Shipment duplicado</b>':''}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
   </tbody></table></div>${paginador(key,pg)}`;
 }
 
@@ -678,6 +696,25 @@ const ACT={
   async photoEv(d){const l=liqsOf({id:d.id}).find(x=>x.evidenciaId===d.ev);if(l&&l.evidencia){S.modal={type:'photo',src:l.evidencia,z:1,titulo:`Evidencia · viaje #${d.id} · envío ${l.ciclo}`};render();}},
   async zoom(d){if(S.modal&&S.modal.type==='photo'){S.modal.z=d.d==='0'?1:Math.max(1,Math.min(4,(S.modal.z||1)+Number(d.d)));render();}},
   async sample(d){S.draft[d.id]=sampleSlip(d.id);render();},
+  /* Trae la página siguiente del histórico (viajes anteriores a lo que ya está en pantalla). */
+  async cargarViejos(){
+    if(S.cargandoViejos)return;
+    S.cargandoViejos=true;render();
+    try{
+      const antes=S.viejoAntes||(DB.ventana&&DB.ventana.desde)||'';
+      const r=await API.viajesAnteriores(S.user.id,{antesDe:antes,antesId:S.viejoId||'',limite:PAGINA_VIEJOS});
+      const n=(r.trips||[]).length;
+      if(!n)S.viejoFin=true;
+      else{
+        const last=r.trips[r.trips.length-1];
+        S.viejoAntes=String(last.fechaPlan||'').slice(0,10)||antes;
+        S.viejoId=last.id;
+        if(n<r.limite)S.viejoFin=true;
+      }
+      toast(n?`Se cargaron ${n} viaje(s) anteriores.`:'No hay más viajes anteriores.');
+    }catch(e){toast(e.message,'err');}
+    S.cargandoViejos=false;render();
+  },
   async limpiarFiltros(){S.q='';S.fCli='';S.fPcat='';S.fDesde='';S.fHasta='';S.sortL=null;render();},
   async sortL(d){const def=liqCurrent().k==='apr'?{k:'revision',dir:-1}:{k:'fecha',dir:1},c=S.sortL||def;S.sortL=c.k===d.k?{k:d.k,dir:-c.dir}:{k:d.k,dir:1};render();},
   async sortF(d){const c=S.sortF||{k:'fechaEnvio',dir:-1};S.sortF=c.k===d.k?{k:d.k,dir:-c.dir}:{k:d.k,dir:1};render();},
