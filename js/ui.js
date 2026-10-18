@@ -186,7 +186,6 @@ function comboHTML(flt,value,opts,ph){
 function accionesViaje(t){
   const b=(act,lbl,cls)=>`<button class="btn sm ${cls||''}" data-act="${act}" data-id="${t.id}">${lbl}</button>`;
   let a=b('detalle','Ver','ghost');
-  if(canEdit(t))a+=b('editar','Editar','');
   if(t.estado==='PLANIFICADO'&&hp('viajes_iniciar')&&mine(t))a+=b('iniciarAsk','En ruta','primary');
   if(t.estado==='EN_RUTA'&&hp('viajes_finalizar')&&mine(t))a+=b('finalizarAsk','Entregado','primary');
   if(['ENTREGADO','RECHAZADO'].includes(t.estado)&&hp('liq_enviar')&&mine(t))a+=b('detalle',t.estado==='RECHAZADO'?'Corregir':'Liquidar','primary');
@@ -257,7 +256,7 @@ const AUTO=()=>false;
 function setInd(k,st,msg){
   const el=document.getElementById('sv_'+k);if(!el)return;
   el.className='sv '+st;
-  el.innerHTML=st==='saving'?'Guardando…':st==='saved'?'✓ Guardado':`<span>⚠ ${esc(msg||'No se guardó')}</span> <button class="linkbtn" data-act="autoRetry" data-k="${k}" data-id="${esc(S.param)}">Reintentar</button>`;
+  el.innerHTML=st==='saving'?'Guardando…':st==='saved'?'✓ Guardado':`<span>⚠ ${esc(msg||'No se guardó')}</span> <button class="linkbtn" data-act="autoRetry" data-k="${esc(k)}" data-id="${esc(S.param)}">Reintentar</button>`;
 }
 function refreshDurs(id){const b=document.getElementById('durs_box');if(!b)return;try{b.innerHTML=dursHTML(API.viaje(S.user.id,id));}catch(e){}}
 async function autoSave(id,k,v){
@@ -330,7 +329,8 @@ VIEWS.detalle=()=>{
     <div class="detgrid">
       <div class="card"><h3>Datos del viaje</h3><dl class="kv">${datos}</dl></div>
       <div class="card"><h3>Piloto y unidad</h3><dl class="kv">
-        ${kvr('Piloto',esc(j.piloto)+' '+src('PILOTOS'))}${kvr('Unidad',esc(f.unidad)+' '+src('PILOTOS'))}${kvr('Placa',esc(f.placa)+' '+src('FLOTA'))}${rev?'':kvr('Tango',esc(f.tango)+' '+src('FLOTA'))}${rev?'':kvr('Tipo de unidad',esc(f.tipo)+' '+src('FLOTA'))}${kvr('Capacidad',esc(f.capacidad)+' '+src('FLOTA'))}</dl></div>
+        ${kvr('Piloto',esc(j.piloto)+' '+src('PILOTOS'))}${kvr('Unidad',esc(f.unidad)+' '+src('PILOTOS'))}${kvr('Placa',esc(f.placa)+' '+src('FLOTA'))}${rev?'':kvr('Tango',esc(f.tango)+' '+src('FLOTA'))}${rev?'':kvr('Tipo de unidad',esc(f.tipo)+' '+src('FLOTA'))}${kvr('Capacidad',esc(f.capacidad)+' '+src('FLOTA'))}</dl>
+        ${t.notaPiloto?`<div class="alertbox" id="notaPilotoViaje" role="note" style="margin-top:10px"><b>${esc(t.notaPiloto)}</b><div class="mute" style="font-size:13px;margin-top:2px">El piloto del viaje no es el asignado a la unidad ${esc(f.unidad||'')}; la nota queda guardada en el viaje.</div></div>`:''}</div>
       ${horarios}
       ${hp('comercial_ver')||hp('finanzas_ver')?moneyCard(t):''}
       ${verLiq?`<div class="card" style="grid-column:1/-1"><h3>Liquidación · historial de envíos</h3>${liqHTML}</div>`:''}
@@ -413,7 +413,7 @@ VIEWS.catalogos=()=>{
     pil:tb(['Id','Piloto','Unidad asignada','Proyecto'],PILOTOS.map(p=>[p.id,esc(p.nombre),p.unidad?esc(p.unidad):'<span class="mute">Sin unidad</span>',pn(p.proyecto)]),'catpil'),
     flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)]),'catflo'),
     ori:`${puedeEditarListas()?`<div style="margin-bottom:8px"><button class="btn sm" data-act="catalogoOpen" data-k="origen">Editar orígenes</button></div>`:''}${tb(['Origen'],ORIGENES.map(o=>[esc(o.nombre)]),'catori')}`,
-    cat:`<div class="grid g2">${Object.entries({'clientes':'CLIENTES','proyectos':'PROYECTOS','tipoUnidad':'TIPO DE UNIDAD','opl':'OPL · TRANSPORTISTAS','tipoCarga':'TIPO CARGA','tipoViaje':'TIPO DE VIAJE'}).map(([k,n])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${(CAT[k]||[]).length}</span>${puedeEditarListas()?` <button class="btn sm ghost" data-act="catalogoOpen" data-k="${k}">Editar</button>`:''}</h3><div class="bgs">${(CAT[k]||[]).map(x=>`<span class="est">${esc(x)}</span>`).join('')||'<span class="mute">Sin valores</span>'}</div>${LISTAS_SISTEMA.includes(k)?'<div class="mute" style="font-size:12px;margin-top:6px">Se guarda en la base y la app lo usa de inmediato.</div>':'<div class="mute" style="font-size:12px;margin-top:6px">Se arma solo con la ficha de cada cliente.</div>'}</div>`).join('')}</div>`,
+    cat:`<div class="grid g2">${Object.entries({'clientes':'CLIENTES','proyectos':'PROYECTOS','tipoUnidad':'TIPO DE UNIDAD','opl':'OPL · TRANSPORTISTAS','tipoCarga':'TIPO CARGA','tipoViaje':'TIPO DE VIAJE','arrastre':'EQUIPOS DE ARRASTRE (PLACAS)'}).map(([k,n])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${(CAT[k]||[]).length}</span>${puedeEditarListas()?` <button class="btn sm ghost" data-act="catalogoOpen" data-k="${k}">Editar</button>`:''}</h3><div class="bgs">${(CAT[k]||[]).map(x=>`<span class="est">${esc(x)}</span>`).join('')||'<span class="mute">Sin valores</span>'}</div>${LISTAS_SISTEMA.includes(k)?'<div class="mute" style="font-size:12px;margin-top:6px">Se guarda en la base y la app lo usa de inmediato.</div>':'<div class="mute" style="font-size:12px;margin-top:6px">Se arma solo con la ficha de cada cliente.</div>'}</div>`).join('')}</div>`,
     des:tb(['Id','Destino','Proyecto'],DESTINOS.map(d=>[d.id,esc(d.nombre),pn(d.proyecto)]),'catdes'),fle:flePanel()}[k];
   return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; todos vienen de la base (Supabase)')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
     <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS, FLOTA y DESTINOS se leen de sus tablas; las listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje y orígenes) se guardan en la tabla <code>catalogos</code> y se editan desde aquí. CLIENTES y PROYECTOS se arman con la ficha de cada cliente.</div></div>`;

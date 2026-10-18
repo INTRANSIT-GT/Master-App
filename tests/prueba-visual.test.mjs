@@ -13,8 +13,8 @@ T('V1 La página carga sin errores de JavaScript', errs.length === 0, errs);
 T('V2 Todos los archivos que usa existen (funciona abriéndola con doble clic, sin servidor)', refs.every(f => fs.existsSync(path.join(raíz, f))), refs.filter(f => !fs.existsSync(path.join(raíz, f))));
 T('V3 No depende de Supabase: modo de demostración y sin claves', ev('BACKEND.modo') === 'demo' && !/supabase\.co/.test(leer('prueba-visual.html') + leer('js/datos-prueba-visual.js')));
 const botones = [...d.querySelectorAll('#pv-b button')];
-T('V4 La barra de revisión ofrece 3 encargados y todos los demás perfiles (10 botones)', botones.length === 10 && botones.filter(b => /ejemplo/.test(b.textContent)).length === 10, botones.length);
-T('V5 Arranca viendo al Encargado de proyecto y su botón de perfil muestra solo nombre y rol', ev('S.user.rol') === 'ENCARGADO' && /Encargado de proyecto/.test(d.querySelector('.userchip').textContent));
+T('V4 La barra de revisión ofrece 3 operativos y todos los demás perfiles', botones.length === ev('Object.keys(ROLES).length') + 2 && botones.filter(b => /ejemplo/.test(b.textContent)).length === botones.length, botones.length);
+T('V5 Arranca viendo al Operativo y su botón de perfil muestra solo nombre y rol', ev('S.user.rol') === 'OPERATIVO' && /Operativo/.test(d.querySelector('.userchip').textContent));
 const nora = botones.find(b => /58 clientes/.test(b.textContent)); nora.click();
 T('V6 «Nora» (58 clientes): sin IDs ni códigos en el botón de perfil', !/CIT-U|CLI-0/.test(d.querySelector('#app').textContent) && d.querySelector('.userchip').textContent.replace(/\s+/g, ' ').trim().startsWith('NRNora Rivera'));
 ev("S.form=null;go('nuevo')");
@@ -32,6 +32,6 @@ T('V10 Al consultar de nuevo el viaje, la ruta se conserva', ev(`DB.trips.find(x
 /* los demás perfiles: cada uno abre todas sus pantallas */
 const otros = botones.filter(b => !/(Pedro|Nora|sin proyectos)/i.test(b.textContent)); const fallos = [];
 for (const b of otros) { b.click(); const vistas = JSON.parse(ev("JSON.stringify(navItems().filter(v=>v!=='modelo'))")); for (const v of vistas) { try { ev(`S.form=null;S.modal=null;go('${v}')`); if (!d.querySelector('#main') || !d.querySelector('#main').innerHTML.length) fallos.push(b.textContent + ':' + v); } catch (e) { fallos.push(b.textContent + ':' + v + ':' + e.message); } } }
-T(`V11 Los ${otros.length} perfiles restantes abren todas sus pantallas sin errores`, otros.length === 7 && fallos.length === 0, fallos);
+T(`V11 Los ${otros.length} perfiles restantes abren todas sus pantallas sin errores`, otros.length === ev('Object.keys(ROLES).length') - 1 && fallos.length === 0, fallos);
 T('V12 Ningún texto «perfil/catálogo» para el encargado en inicio, viajes y rutas', (botones.find(b => /Pedro/.test(b.textContent)).click(), ['inicio', 'viajes', 'rutas', 'liquidaciones'].every(v => (ev(`go('${v}')`), !/perfil|cat[aá]logo/i.test(d.querySelector('#app').innerText)))));
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

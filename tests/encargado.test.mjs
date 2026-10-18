@@ -1,4 +1,4 @@
-/* Perfil «Encargado de proyecto»: los 6 cambios solicitados, y prueba de que los DEMÁS perfiles no cambiaron.
+/* Perfil «Operativo»: los 6 cambios solicitados, y prueba de que los DEMÁS perfiles no cambiaron.
    Parte A: servidor + Postgres con tus migraciones 001–008 (la ruta elegida se guarda y se conserva).
    Parte B: interfaz del encargado.  Parte C: comparación HTML original ↔ nuevo para todos los demás perfiles. */
 import { PGlite } from '@electric-sql/pglite';
@@ -22,11 +22,11 @@ await db.exec(`create role anon nologin; create role authenticated nologin; crea
   create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security; grant usage on schema storage to authenticated; grant select, insert on storage.objects to authenticated;`);
-let sqlOk = true; for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql', '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql']) { try { await db.exec(leer('supabase/migrations/' + f)); } catch (e) { sqlOk = false; T('SQL ' + f, false, e.message); } }
+let sqlOk = true; for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql', '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql', '019_catalogos.sql', '020_arrastres.sql']) { try { await db.exec(leer('supabase/migrations/' + f)); } catch (e) { sqlOk = false; T('SQL ' + f, false, e.message); } }
 T('A0 Las migraciones 001–008 se aplican (no se cambió la base de datos)', sqlOk);
 const U = {}; const mk = async (k, u, n, r) => { U[k] = uuid(); await db.query('insert into auth.users(id,email) values ($1,$2)', [U[k], u + '@t.test']); await db.query('insert into master.perfiles(id,usuario,email,nombre,rol) values ($1,$2,$3,$4,$5)', [U[k], u, u + '@t.test', n, r]); };
 await db.exec(`insert into master.clientes(id,nombre,cliente,proyectos) values ('COLGATE','Colgate','COLGATE','{COLGATE,LV}'); insert into master.clientes_fiscal(cliente_id) values ('COLGATE');`);
-await mk('adm', 'admin', 'Administradora', 'ADMIN'); await mk('ped', 'pedro', 'Pedro Chaperon', 'ENCARGADO');
+await mk('adm', 'admin', 'Administradora', 'ADMIN'); await mk('ped', 'pedro', 'Pedro Chaperon', 'OPERATIVO');
 await db.query(`insert into master.acceso_cliente(user_id,cliente_id) values ($1,'COLGATE')`, [U.ped]);
 await db.exec(`insert into master.flota(unidad,placa,tango,capacidad,tipo) values ('T-1','C-1','TG-1','10 Ton','10TON'); insert into master.pilotos(id,nombre,unidad,cliente_id) values ('P-1','Piloto Uno','T-1','COLGATE');
   insert into master.destinos(id,nombre,cliente_id) values ('D-1','Mayorista Escuintla','COLGATE'),('D-2','Los Andes','COLGATE');
@@ -56,12 +56,12 @@ const cargar = (rutaUi) => {
 const { w, errs } = cargar(null), d = w.document, ev = c => w.eval(c), tick = () => new Promise(r => setTimeout(r, 25));
 T('B0 La interfaz carga sin errores de JavaScript', errs.length === 0, errs);
 /* Nora: 58 clientes asignados, como en tu captura */
-ev(`(()=>{DB.usuarios.push({id:'U-9',usuario:'nora',clave:'x',nombre:'Nora Rivera',rol:'ENCARGADO',activo:true,proyectos:[]});
+ev(`(()=>{DB.usuarios.push({id:'U-9',usuario:'nora',clave:'x',nombre:'Nora Rivera',rol:'OPERATIVO',activo:true,proyectos:[]});
   const ids=[];for(let i=1;i<=55;i++)ids.push('CIT-U'+String(i).padStart(4,'0'));['CLI-001','CLI-002','CLI-003'].forEach(x=>ids.push(x));
   ids.forEach(id=>{DB.clientes.push({id,nombre:id,cliente:id,proyectos:['P-'+id],torreEstatus:false,activo:true});DB.acceso.push({userId:'U-9',cliente:id});DB.rutas.push({id:'R-'+id,codigo:'RC-'+id,nombre:'Ruta '+id,cliente:id,proyecto:'P-'+id,origenId:'CP',destinoId:'D-1',estado:'ACTIVA',origenProp:'',destinoProp:'',fuente:'CATALOGO'});});
   syncRefs();S.user=DB.usuarios.find(u=>u.usuario==='nora');S.view='inicio';render();})()`);
 const chip = d.querySelector('.userchip');
-T('B1 [Cambio 1] Encargado con 58 clientes: el botón de perfil no muestra IDs ni códigos', !/CIT-U|CLI-0/.test(d.querySelector('#app').textContent) && chip.textContent.replace(/\s+/g, ' ').trim() === 'NRNora RiveraEncargado de proyecto', chip.textContent);
+T('B1 [Cambio 1] Encargado con 58 clientes: el botón de perfil no muestra IDs ni códigos', !/CIT-U|CLI-0/.test(d.querySelector('#app').textContent) && chip.textContent.replace(/\s+/g, ' ').trim() === 'NRNora RiveraOperativo', chip.textContent);
 ev("S.form=null;go('nuevo')");
 const form = () => d.querySelector('.inner.form');
 T('B2 [Cambio 1] En el formulario no se muestran códigos de ruta (ni «Código de ruta»)', !/RC-CLI|COL-00/.test(form().textContent) && !/Código/.test(form().textContent));

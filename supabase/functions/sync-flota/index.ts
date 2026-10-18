@@ -164,6 +164,12 @@ Deno.serve(async (req: Request) => {
     const updF = "placa=excluded.placa, extra=excluded.extra";
     for (const c of trozos(flotaRows, 500)) await sql`insert into master.flota ${sql(c, ...COLS_F)} on conflict (unidad) do update set ${sql.unsafe(updF)}`;
 
+    // 3.b) Tango: solo lo llevan las unidades del proyecto CMI (el Tango es un dato manual,
+    //      no viene de Fleetio). A las unidades de los demás proyectos se les deja vacío.
+    const cmi = (await sql`select unidad from master.pilotos where cliente_id = 'CMI' and coalesce(unidad,'') <> ''`)
+      .map((r: any) => String(r.unidad));
+    await sql`update master.flota set tango = '' where coalesce(tango,'') <> '' and unidad not in ${sql(cmi.length ? cmi : [""])}`;
+
     const COLS_M = ["id_mantenimiento", "unidad", "fleetio_vehicle_id", "fecha", "referencia", "estado", "proveedor", "medidor", "subtotal", "mano_obra", "repuestos", "total", "notas", "actualizado"];
     const updM = COLS_M.filter((c) => c !== "id_mantenimiento").map((c) => `${c}=excluded.${c}`).join(", ");
     for (const c of trozos(mantRows, 500)) await sql`insert into master.mantenimientos ${sql(c, ...COLS_M)} on conflict (id_mantenimiento) do update set ${sql.unsafe(updM)}`;

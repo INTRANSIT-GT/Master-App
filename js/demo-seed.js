@@ -7,15 +7,15 @@ function seedDB(){
   DB=blankDB();
   DB.usuarios=[
     {id:'U-001',usuario:'admin',clave:'admin123',nombre:'Administradora',rol:'ADMIN',activo:true},
-    {id:'U-002',usuario:'pedro',clave:'colgate123',nombre:'Pedro Chaperon',rol:'ENCARGADO',activo:true},
-    {id:'U-003',usuario:'bryan',clave:'cmi123',nombre:'Bryan Hernandez',rol:'ENCARGADO',activo:true},
+    {id:'U-002',usuario:'pedro',clave:'colgate123',nombre:'Pedro Chaperon',rol:'OPERATIVO',activo:true},
+    {id:'U-003',usuario:'bryan',clave:'cmi123',nombre:'Bryan Hernandez',rol:'OPERATIVO',activo:true},
     {id:'U-004',usuario:'felipe',clave:'torre123',nombre:'Felipe Lobos',rol:'TORRE',activo:true},
-    {id:'U-005',usuario:'mar',clave:'liq123',nombre:'Mar Aguilar',rol:'LIQUIDACIONES',activo:true},
-    {id:'U-006',usuario:'alejandra',clave:'comercial123',nombre:'Alejandra',rol:'COMERCIAL',activo:true},
-    {id:'U-007',usuario:'gerencia',clave:'gerencia123',nombre:'Gerencia',rol:'GERENCIA',activo:true},
-    {id:'U-008',usuario:'cocacola',clave:'cocacola123',nombre:'Encargado Coca-Cola',rol:'ENCARGADO',activo:true},
-    {id:'U-009',usuario:'fritolay',clave:'fritolay123',nombre:'Encargado Frito Lay',rol:'ENCARGADO',activo:true},
-    {id:'U-010',usuario:'implan',clave:'implan123',nombre:'Encargado COLGATE (IMPLAN)',rol:'ENCARGADO',activo:true,proyectos:['COLGATE']}
+    {id:'U-005',usuario:'mar',clave:'liq123',nombre:'Mar Aguilar',rol:'VALIDADOR',activo:true},
+    {id:'U-006',usuario:'alejandra',clave:'comercial123',nombre:'Alejandra',rol:'FACTURACION',activo:true},
+    {id:'U-007',usuario:'gerencia',clave:'gerencia123',nombre:'Gerencia',rol:'GERENTE_TRANSPORTE',activo:true},
+    {id:'U-008',usuario:'cocacola',clave:'cocacola123',nombre:'Encargado Coca-Cola',rol:'OPERATIVO',activo:true},
+    {id:'U-009',usuario:'fritolay',clave:'fritolay123',nombre:'Encargado Frito Lay',rol:'OPERATIVO',activo:true},
+    {id:'U-010',usuario:'implan',clave:'implan123',nombre:'Encargado COLGATE (IMPLAN)',rol:'OPERATIVO',activo:true,proyectos:['COLGATE']}
   ];
   DB.seq.usr=11;
   DB.acceso=[{userId:'U-002',cliente:'COLGATE'},{userId:'U-003',cliente:'CMI'},{userId:'U-008',cliente:'COCACOLA'},{userId:'U-009',cliente:'FRITOLAY'},{userId:'U-010',cliente:'COLGATE'}];
@@ -27,7 +27,34 @@ function seedDB(){
     Object.assign({id:'FRITOLAY',nombre:'Frito Lay',cliente:'FRITO LAY',proyectos:['CARGAS GLOBAL'],torreEstatus:true},base)
   ];
   DB.config={};
+  /* Las listas del sistema viven en la base (master.catalogos): aquí van las de ejemplo. */
+  DB.catalogosListas={opl:['GTL','INTRANSIT','J&J','GRIJALVA','TRANS. HERNANDEZ','CATALAN'],
+    origen:['PET','SRG','VN','Z18','ATA','CHIM','CHIQ','EMB','GTY','ABASA','CENTRAL','INTRANSIT PETAPA','INTRANSIT Z11','SEREGUA','LP','LV','MZT','CMI DELTA BARCENAS','PLANTA INHSA','PLANTA MODERNOS','CG','CP','MALACATAN','XELA','OMNIA','HUEHUE','SANTA CATARINA'],
+    tipoCarga:['KG','CAJAS','TARIMAS'],tipoUnidad:['RAS S','RAS L','RAS A','RAS','FUR','5TON','10TON','12TON','53"'],tipoViaje:['ONE WAY','ROUD TRIP','MAYOREO','DETALLE','NA'],
+    arrastre:['TC-100','TC-200']};
   Object.keys(ROLES).forEach(rol=>PERM_KEYS.forEach(p=>DB.permisos.push({rol,permiso:p,habilitado:(PERM_DEFAULT[rol]||[]).includes(p)&&!(PROHIBIDO[rol]||[]).includes(p)})));
+  /* Pilotos y unidades de ejemplo (antes vivían en catalogos.js; ahora se leen de la base). */
+  PILOTOS.length=0;PILOTOS.push(
+    {id:'P-001',nombre:'Juan Pérez',unidad:'T-2084',proyecto:'COLGATE'},{id:'P-002',nombre:'Carlos Mejía',unidad:'T-2091',proyecto:'COLGATE'},
+    {id:'P-003',nombre:'Luis Ordóñez',unidad:'T-2102',proyecto:'COLGATE'},{id:'P-004',nombre:'Oscar Girón',unidad:null,proyecto:'COLGATE'},
+    {id:'P-011',nombre:'Marvin López',unidad:'T-3010',proyecto:'CMI'},{id:'P-012',nombre:'Edwin Castillo',unidad:'T-3015',proyecto:'CMI'},
+    {id:'P-013',nombre:'Hugo Barrios',unidad:'T-3022',proyecto:'CMI'},
+    {id:'P-021',nombre:'Ricardo Lemus',unidad:'T-4010',proyecto:'COCACOLA'},{id:'P-022',nombre:'Kevin Ramírez',unidad:'T-4015',proyecto:'COCACOLA'},
+    {id:'P-031',nombre:'Byron Xicay',unidad:'T-5010',proyecto:'FRITOLAY'},{id:'P-032',nombre:'Estuardo Paz',unidad:'T-5015',proyecto:'FRITOLAY'});
+  FLOTA.length=0;FLOTA.push(
+    {unidad:'T-2084',placa:'C-482KLM',tango:'TNG-0412',capacidad:'10 Ton',tipo:'10TON'},{unidad:'T-2091',placa:'C-517PQR',tango:'TNG-0427',capacidad:'12 Ton',tipo:'12TON'},
+    {unidad:'T-2102',placa:'C-390DFG',tango:'TNG-0433',capacidad:'5 Ton',tipo:'5TON'},{unidad:'T-3010',placa:'C-221HJK',tango:'TNG-0518',capacidad:'10 Ton',tipo:'RAS L'},
+    {unidad:'T-3015',placa:'C-648TUV',tango:'TNG-0524',capacidad:'20 Ton',tipo:'53"'},
+    {unidad:'T-4010',placa:'TC-4010',tango:'',capacidad:'10 Ton',tipo:'10TON'},{unidad:'T-4015',placa:'TC-4015',tango:'',capacidad:'10 Ton',tipo:'10TON'},
+    {unidad:'T-5010',placa:'TC-5010',tango:'',capacidad:'10 Ton',tipo:'10TON'},{unidad:'T-5015',placa:'TC-5015',tango:'',capacidad:'10 Ton',tipo:'10TON'});
+  /* Destinos de ejemplo: cada uno pertenece a su cliente (la validación lo exige). */
+  DESTINOS.length=0;DESTINOS.push(
+    {id:'D-C1',nombre:'Distribuidora Colgate 1',proyecto:'COLGATE'},{id:'D-C2',nombre:'Distribuidora Colgate 2',proyecto:'COLGATE'},
+    {id:'D-C3',nombre:'Centro de Distribución Colgate',proyecto:'COLGATE'},{id:'D-C4',nombre:'Bodega Colgate Zona 12',proyecto:'COLGATE'},
+    {id:'D-M1',nombre:'CMI Delta Bárcenas',proyecto:'CMI'},{id:'D-M2',nombre:'CMI Zona 11',proyecto:'CMI'},
+    {id:'D-M3',nombre:'Planta INHSA',proyecto:'CMI'},{id:'D-M4',nombre:'Distribuidora Metropolitana',proyecto:'CMI'},
+    {id:'D-K1',nombre:'Bodega Coca-Cola 1',proyecto:'COCACOLA'},{id:'D-K2',nombre:'Bodega Coca-Cola 2',proyecto:'COCACOLA'},
+    {id:'D-F1',nombre:'Bodega Frito Lay 1',proyecto:'FRITOLAY'},{id:'D-F2',nombre:'Bodega Frito Lay 2',proyecto:'FRITOLAY'});
   syncRefs();
   const now=Date.now(),lm=m=>toLocal(new Date(now-m*60000)),dd=m=>dstr(new Date(now-m*60000));
   const U={adm:'U-001',ped:'U-002',bry:'U-003',mar:'U-005',ale:'U-006',imp:'U-010'};
@@ -44,7 +71,7 @@ function seedDB(){
   const mk=(cli,pil,ori,des,o)=>{
     n++;const cmi=cli==='CMI',col=cli==='COLGATE',enc={COLGATE:U.ped,CMI:U.bry,COCACOLA:'U-008',FRITOLAY:'U-009'}[cli];
     const pc=o.pc||(col?'COLGATE':cmi?'ABASA':cli==='COCACOLA'?'EMBOCEN':'CARGAS GLOBAL');
-    const d={cliente:cli,proyectoCat:pc,shipment:'SHP-'+(48200+n),noViaje:'NV-'+String(111+n).padStart(6,'0'),opl:o.opl||(cmi?'GRIJALVA':'INTRANSIT'),tipoViaje:cmi?'ROUD TRIP':'ONE WAY',tipoCarga:cmi?'CAJAS':'TARIMAS',noCarga:cmi?420:14,producto:'Producto terminado',
+    const d={cliente:cli,proyectoCat:pc,shipment:'SHP-'+(48200+n),noViaje:'NV-'+String(111+n).padStart(6,'0'),opl:o.opl||(cmi?'GRIJALVA':'INTRANSIT'),tipoViaje:cmi?'ROUD TRIP':'ONE WAY',tipoCarga:cmi?'CAJAS':'TARIMAS',noCarga:cmi?420:14,producto:'Producto terminado',placaArrastre:o.arr||('TC-'+(100+(n%2)*100)),
       fechaPlan:lm(o.pl!==undefined?o.pl:(o.s?o.s+30:o.c)),pilotoId:pil,noDocRetorno:'',qViaticos:''};
     if(o.noRuta){d.rutaId='NO_ASIGNADA';d.rutaRef=o.noRuta;}else d.rutaId=getRuta(cli,pc,ori,des,o.c);
     TKEYS.forEach(k=>d[k]='');

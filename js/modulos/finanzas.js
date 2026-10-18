@@ -219,7 +219,7 @@ Object.assign(ACT,{
   async importeOk(d){const r=await run(()=>API.registrarImportes(S.user.id,d.id,{[S.modal.k]:S.modal.data.monto}),'Importe registrado.',true);if(r.ok)afterWrite();},
   async opTog(d){S.opSel=S.opSel||{};S.opSel[d.id]=!S.opSel[d.id];render();},
   async opClear(){S.opSel={};render();},
-  async opAbrir(d){if(d.url)window.open(d.url,'_blank','noopener');},
+  async opAbrir(d){const u=urlSegura(d.url);if(u)window.open(u,'_blank','noopener');else toast('El archivo no tiene un enlace válido.','err');},
   async opEmitir(){
     const sel=S.opSel||{},ids=Object.keys(sel).filter(id=>sel[id]);
     if(!ids.length)return;

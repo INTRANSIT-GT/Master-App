@@ -6,7 +6,7 @@
 (function(){
   DB=blankDB();
   const U=(id,usuario,nombre,rol)=>({id,usuario,clave:'',nombre,rol,activo:true,proyectos:[]});
-  const ROL_NOMBRE={ADMIN:'Administradora (ejemplo)',TORRE:'Torre de control (ejemplo)',VALIDADOR:'Validador (ejemplo)',FACTURACION:'Facturación (ejemplo)',GERENTE_COMERCIAL:'Gerencia comercial (ejemplo)',COBROS:'Cobros (ejemplo)',GERENTE_TRANSPORTE:'Gerencia de transporte (ejemplo)',ANALISTA_COMERCIAL:'Analista comercial (ejemplo)',PAGO_OPL:'Pago OPL (ejemplo)'};
+  const ROL_NOMBRE={ADMIN:'Administradora (ejemplo)',TORRE:'Torre de control (ejemplo)',VALIDADOR:'Validador (ejemplo)',FACTURACION:'Facturación (ejemplo)',GERENTE_COMERCIAL:'Gerencia comercial (ejemplo)',COBROS:'Cobros (ejemplo)',GERENTE_TRANSPORTE:'Gerencia de transporte (ejemplo)',ANALISTA_COMERCIAL:'Analista comercial (ejemplo)',PAGO_OPL:'Pago OPL (ejemplo)',PROYECTOS:'Proyectos (ejemplo)'};
   Object.keys(ROLES).filter(r=>r!=='OPERATIVO').forEach(r=>DB.usuarios.push(U('U-'+r,r.toLowerCase(),ROL_NOMBRE[r]||r,r)));
   DB.usuarios.push(U('U-OPE1','operativo1','Pedro Chaperon (ejemplo)','OPERATIVO'),U('U-OPE2','nora','Nora Rivera (ejemplo, 58 clientes)','OPERATIVO'),U('U-OPE3','sinproy','Operativo sin proyectos (ejemplo)','OPERATIVO'));
   /* permisos por rol: los valores iniciales del propio motor */
@@ -29,6 +29,12 @@
   PILOTOS.length=0;PILOTOS.push({id:'P-1',nombre:'Juan Pérez (ejemplo)',unidad:'T-1',proyecto:'COLGATE'},{id:'P-2',nombre:'Carlos Mejía (ejemplo)',unidad:'T-2',proyecto:'COLGATE'},{id:'P-3',nombre:'Marvin López (ejemplo)',unidad:'T-3',proyecto:'CMI'});
   FLOTA.length=0;FLOTA.push({unidad:'T-1',placa:'C-482KLM',tango:'TG-01',capacidad:'10 Ton',tipo:'10TON'},{unidad:'T-2',placa:'C-517PQR',tango:'TG-02',capacidad:'12 Ton',tipo:'12TON'},{unidad:'T-3',placa:'C-221HJK',tango:'TG-03',capacidad:'10 Ton',tipo:'10TON'});
   DESTINOS.length=0;DESTINOS.push({id:'D-1',nombre:'Mayorista Escuintla',proyecto:'COLGATE'},{id:'D-2',nombre:'Distribuidora Los Andes',proyecto:'COLGATE'},{id:'D-3',nombre:'Centro de Distribución Norte',proyecto:'CMI'});
+  /* Las listas del sistema viven en la base (master.catalogos): aquí van las de ejemplo, para que la
+     revisión visual muestre los desplegables y pueda crear viajes (si no, la validación los rechaza). */
+  DB.catalogosListas={opl:['GTL','INTRANSIT','J&J','GRIJALVA','TRANS. HERNANDEZ','CATALAN'],
+    origen:['PET','SRG','VN','Z18','ATA','CHIM','CHIQ','EMB','GTY','ABASA','CENTRAL','INTRANSIT PETAPA','INTRANSIT Z11','SEREGUA','LP','LV','MZT','CMI DELTA BARCENAS','PLANTA INHSA','PLANTA MODERNOS','CG','CP','MALACATAN','XELA','OMNIA','HUEHUE','SANTA CATARINA'],
+    tipoCarga:['KG','CAJAS','TARIMAS'],tipoUnidad:['RAS S','RAS L','RAS A','RAS','FUR','5TON','10TON','12TON','53"'],tipoViaje:['ONE WAY','ROUD TRIP','MAYOREO','DETALLE','NA'],
+    arrastre:['TC-100','TC-200']};
   syncRefs();
   /* algunos viajes de ejemplo, creados por el propio motor */
   const b={cliente:'COLGATE',proyectoCat:'COLGATE',pilotoId:'P-1',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'Producto de ejemplo',placaArrastre:'PA-1001'};

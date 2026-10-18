@@ -70,7 +70,7 @@ const AUTOBUSY={};
 async function torreEstadoSave(id,dest,btn){
   const st=document.getElementById('ss_'+id);
   const set=(c,msg)=>{if(btn){btn.classList.remove('saving','saved','error');btn.classList.add(c);btn.title=c==='error'?msg:'';}
-    if(st){st.className='cst '+c;st.innerHTML=c==='saving'?'…':c==='saved'?'✓':`<button class="cretry" data-act="estadoRetry" data-id="${id}" data-dest="${dest}" title="${esc(msg)} Toca para reintentar" aria-label="Error: ${esc(msg)}. Reintentar">⚠</button>`;}};
+    if(st){st.className='cst '+c;st.innerHTML=c==='saving'?'…':c==='saved'?'✓':`<button class="cretry" data-act="estadoRetry" data-id="${esc(id)}" data-dest="${esc(dest)}" title="${esc(msg)} Toca para reintentar" aria-label="Error: ${esc(msg)}. Reintentar">⚠</button>`;}};
   const key=id+'|estado';
   if(AUTOBUSY[key]===dest)return;
   AUTOBUSY[key]=dest;if(btn)btn.disabled=true;set('saving');

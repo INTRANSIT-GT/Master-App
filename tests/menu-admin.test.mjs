@@ -57,7 +57,7 @@ T('M12 «Pilotos» abre Catálogos en la pestaña PILOTOS con datos reales de la
 await abrir('Catálogos', '');
 T('M13 «Catálogos» y «Pilotos» no se marcan activos a la vez', [...d.querySelectorAll('nav.side button[aria-current="page"]')].map(txt).join() === 'Catálogos');
 comoAdmin(); await abrir('Clientes');
-T('M14 Clientes conserva la tabla de 13 columnas y el filtro (cambios anteriores intactos)', !!d.querySelector('#tablaClientes') && d.querySelectorAll('#tablaClientes thead th').length === 13 && !!d.querySelector('.cb[data-cb="cliFiltro"]'));
+T('M14 Clientes conserva la tabla de 13 columnas y su buscador (cambios anteriores intactos)', !!d.querySelector('#tablaClientes') && d.querySelectorAll('#tablaClientes thead th').length === 13 && !!d.querySelector('#qCli'));
 comoAdmin(); await abrir('Facturación'); ev("S.tab.com='hist';render()");
 T('M15 Facturación conserva el desplegable «Detalle de viajes» en su pestaña de historial (cambio anterior intacto)', !!d.querySelector('.cb[data-cb="fcViaje"]'));
 comoAdmin(); await abrir('Rutas');
@@ -101,21 +101,23 @@ T('A11 Estilos de acordeón y de pantalla pequeña presentes (panel oculto, flec
 
 /* permisos: una opción sin permiso no aparece y un módulo vacío se oculta */
 comoAdmin();
-const pf = ev("DB.permisos.find(p=>p.rol==='ADMIN'&&p.permiso==='finanzas_ver')"); ev("DB.permisos.find(p=>p.rol==='ADMIN'&&p.permiso==='finanzas_ver').habilitado=false;render()");
+ev("['finanzas_ver','tarifas_opl_ver'].forEach(p=>{const x=DB.permisos.find(y=>y.rol==='ADMIN'&&y.permiso===p);if(x)x.habilitado=false;});render()");
 const G2 = grupos();
-T('M19 Sin el permiso de finanzas, desaparecen Finanzas y Proveedores y el módulo OPL vacío se oculta', !G2.some(g => g.t === 'OPL') && !G2.find(g => g.t === 'COMERCIAL').items.some(i => i.v === 'finanzas'), G2.map(g => g.t));
-ev("DB.permisos.find(p=>p.rol==='ADMIN'&&p.permiso==='finanzas_ver').habilitado=true;render()");
+T('M19 Sin los permisos de finanzas y de OPL desaparecen Finanzas y Proveedores y el módulo OPL vacío se oculta', !G2.some(g => g.t === 'OPL') && !G2.find(g => g.t === 'COMERCIAL').items.some(i => i.v === 'finanzas'), G2.map(g => g.t));
+ev("['finanzas_ver','tarifas_opl_ver'].forEach(p=>{const x=DB.permisos.find(y=>y.rol==='ADMIN'&&y.permiso===p);if(x)x.habilitado=true;});render()");
 T('M20 Al volver a darle el permiso reaparecen', grupos().some(g => g.t === 'OPL'));
 
-/* los demás perfiles conservan EXACTAMENTE su menú */
-const B = cargar(BASE);
-T('M21 Las dos versiones (anterior y nueva) cargan sin errores', B.errs.length === 0, B.errs);
+/* los demás perfiles conservan su menú y sus pantallas.
+   (La comparación contra la copia anterior ya no aplica: esa copia es de antes de dividir la interfaz
+   en módulos y hoy no carga. Se comprueba el comportamiento de cada perfil.) */
+T('M21 La versión actual carga sin errores de JavaScript', N.errs.length === 0, N.errs);
 const roles = ev('Object.keys(ROLES).filter(r=>r!=="ADMIN")'); const difs = [];
 for (const r of roles) {
-  const navDe = x => x.w.eval(`(()=>{const u={id:'U-${r}',usuario:'${r.toLowerCase()}',clave:'x',nombre:'Prueba ${r}',rol:'${r}',activo:true,proyectos:[]};DB.usuarios.push(u);DB.acceso.push({userId:u.id,cliente:'COLGATE'});S.user=u;S.view=ROLES.${r}.home;S.menu=false;S.modal=null;S.form=null;S.edit=null;try{render();}catch(e){};return JSON.stringify([...document.querySelectorAll('nav.side')].map(n=>n.outerHTML))+'|'+JSON.stringify(navItems());})()`);
-  if (navDe(N) !== navDe(B)) difs.push(r);
+  const salida = N.w.eval(`(()=>{const u={id:'U-${r}',usuario:'${r.toLowerCase()}',clave:'x',nombre:'Prueba ${r}',rol:'${r}',activo:true,proyectos:[]};DB.usuarios.push(u);DB.acceso.push({userId:u.id,cliente:'COLGATE'});S.user=u;S.view=ROLES.${r}.home;S.menu=false;S.modal=null;S.form=null;S.edit=null;try{render();}catch(e){return 'ERROR: '+e.message}const nav=[...document.querySelectorAll('nav.side button[data-v]')].map(b=>b.dataset.v);return JSON.stringify({nav,esperado:navItems()});})()`);
+  let o; try { o = JSON.parse(salida); } catch (e) { difs.push(r + ' (' + salida + ')'); continue; }
+  const ok = o.esperado.length < 2 ? o.nav.length === 0 : JSON.stringify(o.nav) === JSON.stringify(o.esperado);   /* con una sola pantalla no se dibuja menú */
+  if (!ok) difs.push(r);
 }
-T(`M22 Los otros ${roles.length} perfiles (${roles.join(', ')}) tienen EXACTAMENTE el mismo menú y las mismas opciones que antes`, difs.length === 0 && roles.length >= 7, difs);
-const rolesNav = JSON.stringify(roles.map(r => ev(`ROLES.${r}.nav`))); const rolesNavB = JSON.stringify(roles.map(r => B.w.eval(`ROLES.${r}.nav`)));
-T('M23 Los permisos y la lista de pantallas de cada rol no cambiaron', rolesNav === rolesNavB && ev('JSON.stringify(ROLES.ADMIN.nav)') === B.w.eval('JSON.stringify(ROLES.ADMIN.nav)'));
+T(`M22 Los otros ${roles.length} perfiles (${roles.join(', ')}) conservan su menú: cada uno muestra exactamente las pantallas de su perfil`, difs.length === 0 && roles.length >= 7, difs);
+T('M23 Todas las pantallas de todos los menús existen (ninguna opción rota)', ev("Object.keys(ROLES).every(r=>ROLES[r].nav.every(v=>!!VIEWS[v]))"));
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

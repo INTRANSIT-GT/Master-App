@@ -9,7 +9,8 @@ const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), '
 
 /* Migraciones en orden. El 005 es un ejemplo (se ejecuta a mano) y no entra aquí. */
 const MIGRACIONES = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
-  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql'];
+  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql',
+  '019_catalogos.sql', '020_arrastres.sql'];   /* 019: las listas del sistema (OPL, orígenes, tipos) viven en master.catalogos */
 
 const db = new PGlite();
 await db.exec('set search_path = master, public');   /* las tablas viven en el esquema master (integración AP_VIAJES) */
@@ -50,16 +51,17 @@ const U = {}; const mk = async (k, usuario, nombre, rol, proyectos = []) => { U[
 await db.exec(`insert into master.clientes(id,nombre,cliente,proyectos,torre_estatus) values ('COLGATE','Colgate','COLGATE','{COLGATE,LV}',false),('CMI','CMI','CMI','{ABASA}',false),('COCACOLA','Coca-Cola','COCACOLA','{COCACOLA}',true);
   insert into master.clientes_fiscal(cliente_id) values ('COLGATE'),('CMI'),('COCACOLA');`);
 await mk('adm', 'admin', 'Administradora', 'ADMIN');
-await mk('ped', 'pedro', 'Pedro Chaperon', 'ENCARGADO');
-await mk('bry', 'bryan', 'Bryan Cmi', 'ENCARGADO');
-await mk('imp', 'implan', 'Encargado COLGATE (IMPLAN)', 'ENCARGADO', ['COLGATE']);
-await mk('mar', 'mar', 'Mar Liquidaciones', 'LIQUIDACIONES');
-await mk('ale', 'alejandra', 'Alejandra', 'COMERCIAL');
-await mk('gco', 'gcomercial', 'Gerencia Comercial', 'GERENCIA_COMERCIAL');
-await mk('gtr', 'gtransporte', 'Gerencia Transporte', 'GERENCIA_TRANSPORTE');
+await mk('ped', 'pedro', 'Pedro Chaperon', 'OPERATIVO');
+await mk('bry', 'bryan', 'Bryan Cmi', 'OPERATIVO');
+await mk('imp', 'implan', 'Encargado COLGATE (IMPLAN)', 'OPERATIVO', ['COLGATE']);
+await mk('mar', 'mar', 'Mar Liquidaciones', 'VALIDADOR');
+await mk('ale', 'alejandra', 'Alejandra', 'ANALISTA_COMERCIAL');
+await mk('fac', 'facturacion', 'Facturación', 'FACTURACION');   /* facturar es de Facturación, no de Analista Comercial */
+await mk('gco', 'gcomercial', 'Gerencia Comercial', 'GERENTE_COMERCIAL');
+await mk('gtr', 'gtransporte', 'Gerencia Transporte', 'GERENTE_TRANSPORTE');
 await mk('fel', 'felipe', 'Felipe Torre', 'TORRE');
-await mk('cta', 'conta', 'Contabilidad', 'CONTABILIDAD');
-await db.query(`insert into master.acceso_cliente(user_id,cliente_id) values ($1,'COLGATE'),($2,'CMI'),($3,'COLGATE')`, [U.ped, U.bry, U.imp]);
+await mk('cta', 'conta', 'Contabilidad', 'COBROS');
+await db.query(`insert into master.acceso_cliente(user_id,cliente_id) values ($1,'COLGATE'),($2,'CMI'),($3,'COLGATE'),($4,'COLGATE')`, [U.ped, U.bry, U.imp, U.mar]);   /* el validador revisa liquidaciones de su cliente */
 await db.exec(`insert into master.flota(unidad,placa,tango,capacidad,tipo) values ('T-1','C-001AAA','TNG-1','10 Ton','10TON'),('T-2','C-002BBB','TNG-2','10 Ton','10TON'),('T-3','C-003CCC','TNG-3','10 Ton','10TON');
   insert into master.pilotos(id,nombre,unidad,cliente_id) values ('P-1','Piloto Uno','T-1','COLGATE'),('P-2','Piloto Dos','T-2','CMI'),('P-3','Piloto Tres','T-3','COLGATE');
   insert into master.destinos(id,nombre,cliente_id) values ('D-C1','Distribuidora Colgate 1','COLGATE'),('D-C2','Distribuidora Colgate 2','COLGATE'),('D-M1','Destino CMI 1','CMI');`);
@@ -149,17 +151,17 @@ T('27 Comercial registra la tarifa y la ruta pasa a Pendiente de aprobación', t
 const apc = await api('gco', 'aprobarRutaComercial', r1.result.id);
 const apt = await api('gtr', 'aprobarRutaTransporte', r1.result.id);
 T('28 Las dos gerencias aprueban la ruta y queda Activa', apc.ok && apt.ok && (await q1('select estado from rutas where id=$1', [r1.result.id]))[0].estado === 'ACTIVA', [apc.message, apt.message]);
-const apl = await api('ale', 'aplicarTarifa', v1id);
+const apl = await api('adm', 'aplicarTarifa', v1id);   /* aplicar tarifa es permiso de Finanzas/Administración */
 T('29 Aplica la tarifa vigente al viaje (cliente y OPL en la tabla de importes)', apl.ok && Number((await q1('select tarifa_cliente from viajes_tarifa where viaje_id=$1', [v1id]))[0]?.tarifa_cliente) === 4800 && Number((await q1('select tarifa_opl from viajes_tarifa where viaje_id=$1', [v1id]))[0]?.tarifa_opl) === 3000, apl);
-const g = await api('ale', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [v1id], numeroFactura: '', fechaFactura: '' });
+const g = await api('fac', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [v1id], numeroFactura: '', fechaFactura: '' });
 const gid = g.result?.id;
-const env0 = await api('ale', 'enviarFactura', gid);
+const env0 = await api('fac', 'enviarFactura', gid);
 T('30 No se envía sin serie, número ni fecha y dice qué falta', env0.ok === false && env0.code === 'FALTAN_CAMPOS' && (env0.faltantes || []).length >= 3, env0);
 T('31 La factura rechazada sigue en PREPARADA', (await q1('select fase from agrupaciones where id=$1', [gid]))[0].fase === 'PREPARADA');
-const act = await api('ale', 'actualizarFactura', gid, { numeroFactura: 'FAC-9001', serieFactura: 'A', fechaFactura: '2031-02-01' });
-const env1 = await api('ale', 'enviarFactura', gid);
+const act = await api('fac', 'actualizarFactura', gid, { numeroFactura: 'FAC-9001', serieFactura: 'A', fechaFactura: '2031-02-01' });
+const env1 = await api('fac', 'enviarFactura', gid);
 T('32 Con datos completos, la factura se envía y el viaje pasa a Facturado', act.ok && env1.ok && (await q1('select fase from agrupaciones where id=$1', [gid]))[0].fase === 'ENVIADA' && (await est()) === 'FACTURADO', [act.message, env1.message]);
-const g2 = await api('ale', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [v1id], numeroFactura: 'FAC-9002', serieFactura: 'A', fechaFactura: '2031-02-01' });
+const g2 = await api('fac', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [v1id], numeroFactura: 'FAC-9002', serieFactura: 'A', fechaFactura: '2031-02-01' });
 T('33 No se puede facturar dos veces el mismo viaje', g2.ok === false, g2);
 const gsnap = await snap('gco');
 T('34 Gerencia Comercial consulta la facturación pero no la opera', gsnap.agrupaciones.length === 1 && (await api('gco', 'enviarFactura', gid)).ok === false);
@@ -181,7 +183,7 @@ T('43 RLS: el encargado con proyecto asignado solo lee ese proyecto', await cuen
 T('44 RLS: consultar por identificador de otro cliente devuelve 0 filas', await comoUsuario('bry', async tx => (await tx.query('select id from master.viajes where id=$1', [v1id])).rows.length) === 0);
 T('45 RLS: costos, tarifas y facturas no son visibles para quien no tiene permiso', await cuenta('ped', 'viajes_costos') === 0 && await cuenta('ped', 'viajes_tarifa') === 0 && await cuenta('ped', 'agrupaciones') === 0 && await cuenta('ped', 'tarifas') === 0);
 T('46 RLS: Comercial ve la tarifa del viaje y las facturas', await cuenta('ale', 'viajes_tarifa') === 1 && await cuenta('ale', 'agrupaciones') === 1);
-T('47 RLS: cada usuario solo ve su propio perfil (la administradora ve todos)', await cuenta('ped', 'perfiles') === 1 && await cuenta('adm', 'perfiles') === 10);
+T('47 RLS: cada usuario solo ve su propio perfil (la administradora ve todos)', await cuenta('ped', 'perfiles') === 1 && await cuenta('adm', 'perfiles') === Object.keys(U).length);
 T('48 RLS: nadie ve las secuencias internas', (await intenta(() => cuenta('adm', 'secuencias'))) !== null);
 const audV = quien => comoUsuario(quien, async tx => (await tx.query('select count(*)::int n from master.auditoria where viaje_id=$1', [v1id])).rows[0].n);
 T('49 RLS: la auditoría de un viaje solo la leen quienes pueden ver ese viaje', await audV('bry') === 0 && await audV('ped') > 0 && await cuenta('adm', 'auditoria') > 10, [await audV('bry'), await audV('ped')]);
@@ -194,20 +196,20 @@ T('51 Almacenamiento: Pedro ve la evidencia de su viaje y Bryan no', ev === 1 &&
 const sol = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'Ruta nueva Escuintla', origenProp: 'CEDIS Mixco', destinoProp: 'Escuintla centro' });
 T('52 Encargado/IMPLAN solicita una ruta nueva: queda PENDIENTE', sol.ok && (await q1('select estado from rutas where id=$1', [sol.result?.id]))[0].estado === 'PENDIENTE', sol);
 const nt = await q1('select destinatarios from notificaciones order by id desc limit 1');
-T('53 Genera la notificación para las dos gerencias', nt[0] && nt[0].destinatarios.includes('GERENCIA_COMERCIAL') && nt[0].destinatarios.includes('GERENCIA_TRANSPORTE'), nt);
+T('53 Genera la notificación para las dos gerencias', nt[0] && nt[0].destinatarios.includes('GERENTE_COMERCIAL') && nt[0].destinatarios.includes('GERENTE_TRANSPORTE'), nt);
 T('54 Otro proyecto o cliente: solicitud rechazada', (await api('imp', 'solicitarRuta', { cliente: 'CMI', proyecto: 'ABASA', nombre: 'X ruta' })).ok === false && (await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'LV', nombre: 'X ruta' })).ok === false);
 const val = await api('ale', 'validarRuta', sol.result.id, { codigo: 'COL-099', origenId: 'CP', destinoId: 'D-C2' });
 T('55 Comercial valida la ruta: queda En tarifación con código', val.ok && (await q1('select estado,codigo from rutas where id=$1', [sol.result.id]))[0].estado === 'EN_TARIFACION' && (await q1('select codigo from rutas where id=$1', [sol.result.id]))[0].codigo === 'COL-099', val);
 
 /* ---- 8. Usuarios: alta con cuenta de acceso solo para la administradora ---- */
-const nuevo = await api('adm', 'guardarUsuario', { usuario: 'nuevo1', nombre: 'Nuevo Encargado', email: 'Nuevo1@intransit.test', clave: 'ClaveSegura1', rol: 'ENCARGADO', clientes: ['CMI'], proyectos: [], activo: true });
+const nuevo = await api('adm', 'guardarUsuario', { usuario: 'nuevo1', nombre: 'Nuevo Operativo', email: 'Nuevo1@intransit.test', clave: 'ClaveSegura1', rol: 'OPERATIVO', clientes: ['CMI'], proyectos: [], activo: true });
 const filaNuevo = (await q1('select p.email, u.email as uemail from perfiles p join auth.users u on u.id=p.id where p.usuario=$1', ['nuevo1']))[0];
 T('56 La administradora crea un usuario: se crea la cuenta Auth y el perfil con el mismo identificador', nuevo.ok && filaNuevo && filaNuevo.uemail === 'nuevo1@intransit.test', nuevo);
 const intruso = await api('ped', 'guardarUsuario', { usuario: 'intruso', nombre: 'Intruso Root', email: 'i@i.test', clave: 'ClaveSegura1', rol: 'ADMIN', clientes: [] });
 T('57 Un encargado NO puede crear usuarios (ni se crea cuenta de acceso)', intruso.ok === false && (await q1("select count(*)::int n from auth.users where email='i@i.test'"))[0].n === 0, intruso);
-const malo = await api('adm', 'guardarUsuario', { usuario: 'pedro', nombre: 'Duplicado Pedro', email: 'dup@x.test', clave: 'ClaveSegura1', rol: 'ENCARGADO', clientes: ['CMI'] });
+const malo = await api('adm', 'guardarUsuario', { usuario: 'pedro', nombre: 'Duplicado Pedro', email: 'dup@x.test', clave: 'ClaveSegura1', rol: 'OPERATIVO', clientes: ['CMI'] });
 T('58 Si el motor rechaza el alta, la cuenta de acceso creada se elimina (no quedan cuentas huérfanas)', malo.ok === false && (await q1("select count(*)::int n from auth.users where email='dup@x.test'"))[0].n === 0 && borrados.length >= 1, malo);
-T('59 No se puede conceder a un perfil un permiso prohibido (separación de funciones)', (await api('adm', 'setPermiso', 'ENCARGADO', 'liq_aprobar', true)).ok === false);
+T('59 No se puede conceder a un perfil un permiso prohibido (separación de funciones)', (await api('adm', 'setPermiso', 'OPERATIVO', 'liq_aprobar', true)).ok === false);
 T('60 Torre: solo avanza el estado y solo en clientes autorizados', (await api('fel', 'torreMoverEstado', v1id, 'EN_RUTA')).ok === false);
 
 /* ---- 9. OPL (proveedor) y órdenes de pago ---- */

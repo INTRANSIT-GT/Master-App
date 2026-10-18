@@ -30,6 +30,13 @@ const icon=(n,s=20)=>`<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24
 /* ---------- Utilidades ---------- */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* Solo se permiten enlaces http/https: descarta javascript:, data:, file: y cualquier otro esquema
+   (se usa antes de abrir un enlace o de navegar con un valor que viene de los datos). */
+function urlSegura(u){
+  const s=String(u==null?'':u).trim();
+  if(!/^https?:\/\//i.test(s))return '';
+  try{const p=new URL(s);return (p.protocol==='http:'||p.protocol==='https:')?p.href:'';}catch(e){return '';}
+}
 const pad=n=>String(n).padStart(2,'0');
 const dstr=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const todayStr=()=>dstr(new Date());
@@ -52,7 +59,7 @@ const CAMPOS_TIEMPO=[['tIngresoPlanta','Ingreso a planta'],['tEsperaRampa','Espe
 const TKEYS=CAMPOS_TIEMPO.map(x=>x[0]);
 /* Columnas de tiempo que se calculan solas */
 const DUR=[['Espera de rampa','tEsperaRampa','tRampa'],['En rampa','tRampa','tSalidaPlanta'],['Espera de carga','tIngresoPlanta','tInicioCarga'],['Tiempo de carga','tInicioCarga','tFinCarga'],['Tiempo en tránsito','tSalida','tIngresoBodega'],['Espera de descarga','tIngresoBodega','tInicioDescarga'],['Tiempo de descarga','tInicioDescarga','tFinDescarga']];
-const GRUPOKEYS={cliente:['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre'],plan:['fechaPlan'],unidad:['pilotoId','unidadId'],ruta:['rutaId'],tiempos:TKEYS,otros:['noDocRetorno','qViaticos']};
+const GRUPOKEYS={cliente:['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto'],plan:['fechaPlan'],unidad:['pilotoId','unidadId','placaArrastre'],ruta:['rutaId'],tiempos:TKEYS,otros:['noDocRetorno','qViaticos']};
 const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'No. de carga',producto:'Producto',fechaPlan:'Fecha plan',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
 CAMPOS_TIEMPO.forEach(([k,l])=>LBL[k]=l);
 

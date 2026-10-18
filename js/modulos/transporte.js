@@ -21,7 +21,7 @@ VIEWS.viajes=()=>{
 const curModel=()=>S.edit?S.edit.data:S.form;
 function initForm(){
   const d=new Date();d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
-    const m={proyecto:esEnc()?(clientesAsig(S.user).length===1?clientesAsig(S.user)[0]:''):(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',estado:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',
+    const m={proyecto:esEnc()?(clientesAsig(S.user).length===1?clientesAsig(S.user)[0]:''):(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',estado:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',placaArrastreOtro:'',
     fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',placaSel:'',rutaId:'',rutaRef:'',noDocRetorno:'',qViaticos:'',savedId:null,err:''};
   TKEYS.forEach(k=>m[k]='');
   const pc=usaCombo()?(m.proyecto?proyectosAsig(S.user,m.proyecto):[]):PROYECTOS_X[m.proyecto];if(pc&&pc.length===1)m.proyectoCat=pc[0];
@@ -29,7 +29,7 @@ function initForm(){
 }
 function toModel(t){
   const m={proyecto:t.proyecto,fechaPlanD:planD(t),fechaPlanT:planT(t),err:''};
-  ['proyectoCat','estado','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
+  ['proyectoCat','estado','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','placaArrastreOtro','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
   m.placaSel=t.unidadId||'';                      /* la unidad del viaje se edita como «placa» */
   return m;
 }
@@ -90,8 +90,18 @@ function aplicarCampo(M,k,v){
     else{M.rutaRef='';const g=rutasGrupos(M).find(x=>x.key===v);if(g){if(M.proyecto!==g.cliente){M.proyecto=g.cliente;M.pilotoId='';M.placaSel='';}M.proyectoCat=g.proyecto;}resolverRuta(M);}   /* cliente y proyecto salen de la ruta elegida */
   }
   if(k==='rutaO'||k==='rutaD')resolverRuta(M);
-  if(k==='placaSel'){const ps=pilotosDePlaca(M.proyecto,v);   /* el piloto se conserva si pertenece a esa placa */
-    if(esAdm()||!ps.some(p=>p.id===M.pilotoId)){M.pilotoId='';if(ps.length===1)M.pilotoId=ps[0].id;}}
+  if(k==='placaSel'){
+    /* El piloto asignado a la unidad se propone solo; si hay más de uno (o ninguno) se elige a mano.
+       Se conserva el piloto actual si puede ir con esa unidad (los pilotos sin unidad también pueden). */
+    const ps=pilotosElegibles(M.proyecto,v),asig=pilotosDePlaca(M.proyecto,v);
+    if(!ps.some(p=>p.id===M.pilotoId)){
+      M.pilotoId='';
+      if(asig.length===1)M.pilotoId=asig[0].id;                 /* el asignado a la unidad */
+      else if(!asig.length&&ps.length===1)M.pilotoId=ps[0].id;  /* unidad sin piloto: único piloto disponible */
+    }
+    /* El arrastre se propone con el último que usó esa unidad. */
+    const ua=ultimoArrastreDeUnidad(v);if(ua)M.placaArrastre=ua;
+  }
   if(k==='pilotoId'&&v&&!esAdm()){const P=PILOTOS.find(p=>p.id===v);if(P&&P.unidad)M.placaSel=P.unidad;}   /* arranca con la placa del piloto; se puede cambiar, siempre del mismo cliente */
   if(k==='pilotoAlt')M.pilotoId=v;                                                                              /* solo si la placa tiene más de un piloto asignado */
   if(k==='pilotoId'&&v)S.flash=true;
@@ -126,6 +136,38 @@ function clientesAdminHTML(){
 
 /* ---- Nuevo viaje · placa del equipo: la relación placa → unidad → piloto se resuelve sola ---- */
 function pilotosDePlaca(cliente,unidad){return PILOTOS.filter(p=>p.proyecto===cliente&&p.unidad&&p.unidad===unidad);}
+/* Pilotos que se pueden elegir para esa unidad: los asignados a ella y los que no tienen unidad asignada.
+   El piloto asignado a la unidad se propone solo, pero se puede cambiar para ese viaje:
+   en ese caso el viaje guarda la nota «piloto no asignado a unidad». */
+function pilotosElegibles(cliente,unidad){
+  if(!unidad)return [];
+  const dePlaca=pilotosDePlaca(cliente,unidad);
+  const sinUnidad=PILOTOS.filter(p=>p.proyecto===cliente&&!p.unidad);
+  return [...dePlaca,...sinUnidad];
+}
+/* Equipo de arrastre que no está en la lista: se escribe la placa a mano. */
+const ARRASTRE_OTRO='__OTRO__';
+const arrastreFinal=M=>String(M.placaArrastre===ARRASTRE_OTRO?(M.placaArrastreOtro||''):(M.placaArrastre||'')).trim();
+const esPilotoDeUnidad=(pilotoId,unidad)=>{const P=PILOTOS.find(p=>p.id===pilotoId);return !!(P&&unidad&&String(P.unidad||'')===unidad);};
+/* Equipos de arrastre (placas de remolque) disponibles: la lista del sistema (Catálogos), las placas de
+   flota que parecen arrastre (empiezan con TC) y las que ya se usaron en viajes. */
+function arrastresDisponibles(){
+  const set=new Set();
+  (CAT.arrastre||[]).forEach(v=>{const s=String(v==null?'':v).trim();if(s)set.add(s);});
+  FLOTA.forEach(f=>{const p=String(f.placa||'').trim();if(/^TC/i.test(p))set.add(p);});
+  DB.trips.forEach(t=>{const p=String(t.placaArrastre||'').trim();if(p)set.add(p);});
+  return [...set].sort((a,b)=>a.localeCompare(b,'es'));
+}
+/* Último arrastre que usó esa unidad: se propone al registrar el viaje. */
+function ultimoArrastreDeUnidad(unidad){
+  if(!unidad)return '';
+  const usados=DB.trips.filter(t=>t.unidadId===unidad&&String(t.placaArrastre||'').trim())
+    .sort((a,b)=>String(b.fechaPlan||'').localeCompare(String(a.fechaPlan||'')));
+  return usados.length?String(usados[0].placaArrastre).trim():'';
+}
+/* Placa del equipo de arrastre: va en la sección de la unidad. Se propone el último arrastre que usó esa
+   unidad y se elige de la lista; si el equipo no está en la lista se escribe la placa a mano (queda en la
+   lista para los próximos viajes, porque la lista también incluye las placas ya usadas en viajes). */
 const etiquetaPlaca=f=>f?(String(f.placa||f.unidad||'')+(f.capacidad?' · '+f.capacidad:'')):'';
 function placasDe(cliente){const m=new Map();PILOTOS.filter(p=>p.proyecto===cliente&&p.unidad).forEach(p=>{const f=FLOTA.find(x=>x.unidad===p.unidad);if(f&&!m.has(f.unidad))m.set(f.unidad,f);});return [...m.values()].sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'es'));}
 function autoPlaca(M,plSel,ps){
@@ -133,10 +175,12 @@ function autoPlaca(M,plSel,ps){
   if(!U)return `<div class="auto empty2">Elige la placa: la unidad, el Tango, el tipo de unidad, la capacidad y el piloto asignado se cargan solos.</div>`;
   const P=PILOTOS.find(p=>p.id===M.pilotoId);
   const aviso=!ps.length?`<div class="auto" style="border-color:var(--fix);background:var(--fix-bg);margin-bottom:10px"><div class="ah" style="color:var(--fix)">${icon('alert',18)} Esta placa no tiene un piloto asignado para este cliente</div><div>El viaje necesita un piloto. Pide a administración que asigne la unidad ${esc(U.unidad)} a un piloto en la lista de pilotos.</div></div>`:'';
-  return aviso+`<div class="auto ${S.flash?'flash':''}"><div class="ah">${icon('check',18)} Datos cargados automáticamente</div><div class="cells">
+  const fuera=!!P&&!esPilotoDeUnidad(M.pilotoId,U.unidad);
+  const avisoNota=fuera?`<div class="auto" id="notaPilotoUnidad" style="border-color:var(--fix);background:var(--fix-bg);margin-bottom:10px"><div class="ah" style="color:var(--fix)">${icon('alert',18)} ${esc(NOTA_PILOTO)}</div><div>${esc(P.nombre)} no está asignado a la unidad ${esc(U.placa||U.unidad)}; se puede usar en este viaje y la nota queda guardada en el viaje.</div></div>`:'';
+  return aviso+avisoNota+`<div class="auto ${S.flash?'flash':''}"><div class="ah">${icon('check',18)} Datos cargados automáticamente</div><div class="cells">
     <div class="cell"><small>Placa ${src('FLOTA')}</small><b>${esc(U.placa)}</b></div>
     <div class="cell"><small>Capacidad ${src('FLOTA')}</small><b>${esc(U.capacidad)}</b></div>
-    <div class="cell"><small>Piloto asignado ${src('PILOTOS')}</small><b>${P?esc(P.nombre):'<span class="mute">por definir</span>'}</b></div></div></div>`;
+    <div class="cell"><small>${fuera?'Piloto del viaje':'Piloto asignado'} ${src('PILOTOS')}</small><b>${P?esc(P.nombre):'<span class="mute">por definir</span>'}</b></div></div></div>`;
 }
 /* ---- Rutas · catálogo desplegable (cada ruta una vez) con origen/destino ---- */
 function agruparRutas(filas){
@@ -179,7 +223,19 @@ function autoCard(M){
     <div class="cell"><small>Placa ${src('FLOTA')}</small><b>${esc(U.placa)}</b></div>
     <div class="cell"><small>Capacidad ${src('FLOTA')}</small><b>${esc(U.capacidad)}</b></div>
     <div class="cell"><small>Piloto ${src('PILOTOS')}</small><b>${esc(P.nombre)}</b></div></div></div>`;
+  if(h&&U&&P&&!esPilotoDeUnidad(M.pilotoId,U.unidad))h=`<div class="auto" id="notaPilotoUnidad" style="border-color:var(--fix);background:var(--fix-bg);margin-bottom:10px"><div class="ah" style="color:var(--fix)">${icon('alert',18)} ${esc(NOTA_PILOTO)}</div><div>${esc(P.nombre)} no está asignado a la unidad ${esc(U.placa||U.unidad)}; se puede usar en este viaje y la nota queda guardada en el viaje.</div></div>`+h;
   S.flash=false;return h;
+}
+function arrastreCampo(M,plSel,arrastres,fcombo){
+  const falta=!plSel,otro=M.placaArrastre===ARRASTRE_OTRO;
+  const opts=arrastres.map(p=>({id:p,nombre:p}));
+  if(M.placaArrastre&&!otro&&!arrastres.includes(M.placaArrastre))opts.push({id:M.placaArrastre,nombre:M.placaArrastre});   /* el valor del viaje, aunque ya no esté en la lista */
+  opts.push({id:ARRASTRE_OTRO,nombre:'OTRO EQUIPO · escribir la placa (no está en la lista)'});
+  const ph=falta?'Primero elige la placa del equipo':(otro?'OTRO EQUIPO · escribe la placa abajo':'Selecciona la placa del arrastre');
+  const hint=falta?'Se propone el último arrastre que usó la unidad.':(otro?'Escribe la placa del equipo de arrastre. Queda disponible en la lista para los próximos viajes.'
+    :'Se propone el último arrastre que usó esta unidad. Si el equipo no está en la lista, elige «OTRO EQUIPO» y escríbela.');
+  return fcombo('placaArrastre','Placa del equipo de arrastre',opts,M.placaArrastre,{src:'FLOTA',dis:falta,ph,hint})
+    +(otro?`<div class="fgroup"><label for="m_placaArrastreOtro">Placa del arrastre (escrita a mano) <span class="mute">*</span></label><input type="text" id="m_placaArrastreOtro" data-m="placaArrastreOtro" value="${esc(M.placaArrastreOtro||'')}" maxlength="60" placeholder="Ej. TC-123ABC" ${M.placaArrastre?'':'disabled'}><span class="hint">Queda guardada en el viaje y disponible en la lista para los próximos viajes.</span></div>`:'');
 }
 function dursHTML(M){
   return `<div class="durs">${DUR.map(([l,a,b])=>{const v=diff(M[a],M[b]);return `<div class="dur"><small>${l}</small><b class="${v==='Revisar fechas'?'bad':''}">${v}</b></div>`;}).join('')}</div>`;
@@ -209,7 +265,7 @@ function fieldsHTML(M,groups,dis){
       <div class="row2">${txt('noViaje','No. de viaje')}${sel('opl','OPL',CAT.opl,{src:'CATALOGO'})}</div>
       ${hp('viajes_editar_estado')?`<div class="row2">${sel('estado','Estado',Object.keys(ESTADOS).map(k=>({id:k,nombre:ESTADOS[k].l})))}</div>`:''}
       <div class="row2">${sel('tipoViaje','Tipo de viaje',CAT.tipoViaje,{src:'CATALOGO'})}${sel('tipoCarga','Tipo de carga',CAT.tipoCarga,{src:'CATALOGO'})}</div>
-      <div class="row2">${txt('placaArrastre','Placa del equipo de arrastre')}${txt('noCarga','No. de carga',{type:'number',num:1,hint:'Cantidad, según el tipo de carga'})}</div>
+      <div class="row2">${txt('noCarga','No. de carga',{type:'number',num:1,hint:'Cantidad, según el tipo de carga'})}</div>
       <div class="row2">${txt('producto','Producto')}${txt('noViaje','Referencia interna (opcional)')}</div></div>`;
   }
   if(has('plan')){
@@ -221,12 +277,13 @@ function fieldsHTML(M,groups,dis){
     const falla=catalogoFalla(),plSel=M.placaSel||((PILOTOS.find(p=>p.id===M.pilotoId)||{}).unidad||'');
     const placas=(ready&&!falla)?placasDe(M.proyecto):[],actual=(plSel&&!placas.some(x=>x.unidad===plSel))?FLOTA.find(x=>x.unidad===plSel):null;
     const opts=placas.concat(actual?[actual]:[]).map(f=>({id:f.unidad,nombre:etiquetaPlaca(f)}));
-    const ps=plSel?pilotosDePlaca(M.proyecto,plSel):[],sinPlacas=ready&&!falla&&!opts.length;
+    const ps=plSel?pilotosElegibles(M.proyecto,plSel):[],asig=plSel?pilotosDePlaca(M.proyecto,plSel):[],sinPlacas=ready&&!falla&&!opts.length;
     h+=`<div class="card fsec"><h3>Placa y unidad</h3>
       ${falla?`<div class="alertbox" role="alert" style="margin-bottom:10px"><b>${esc(falla)}</b>${REINTENTAR}</div>`:''}
       ${fcombo('placaSel','Placa del equipo',opts,plSel,{req:1,src:'FLOTA',dis:!ready||!!falla||sinPlacas,ph:!ready?'Primero elige el cliente o la ruta':(falla?'No disponible':(sinPlacas?'Sin placas disponibles':'Selecciona o escribe la placa')),hint:sinPlacas?'Este cliente no tiene placas disponibles: ninguno de sus pilotos tiene una unidad asignada en la flota.':''})}
-      ${ps.length>1?`<div class="fgroup"><label for="m_pilotoAlt">Piloto de esta placa <span class="mute">*</span></label><select id="m_pilotoAlt" data-m="pilotoAlt" ${d}><option value="">Esta placa tiene ${ps.length} pilotos asignados: elige uno</option>${ps.map(p=>`<option value="${esc(p.id)}" ${p.id===M.pilotoId?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>`:''}
-      ${autoPlaca(M,plSel,ps)}</div>`;
+      ${ps.length>1?`<div class="fgroup"><label for="m_pilotoAlt">Piloto del viaje <span class="mute">*</span></label><select id="m_pilotoAlt" data-m="pilotoAlt" ${d}><option value="">${asig.length?`Esta unidad tiene ${asig.length} piloto${asig.length===1?'':'s'} asignado${asig.length===1?'':'s'}: elige uno`:'Elige el piloto del viaje'}</option>${ps.map(p=>`<option value="${esc(p.id)}" ${p.id===M.pilotoId?'selected':''}>${esc(p.nombre)}${p.unidad?'':' · sin unidad asignada'}</option>`).join('')}</select><span class="hint">Se elige solo el piloto asignado a la unidad; puedes cambiarlo para este viaje. Si no es el asignado, el viaje guarda la nota «${esc(NOTA_PILOTO)}».</span></div>`:''}
+      ${autoPlaca(M,plSel,ps)}
+      ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}</div>`;
   }
   if(has('unidad')&&!esAdm()){
     const falla=catalogoFalla(),plSel=M.placaSel||((PILOTOS.find(p=>p.id===M.pilotoId)||{}).unidad||'');
@@ -236,7 +293,8 @@ function fieldsHTML(M,groups,dis){
     h+=`<div class="card fsec"><h3>Piloto y unidad</h3>
       ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?'Selecciona un piloto':'Primero elige el cliente'})}
       ${fcombo('placaSel','Placa del equipo',opts,plSel,{req:1,src:'FLOTA',dis:!ready||!!falla||sinPlacas,ph:!ready?'Primero elige el cliente':(falla?'No disponible':(sinPlacas?'Sin placas disponibles':'Selecciona la placa')),hint:sinPlacas?'Este cliente no tiene placas disponibles: ninguno de sus pilotos tiene una unidad asignada en la flota.':'Puedes cambiar la placa (unidad) del piloto: siempre dentro de este cliente. El cliente no se cambia.'})}
-      ${autoCard(M)}</div>`;
+      ${autoCard(M)}
+      ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}</div>`;
   }
   if(has('ruta')&&!usaCombo()){
     const rs=(ready&&M.proyectoCat)?API.rutasParaViaje(S.user.id,M.proyecto,M.proyectoCat):[];
@@ -400,11 +458,12 @@ Object.assign(ACT,{
   async guardar(){
     const f=S.form;f.err='';
     if(!f.placaSel){f.err='Selecciona la placa del equipo.';render();topScroll();return;}
-    if(!f.pilotoId){const ps=pilotosDePlaca(f.proyecto,f.placaSel);
-      f.err=ps.length>1?'Esta placa tiene más de un piloto asignado: elige el piloto de la placa.':'Esta placa no tiene un piloto asignado para este cliente: elige otra placa o pide a la administradora que asigne la unidad a un piloto.';render();topScroll();return;}
+    if(!f.pilotoId){const ps=pilotosElegibles(f.proyecto,f.placaSel);
+      f.err=ps.length>1?'Esta placa tiene más de un piloto asignado: elige el piloto del viaje.':'Esta placa no tiene un piloto asignado para este cliente: elige otra placa o pide a la administradora que asigne la unidad a un piloto.';render();topScroll();return;}
     const d={cliente:f.proyecto,fechaPlan:f.fechaPlanD&&f.fechaPlanT?f.fechaPlanD+'T'+f.fechaPlanT:'',rutaRef:f.rutaRef||''};
     [...DATA_KEYS,...TKEYS].forEach(k=>{d[k]=f[k];});
     d.unidadId=f.placaSel||'';                     /* la placa elegida es la unidad del viaje */
+    d.placaArrastre=arrastreFinal(f);              /* de la lista o escrita a mano */
     try{const t=await API.crearViaje(S.user.id,d);f.savedId=t.id;render();topScroll();toast(f.rutaId==='NO_ASIGNADA'?`Viaje #${t.id} guardado con ruta NO ASIGNADA. Se avisó a Comercial y Gerencia dentro de la aplicación.`:`Viaje #${t.id} guardado.`);}
     catch(e){f.err=sinPerfil(e.message);render();topScroll();}
   },
@@ -422,7 +481,7 @@ Object.assign(ACT,{
   async editSave(){
     const E=S.edit,M=E.data;let t;try{t=API.viaje(S.user.id,E.id);}catch(e){return;}
     const cambios={};
-    editGroups(t).flatMap(g=>GRUPOKEYS[g]).forEach(k=>{cambios[k]=k==='fechaPlan'?(M.fechaPlanD&&M.fechaPlanT?M.fechaPlanD+'T'+M.fechaPlanT:''):(k==='unidadId'?(M.placaSel||''):M[k]);});
+    editGroups(t).flatMap(g=>GRUPOKEYS[g]).forEach(k=>{cambios[k]=k==='fechaPlan'?(M.fechaPlanD&&M.fechaPlanT?M.fechaPlanD+'T'+M.fechaPlanT:''):(k==='unidadId'?(M.placaSel||''):(k==='placaArrastre'?arrastreFinal(M):M[k]));});
     try{const r=await API.editarViaje(S.user.id,E.id,cambios,E.motivo);S.edit=null;render();topScroll();toast(r.cambios?`Viaje #${E.id} actualizado (${r.cambios} ${r.cambios===1?'cambio':'cambios'}).`:'No hubo cambios.');
       const t2=API.viaje(S.user.id,E.id);if(DUR.some(([l,a,b])=>diff(t2[a],t2[b])==='Revisar fechas'))toast('Ojo: hay horarios fuera de orden.','err');}
     catch(e){M.err=e.message;render();topScroll();}

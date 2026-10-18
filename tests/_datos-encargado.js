@@ -1,7 +1,7 @@
 (()=>{
   DB=blankDB();
   const U=(id,usuario,nombre,rol,pr)=>({id,usuario,clave:'x',nombre,rol,activo:true,proyectos:pr||[]});
-  DB.usuarios.push(U('U-1','admin','Admin Master','ADMIN'),U('U-2','pedro','Pedro Chaperon','ENCARGADO'),U('U-3','sinp','Encargado Sin Proyectos','ENCARGADO'));
+  DB.usuarios.push(U('U-1','admin','Admin Master','ADMIN'),U('U-2','pedro','Pedro Chaperon','OPERATIVO'),U('U-3','sinp','Encargado Sin Proyectos','OPERATIVO'));
   Object.keys(ROLES).forEach(r=>PERM_KEYS.forEach(p=>{DB.permisos.push({rol:r,permiso:p,habilitado:r==='ADMIN'?true:((PERM_DEFAULT[r]||[]).includes(p)&&!((PROHIBIDO[r]||[]).includes(p)))});}));
   const cl=(id,n,pr)=>({id,nombre:n,cliente:n.toUpperCase(),proyectos:pr,torreEstatus:false,activo:true,nit:'',direccionFiscal:'',correoFacturacion:'',contacto:'',telefono:'',creditoDias:'',observaciones:''});
   DB.clientes.push(cl('COLGATE','Colgate',['COLGATE','LV']),cl('SINPROY','Cliente sin proyectos',[]));
