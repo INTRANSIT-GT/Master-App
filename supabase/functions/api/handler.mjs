@@ -132,6 +132,11 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
       /* Totales de TODO el histórico (no de la ventana que se ve en pantalla): los calcula el mismo motor sobre
          los viajes que este usuario puede ver. Respuesta pequeña y no se guarda nada. */
       if (op === 'resumenHistorico') {
+        /* El resumen por mes y por estado lo puede ver cualquiera que vea viajes; los NÚMEROS financieros solo
+           quien tiene permiso de finanzas (por eso viajan por separado: puede venir `financiero: null`). */
+        const puedeFin = E.hasPerm(A, 'finanzas_ver') || E.hasPerm(A, 'tarifas_opl_ver');
+        if (!puedeFin && !E.hasPerm(A, 'viajes_ver') && !E.hasPerm(A, 'viajes_ver_todos') && !E.hasPerm(A, 'comercial_ver'))
+          return { resp: falla('SIN_PERMISO', 'Tu perfil no puede consultar los viajes.'), commit: false };
         const vis = new Set(E.API.listarViajes(actorId).map(t => t.id));
         const B = E.getDB();
         B.trips = B.trips.filter(t => vis.has(t.id));
@@ -144,7 +149,7 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
           const mes = String(t.fechaPlan || '').slice(0, 7);
           if (/^\d{4}-\d{2}$/.test(mes)) { const m = porMes[mes] = porMes[mes] || {}; m[t.estado] = (m[t.estado] || 0) + 1; }
         }
-        const financiero = E.API.resumenFinanciero(actorId, argsDe(args));
+        const financiero = puedeFin ? E.API.resumenFinanciero(actorId, argsDe(args)) : null;
         return { resp: { ok: true, result: { financiero, porEstado, porMes, viajes: B.trips.length } }, commit: false };
       }
       /* Una página del histórico (los viajes que quedan fuera de la ventana) o los resultados de una búsqueda en

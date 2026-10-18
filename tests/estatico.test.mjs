@@ -7,6 +7,7 @@ let ok = 0, mal = 0; const filas = [];
 const T = (n, c, x) => { c ? ok++ : mal++; filas.push((c ? 'OK   ' : 'FAIL ') + n + (!c && x !== undefined ? '  ← ' + JSON.stringify(x).slice(0, 300) : '')); };
 const dims = f => { const b = fs.readFileSync(path.join(raíz, f)); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
 const html = leer('index.html');
+const css = leer('css/app.css');
 const refs = [...html.matchAll(/(?:src|href)="([^"#]+)"/g)].map(m => m[1]).filter(u => !/^https?:/.test(u));
 T('01 Todos los recursos de index.html existen', refs.every(ex), refs.filter(r => !ex(r)));
 T('02 Todas las rutas son relativas (funcionan en https://usuario.github.io/repositorio/)', refs.every(r => !r.startsWith('/')) && !/(?:src|href)="\/[^\/]/.test(html));
@@ -34,4 +35,5 @@ T('12 js/config.js solo lleva la clave publishable/anon (nunca una secreta)', !/
 T('13 El motor del servidor está al día con js/engine.js (ejecuta: npm run build:core)', (() => { const g = leer('supabase/functions/api/core.mjs'); const e = leer('js/engine.js').replace(/\/\*#BROWSER\*\/[\s\S]*?\/\*#END\*\//g, ''); return g.includes(e); })());
 T('14 No existe la clave service_role en ningún archivo de la interfaz', !/SUPABASE_SERVICE_ROLE_KEY/.test(código));
 T('15 La Edge Function usa la clave de servicio solo desde variables de entorno del servidor', /Deno\.env\.get\("SUPABASE_SERVICE_ROLE_KEY"\)/.test(leer('supabase/functions/api/index.ts')) && !/eyJ/.test(leer('supabase/functions/api/index.ts')));
+T('16 El menú del teléfono respeta el área segura: la primera opción no queda bajo el notch', /body\.mob \.side\{[^}]*padding:calc\(var\(--safe-t\)/.test(css) && /--safe-t:\s*env\(safe-area-inset-top/.test(css) && /body\.mob \.side\{[^}]*overflow:auto/.test(css));
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

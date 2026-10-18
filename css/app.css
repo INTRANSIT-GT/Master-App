@@ -328,6 +328,10 @@ tr.dim td{color:var(--mute)}
 .st-PENDIENTE_CORRECCION{--tone:#EC220F}
 .st-APROBADA,.st-COMERCIAL_REGISTRADA{--tone:#00AD62}
 /* Estado del proceso (una sola tabla: ESTADOS en engine.js) */
+/* Gráfica de barras apiladas y leyenda: el color de cada tramo sale del --tone de su estado */
+.chart-meses rect{fill:var(--tone)}
+.chart-meses text{fill:#44556B}
+.est.leyenda-est{background:var(--tone);border-color:var(--tone);color:#fff}
 .st-PLANIFICADO{--tone:#8C9BAB}
 .st-EN_RUTA{--tone:#0088FF}
 .st-ENTREGADO{--tone:#00B8D9}
@@ -491,7 +495,9 @@ body.mob .navbtn{display:inline-grid;place-items:center;width:44px;height:44px;f
 body.mob .top{gap:8px;padding:8px 10px}
 body.mob .brand{gap:8px;min-width:0}
 body.mob .brand>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.mob .side{position:absolute;top:0;bottom:0;left:0;z-index:70;width:min(300px,84%);flex:none;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:2px;padding:14px 10px;background:var(--surface);border-right:1px solid var(--line);border-bottom:0;overflow:auto;box-shadow:0 14px 40px rgba(8,18,30,.35);transform:translateX(-102%);transition:transform .2s ease}
+/* El cajón arranca en top:0, debajo del notch/barra de estado: el relleno usa el área segura del teléfono,
+   si no la primera opción del menú («Inicio») queda tapada y no se puede tocar. */
+body.mob .side{position:absolute;top:0;bottom:0;left:0;z-index:70;width:min(300px,84%);flex:none;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:2px;padding:calc(var(--safe-t) + 14px) 10px calc(var(--safe-b) + 14px);background:var(--surface);border-right:1px solid var(--line);border-bottom:0;overflow:auto;overscroll-behavior:contain;box-shadow:0 14px 40px rgba(8,18,30,.35);transform:translateX(-102%);transition:transform .2s ease}
 body.mob.nav-open .side{transform:none}
 body.mob .side button{width:100%;white-space:normal;text-align:left;padding:11px 12px;min-height:44px}
 body.mob .side .sep{display:block}

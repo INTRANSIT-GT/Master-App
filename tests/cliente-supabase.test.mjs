@@ -147,6 +147,21 @@ await ev("S.tab.fin='mes';go('finanzas')"); await flush(); await flush();
 const svg = d.querySelector('#app svg.chart-meses');
 T('34 Finanzas dibuja la gráfica de viajes por mes', !!svg && /Viajes por mes/.test(d.querySelector('#app').textContent));
 T('35 Cada tramo usa el color de su estado (clase st-XXX) y trae su número', !!svg && svg.querySelectorAll('rect.st-COBRADO,rect.st-FACTURADO,rect.st-ACEPTADO').length > 0 && /Cobrado: /.test(svg.textContent), svg && svg.textContent.slice(0, 120));
-T('36 La leyenda usa los mismos colores de estado', !!d.querySelector('#app .est.st-COBRADO') && !!d.querySelector('#app .est.st-PLANIFICADO'));
+T('36 La leyenda usa los mismos colores de estado', !!d.querySelector('#app .leyenda-est.st-COBRADO') && !!d.querySelector('#app .leyenda-est.st-PLANIFICADO'));
+/* ---------- 11. La gráfica vive en Inicio y respeta el alcance del perfil ---------- */
+await login('pedro@intransit.test', 'clave123');
+await ev("go('inicio')"); await flush(); await flush();
+const svgIni = d.querySelector('#app svg.chart-meses');
+T('37 Inicio muestra la gráfica de viajes por mes', !!svgIni && /Viajes por mes/.test(d.querySelector('#app').textContent));
+const pmPedro = await ev(`API.resumenHistorico(S.user.id,{}).then(r=>r.porMes,e=>e.code)`);
+const colg = (await db.query("select count(*)::int n from viajes where cliente_id='COLGATE' and fecha_plan ~ '^\\d{4}-\\d{2}'")).rows[0].n;
+const sumaPedro = pmPedro && typeof pmPedro === 'object' ? Object.values(pmPedro).reduce((a, m) => a + Object.values(m).reduce((x, y) => x + y, 0), 0) : -1;
+T('38 El resumen del perfil solo cuenta los viajes de sus clientes asignados', sumaPedro === colg, [sumaPedro, colg]);
+await login('admin@intransit.test', 'clave123');
+await ev("go('inicio')"); await flush(); await flush();
+const pmAdm = await ev(`API.resumenHistorico(S.user.id,{}).then(r=>r.porMes,e=>e.code)`);
+const sumaAdm = Object.values(pmAdm).reduce((a, m) => a + Object.values(m).reduce((x, y) => x + y, 0), 0);
+const total = (await db.query("select count(*)::int n from viajes where fecha_plan ~ '^\\d{4}-\\d{2}'")).rows[0].n;
+T('39 La administradora sí ve el total de la base', sumaAdm === total && total > colg, [sumaAdm, total, colg]);
 
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

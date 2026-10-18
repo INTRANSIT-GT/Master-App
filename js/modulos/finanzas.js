@@ -132,10 +132,7 @@ VIEWS.finanzas=()=>{
   const sinFiltro=!S.fDesde&&!S.fHasta&&!S.fCli&&!S.fPcat&&!S.fProv;
   const H=sinFiltro&&S.finHist&&S.finHist.financiero?S.finHist.financiero.M:null;
   if(H)['porPagarProv','pendProv','porPagarPil','pendPil','costoTotal','costoIncompletos','provSinCosto','pilSinImporte','margenEst','margenPct','margenIngreso','margenCostos'].forEach(x=>{if(x in H)M[x]=H[x];});
-  if(S.finHist===undefined&&!S.finHistCargando&&typeof API.resumenHistorico==='function'){
-    S.finHistCargando=true;
-    API.resumenHistorico(S.user.id,{}).then(h=>{S.finHist=h||null;S.finHistCargando=false;if(S.view==='finanzas')render();}).catch(()=>{S.finHist=null;S.finHistCargando=false;});
-  }
+  cargaHistorico();
   const histNota=k==='res'&&H?`<div class="alertbox info" style="margin-bottom:10px">Costos y margen: <b>toda la base</b> (histórico completo), no solo los viajes cargados en pantalla. Los detalles de cada total listan los viajes que están cargados.</div>`
     :(k==='res'&&S.finHistCargando?'<div class="mute" style="margin-bottom:10px">Calculando los totales del histórico…</div>':'');
   const filt=`<div class="lfilters" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde)}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta)}"></label>
@@ -169,7 +166,7 @@ VIEWS.finanzas=()=>{
     const meses=PM?Object.keys(PM).sort().slice(-12):[];
     body=PM&&meses.length
       ? `<h2 style="margin-bottom:10px">Viajes por mes · por estado</h2>
-      <div class="card">${chartMeses(PM,meses)}
+      <div class="card"><div id="chartMes">${chartMeses(PM,meses)}</div>
         ${leyendaMeses()}
         <div class="mute" style="font-size:12.5px;margin-top:8px">Cada barra es un mes (por <b>fecha plan</b> del viaje) y cada color, un estado. Un mes «todo verde» significa que todos sus viajes ya están liquidados/facturados/cobrados; si queda un tramo de otro color, hay viajes pendientes en ese mes. Pasa el cursor sobre un tramo para ver el número. Se muestran los últimos 12 meses con actividad.</div></div>
       <div class="mute" style="margin-top:10px">Total en la base: <b>${S.finHist.viajes}</b> viajes · ${Object.entries(S.finHist.porEstado||{}).map(([e,n])=>`${esc((ESTADOS[e]||{}).l||e)}: ${n}`).join(' · ')}</div>`

@@ -151,7 +151,8 @@ function loginHTML(){
 
 /* ---- Inicio del encargado ---- */
 VIEWS.inicio=()=>{
-  const u=S.user,cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean),all=vis(),ts=S.inicioProy?all.filter(t=>t.proyecto===S.inicioProy):all;
+  const u=S.user;cargaHistorico();
+  const cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean),all=vis(),ts=S.inicioProy?all.filter(t=>t.proyecto===S.inicioProy):all;
   const w={RECHAZADO:0,ENTREGADO:1,PLANIFICADO:2};
   const act=ts.filter(t=>w[t.estado]!==undefined).sort((a,b)=>w[a.estado]-w[b.estado]);
   const fix=cnt(ts,t=>t.estado==='RECHAZADO');
@@ -164,6 +165,10 @@ VIEWS.inicio=()=>{
     </div>
     ${fix?`<div class="alertbox" style="margin-top:18px;display:flex;gap:10px;align-items:center">${icon('alert',20)}<span><b>${fix} ${fix===1?'viaje fue rechazado':'viajes fueron rechazados'}</b>. Ábrelos para ver los comentarios y corregirlos.</span></div>`:''}
     <section class="section"><h2>Requiere tu atención</h2>${act.length?`<div class="cards">${act.map(tripCard).join('')}</div>`:empty('Todo al día','No tienes viajes esperando una acción.')}</section>
+    <section class="section"><h2>Viajes por mes · por estado</h2>
+      <div class="card"><div id="chartMes">${historicoMeses()||(S.finHistCargando?'<div class="mute">Calculando el resumen de tus viajes…</div>':'<div class="mute">Aún no hay viajes registrados.</div>')}</div>
+      <div class="mute" style="font-size:12.5px;margin-top:8px">Tus viajes por <b>fecha plan</b> (todos, no solo los cargados en pantalla), divididos por estado con el color de cada estado. Pasa el cursor por un tramo para ver el número; un mes «todo verde» ya está liquidado, facturado o cobrado.</div></div>
+    </section>
   </div>`;
 };
 
@@ -214,7 +219,7 @@ function chartMeses(porMes,meses,opts){
     orden.forEach(k=>{
       const n=porMes[m][k]||0;if(!n)return;
       const alto=(H-PT-PB)*(n/max);
-      svg+=`<rect class="st-${k}" x="${(x-barra/2).toFixed(1)}" y="${y.toFixed(1)}" width="${barra.toFixed(1)}" height="${alto.toFixed(1)}" style="fill:var(--tone)"><title>${mesL(m)} · ${(ESTADOS[k]||{}).l||k}: ${n}</title></rect>`;
+      svg+=`<rect class="st-${k}" x="${(x-barra/2).toFixed(1)}" y="${y.toFixed(1)}" width="${barra.toFixed(1)}" height="${alto.toFixed(1)}" ><title>${mesL(m)} · ${(ESTADOS[k]||{}).l||k}: ${n}</title></rect>`;
       y+=alto;
     });
     svg+=`<text x="${x.toFixed(1)}" y="${(H-PB-altoTot-5).toFixed(1)}" text-anchor="middle" font-size="12" fill="#44556B">${t}</text>`;
@@ -224,8 +229,29 @@ function chartMeses(porMes,meses,opts){
   return svg;
 }
 function leyendaMeses(){
-  return `<div class="bgs" style="margin-top:8px">${Object.keys(ESTADOS).map(k=>`<span class="est st-${k}" style="background:var(--tone);border-color:var(--tone);color:#fff">${esc(ESTADOS[k].l)}</span>`).join('')}</div>`;
+  return `<div class="bgs" style="margin-top:8px">${Object.keys(ESTADOS).map(k=>`<span class="est leyenda-est st-${k}">${esc(ESTADOS[k].l)}</span>`).join('')}</div>`;
 }
+/* ---- Resumen de toda la base: se pide una sola vez por sesión y lo usan Inicio y Finanzas ----
+   (El servidor lo calcula sobre los viajes que este usuario puede ver, así que respeta el alcance del perfil.) */
+function cargaHistorico(){
+  if(S.finHist!==undefined||S.finHistCargando||typeof API.resumenHistorico!=='function')return;
+  S.finHistCargando=true;
+  Promise.resolve().then(()=>API.resumenHistorico(S.user.id,{}))
+    .then(h=>{
+      S.finHist=h||null;S.finHistCargando=false;
+      /* Se actualiza solo la gráfica (no toda la pantalla): así no se pierde el clic de quien está navegando. */
+      const el=$('#chartMes');
+      if(el)el.innerHTML=historicoMeses()||'<div class="mute">Aún no hay viajes registrados.</div>';
+      else render();
+    })
+    .catch(()=>{S.finHist=null;S.finHistCargando=false;});
+}
+function historicoMeses(){
+  const pm=S.finHist&&S.finHist.porMes;if(!pm)return '';
+  const ms=Object.keys(pm).sort().slice(-12);if(!ms.length)return '';
+  return chartMeses(pm,ms)+leyendaMeses();
+}
+
 /* ---- Ventana de viajes: qué está cargado y poder traer los anteriores ----
    Solo aparece cuando el servidor informa la ventana (Supabase). En demostración no hay ventana: se ve todo. */
 const PAGINA_VIEJOS=400;
