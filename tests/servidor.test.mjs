@@ -238,13 +238,16 @@ const subFac = await comoUsuario('adm', tx => intenta(() => tx.query(`insert int
 T('68 La política de almacenamiento permite subir los archivos de la orden', subDoc === null && subTrf === null && subFac === null, [subDoc, subTrf, subFac]);
 const doc = await api('adm', 'adjuntarDocumentoOrden', op2id, { path: rutaOp('orden-documento-0001.pdf'), nombre: 'orden.pdf' });
 T('69 Se adjunta el documento de la orden (con archivo real en el almacenamiento)', doc.ok && doc.result.emision.documento.path === rutaOp('orden-documento-0001.pdf'), doc);
+const pagoCorto = await api('adm', 'registrarTransferencia', op2id, { fecha: '2031-03-01', monto: 100, referencia: 'TRF-9000', evidencia: { path: rutaOp('transferencia-0001.pdf'), nombre: 'transferencia.pdf' }, factura: { path: rutaOp('factura-proveedor-0001.pdf'), nombre: 'factura.pdf' } });
+T('70 Un pago por un monto distinto al de la orden se rechaza', pagoCorto.ok === false && pagoCorto.code === 'MONTO_DISTINTO', pagoCorto);
+T('71 El intento rechazado no cierra la orden ni registra ningún pago', (await q1('select fase from ordenes_pago where id=$1', [op2id]))[0].fase === 'EMITIDA' && (await q1("select count(*)::int n from pagos where extra->>'ordenPagoId'=$1", [op2id]))[0].n === 0);
 const tr = await api('adm', 'registrarTransferencia', op2id, { fecha: '2031-03-01', monto: 3000, referencia: 'TRF-9001', evidencia: { path: rutaOp('transferencia-0001.pdf'), nombre: 'transferencia.pdf' }, factura: { path: rutaOp('factura-proveedor-0001.pdf'), nombre: 'factura.pdf' } });
-T('70 Con evidencia y factura, la orden se paga y queda el pago al proveedor', tr.ok && tr.result.fase === 'PAGADA' && (await q1("select count(*)::int n from pagos where tipo='PROVEEDOR' and viaje_id=$1", [v1id]))[0].n === 1, tr);
+T('72 Con evidencia y factura, la orden se paga y queda el pago al proveedor', tr.ok && tr.result.fase === 'PAGADA' && (await q1("select count(*)::int n from pagos where tipo='PROVEEDOR' and viaje_id=$1", [v1id]))[0].n === 1, tr);
 const anulPagada = await api('adm', 'anularOrdenPago', op2id, 'Intentar anular una paga');
-T('71 Una orden ya pagada no se anula', anulPagada.ok === false, anulPagada);
+T('73 Una orden ya pagada no se anula', anulPagada.ok === false, anulPagada);
 const rePagar = await api('adm', 'crearOrdenPago', { proveedor: 'J&J', viajeIds: [v1id] });
-T('72 El viaje de una orden pagada ya no se puede volver a incluir', rePagar.ok === false && rePagar.code === 'YA_EN_ORDEN', rePagar);
-T('73 RLS: solo quien puede ver finanzas lee las órdenes de pago', await cuenta('adm', 'ordenes_pago') === 2 && await cuenta('ped', 'ordenes_pago') === 0);
+T('74 El viaje de una orden pagada ya no se puede volver a incluir', rePagar.ok === false && rePagar.code === 'YA_EN_ORDEN', rePagar);
+T('75 RLS: solo quien puede ver finanzas lee las órdenes de pago', await cuenta('adm', 'ordenes_pago') === 2 && await cuenta('ped', 'ordenes_pago') === 0);
 
 
 /* ---- 10. Viajes de la carga anterior: Entregados/Rechazados sin fecha de entrega ---- */
@@ -256,21 +259,21 @@ await comoUsuario('ped', tx => intenta(() => tx.query(`insert into storage.objec
 await q1('update viajes set finalizado_en=null where id=$1', [vOldId]);   /* así quedaron los viajes migrados (007) */
 const liqOld = await api('ped', 'enviarLiquidacion', vOldId, { path: rutaOld('evidencia-0002.jpg') });
 const fOld = (await q1('select estado,finalizado_en from viajes where id=$1', [vOldId]))[0];
-T('74 Un viaje Entregado sin fecha de entrega (carga anterior) sí puede liquidarse', liqOld.ok && fOld.estado === 'LIQUIDADO', liqOld.message);
-T('75 La fecha de entrega se completa y queda guardada en el viaje', !!fOld.finalizado_en, fOld);
-T('76 Queda la constancia en la auditoría del viaje', (await q1("select count(*)::int n from auditoria where viaje_id=$1 and accion ilike '%Fecha de entrega completada%'", [vOldId]))[0].n === 1);
+T('76 Un viaje Entregado sin fecha de entrega (carga anterior) sí puede liquidarse', liqOld.ok && fOld.estado === 'LIQUIDADO', liqOld.message);
+T('77 La fecha de entrega se completa y queda guardada en el viaje', !!fOld.finalizado_en, fOld);
+T('78 Queda la constancia en la auditoría del viaje', (await q1("select count(*)::int n from auditoria where viaje_id=$1 and accion ilike '%Fecha de entrega completada%'", [vOldId]))[0].n === 1);
 await api('mar', 'devolver', vOldId, 'Falta la firma del cliente');
 await q1('update viajes set finalizado_en=null where id=$1', [vOldId]);
 const liqOld2 = await api('ped', 'enviarLiquidacion', vOldId, { path: rutaOld('evidencia-0002.jpg') });
-T('77 Un viaje Rechazado sin fecha de entrega se puede volver a liquidar', liqOld2.ok && (await q1('select estado from viajes where id=$1', [vOldId]))[0].estado === 'LIQUIDADO', liqOld2.message);
+T('79 Un viaje Rechazado sin fecha de entrega se puede volver a liquidar', liqOld2.ok && (await q1('select estado from viajes where id=$1', [vOldId]))[0].estado === 'LIQUIDADO', liqOld2.message);
 
 
 /* ---- 11. La migración 021 rellena la fecha de entrega de la carga anterior ---- */
 await q1('update viajes set finalizado_en=null where id=$1', [vOldId]);
 await db.exec(sqlDe('021_fecha_entrega_anterior.sql'));
 const fOld21 = (await q1('select finalizado_en from viajes where id=$1', [vOldId]))[0];
-T('78 La migración 021 completa la fecha de entrega de los viajes viejos (la toma de la auditoría)', !!fOld21.finalizado_en, fOld21);
-T('79 La migración no inventa fechas en los viajes que todavía no se entregaron', (await q1("select count(*)::int n from viajes where estado in ('PLANIFICADO','EN_RUTA') and finalizado_en is not null"))[0].n === 0);
+T('80 La migración 021 completa la fecha de entrega de los viajes viejos (la toma de la auditoría)', !!fOld21.finalizado_en, fOld21);
+T('81 La migración no inventa fechas en los viajes que todavía no se entregaron', (await q1("select count(*)::int n from viajes where estado in ('PLANIFICADO','EN_RUTA') and finalizado_en is not null"))[0].n === 0);
 
 console.log(filas.join('\n'));
 console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`);

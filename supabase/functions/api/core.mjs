@@ -1119,6 +1119,11 @@ const API={
     if(o.fase!=='EMITIDA')deny('Esta orden de pago ya está pagada.','ESTADO_INVALIDO');
     const f=String((d&&d.fecha)||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(f))deny('Fecha de la transferencia no válida.','VALIDACION');
     const monto=nn(d&&d.monto);if(monto==null||monto<=0)deny('El monto pagado debe ser mayor a cero.','VALIDACION');
+    /* La orden se paga completa: lo transferido debe ser el importe de la orden (tolerancia de un centavo por redondeo).
+       Un pago parcial no cierra la orden ni marca los viajes como pagados: para pagar otro monto hay que anular la
+       orden y emitirla de nuevo con el importe correcto. */
+    const esperado=nn(o.importe);
+    if(Math.abs(r2(monto)-esperado)>0.005)deny(`El monto transferido (Q ${r2(monto)}) no coincide con el de la orden (Q ${esperado}). La orden se paga completa: registra ese importe o anula la orden y emítela de nuevo con el monto correcto.`,'MONTO_DISTINTO');
     const ref=String((d&&d.referencia)||'').trim();if(ref.length<3||ref.length>40)deny('La referencia de la transferencia es obligatoria (3 a 40 caracteres).','VALIDACION');
     const archivo=(a,nombre)=>{const p=a&&a.path;
       if(!(typeof p==='string'&&new RegExp('^pagos/'+opId+'/[A-Za-z0-9._-]{8,90}$').test(p)))deny(`Falta ${nombre}. Sin ese archivo no se cierra la orden.`,'SIN_ARCHIVO');

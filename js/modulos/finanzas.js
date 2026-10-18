@@ -233,7 +233,7 @@ Object.assign(ACT,{
     if(o){S.opSel={};toast(`Orden ${o.id} emitida por ${qfmt(o.importe)}.`);afterWrite();}
   },
   async opTransferOpen(d){const o=DB.ordenesPago.find(x=>x.id===d.id);if(!o)return;
-    formM({title:`Registrar pago al proveedor · ${o.id}`,text:`${esc(o.proveedor)} · ${(o.viajeIds||[]).length} viaje(s) · <b>${qfmt(o.importe)}</b>.<br>La orden se cierra con <b>dos archivos</b>: la evidencia de la transferencia y la factura del proveedor.`,
+    formM({title:`Registrar pago al proveedor · ${o.id}`,text:`${esc(o.proveedor)} · ${(o.viajeIds||[]).length} viaje(s) · <b>${qfmt(o.importe)}</b>.<br>La orden se paga completa: el monto debe ser <b>${qfmt(o.importe)}</b> (si el pago fuera distinto, anula la orden y emítela de nuevo).<br>Se cierra con <b>dos archivos</b>: la evidencia de la transferencia y la factura del proveedor.`,
       fields:[{k:'fecha',label:'Fecha de la transferencia',type:'date',req:1},{k:'monto',label:'Monto pagado (Q)',type:'number',req:1},{k:'referencia',label:'Referencia / número de transferencia',req:1},{k:'evidencia',label:'Evidencia de la transferencia (foto o PDF)',type:'file'},{k:'factura',label:'Factura del proveedor (foto o PDF)',type:'file'}],
       data:{fecha:todayStr(),monto:o.importe,referencia:'',evidencia:'',factura:''},ok:'REGISTRAR PAGO',okCls:'ok',act:'opTransferOk',id:o.id});},
   async opTransferOk(d){const m=S.modal.data,id=S.modal.id;
