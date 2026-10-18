@@ -21,7 +21,7 @@ function ordenPagoPDF(o){
   y+=6;doc.setFontSize(11);doc.text('TOTAL: '+ver(o.importe),400,y);
   return doc.output('datauristring');
 }
-const FINTABS=[{k:'res',l:'Resumen financiero'},{k:'prov',l:'Proveedores'},{k:'ord',l:'Órdenes de pago'},{k:'fact',l:'Facturación e ingresos'},{k:'pil',l:'Pilotos'}];
+const FINTABS=[{k:'res',l:'Resumen financiero'},{k:'mes',l:'Viajes por mes'},{k:'prov',l:'Proveedores'},{k:'ord',l:'Órdenes de pago'},{k:'fact',l:'Facturación e ingresos'},{k:'pil',l:'Pilotos'}];
 /* ---- Órdenes de pago a proveedores (OPL): piezas reutilizadas por Finanzas y por la sección OPL ---- */
 function opSelIds(porPagar){const sel=S.opSel||{};return Object.keys(sel).filter(id=>sel[id]&&porPagar.some(r=>r.id===id));}
 function opSelBar(selIds,porPagar,canPay){
@@ -136,8 +136,8 @@ VIEWS.finanzas=()=>{
     S.finHistCargando=true;
     API.resumenHistorico(S.user.id,{}).then(h=>{S.finHist=h||null;S.finHistCargando=false;if(S.view==='finanzas')render();}).catch(()=>{S.finHist=null;S.finHistCargando=false;});
   }
-  const histNota=H?`<div class="alertbox info" style="margin-bottom:10px">Costos y margen: <b>toda la base</b> (histórico completo), no solo los viajes cargados en pantalla. Los detalles de cada total listan los viajes que están cargados.</div>`
-    :(S.finHistCargando?'<div class="mute" style="margin-bottom:10px">Calculando los totales del histórico…</div>':'');
+  const histNota=k==='res'&&H?`<div class="alertbox info" style="margin-bottom:10px">Costos y margen: <b>toda la base</b> (histórico completo), no solo los viajes cargados en pantalla. Los detalles de cada total listan los viajes que están cargados.</div>`
+    :(k==='res'&&S.finHistCargando?'<div class="mute" style="margin-bottom:10px">Calculando los totales del histórico…</div>':'');
   const filt=`<div class="lfilters" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde)}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta)}"></label>
     <select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>
     <select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
@@ -163,6 +163,17 @@ VIEWS.finanzas=()=>{
       ${tile('margenEst','Margen estimado sobre monto enviado a facturar',M.margenEst,M.margenEst==null?'Ningún viaje enviado a facturar tiene ingreso y costos completos':`${M.margenPct}% sobre ${qfmt(M.margenIngreso)} · ${R.margenRows.length-M.margenExcluidos} viajes incluidos`,M.margenExcluidos?M.margenExcluidos+' viaje(s) excluidos por datos faltantes':'')}
       ${tile('gananciaReal','Ganancia real',M.gananciaReal,M.gananciaReal==null?'Requiere factura cobrada por completo y costos registrados':`${M.realIncluidas} agrupación(es) cobradas por completo`,M.realPendientes?M.realPendientes+' agrupación(es) aún sin cobrar por completo (no cuentan)':'')}</div>
       <div class="alertbox info" style="margin-top:14px"><b>Cómo se calcula:</b> las facturas se suman una sola vez aunque incluyan varios viajes. Un dato faltante no se toma como cero: el viaje o la agrupación se excluye y se señala. Los viáticos (Q_VIATICOS) se tratan como importe por pagar al piloto. Toca cualquier indicador para ver el detalle que lo explica.</div>`;
+  }else if(k==='mes'){
+    /* Resumen por mes de TODA la base (lo calcula el servidor con todos los viajes, no solo la ventana cargada). */
+    const PM=(S.finHist&&S.finHist.porMes)||null;
+    const meses=PM?Object.keys(PM).sort().slice(-12):[];
+    body=PM&&meses.length
+      ? `<h2 style="margin-bottom:10px">Viajes por mes · por estado</h2>
+      <div class="card">${chartMeses(PM,meses)}
+        ${leyendaMeses()}
+        <div class="mute" style="font-size:12.5px;margin-top:8px">Cada barra es un mes (por <b>fecha plan</b> del viaje) y cada color, un estado. Un mes «todo verde» significa que todos sus viajes ya están liquidados/facturados/cobrados; si queda un tramo de otro color, hay viajes pendientes en ese mes. Pasa el cursor sobre un tramo para ver el número. Se muestran los últimos 12 meses con actividad.</div></div>
+      <div class="mute" style="margin-top:10px">Total en la base: <b>${S.finHist.viajes}</b> viajes · ${Object.entries(S.finHist.porEstado||{}).map(([e,n])=>`${esc((ESTADOS[e]||{}).l||e)}: ${n}`).join(' · ')}</div>`
+      : (S.finHistCargando?empty('Calculando el resumen por mes…','Se está consultando toda la base.') : empty('Sin datos para el resumen por mes',''));
   }else if(k==='prov'){
     const rows=R.tripRows.filter(r=>r.proveedor).sort((a,b)=>a.proveedor.localeCompare(b.proveedor)||a.id.localeCompare(b.id));
     const by={};rows.forEach(r=>{const p=by[r.proveedor]=by[r.proveedor]||{por:0,pag:0,sal:0,sin:0,n:0};p.n++;if(r.costo==null)p.sin++;else{p.por+=r.costo;p.sal+=r.saldoProv;}p.pag+=r.pagadoProv;});

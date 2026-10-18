@@ -142,5 +142,11 @@ await ev(`S.q="${V1}";ACT.buscarHistorico()`);
 await new Promise(r => setTimeout(r, 900));        /* el buscador espera 450 ms antes de preguntar al servidor */
 T('32 El buscador trae del servidor un viaje cerrado que no estaba en la ventana', !!ev(`DB.trips.find(t=>t.id==="${V1}")`), ev('DB.trips.map(t=>t.id)'));
 T('33 La pantalla avisa que se buscó en todo el histórico', /todo el histórico/.test(d.querySelector('#app').textContent));
+/* ---------- 10. Gráfica de viajes por mes (barras apiladas por estado) ---------- */
+await ev("S.tab.fin='mes';go('finanzas')"); await flush(); await flush();
+const svg = d.querySelector('#app svg.chart-meses');
+T('34 Finanzas dibuja la gráfica de viajes por mes', !!svg && /Viajes por mes/.test(d.querySelector('#app').textContent));
+T('35 Cada tramo usa el color de su estado (clase st-XXX) y trae su número', !!svg && svg.querySelectorAll('rect.st-COBRADO,rect.st-FACTURADO,rect.st-ACEPTADO').length > 0 && /Cobrado: /.test(svg.textContent), svg && svg.textContent.slice(0, 120));
+T('36 La leyenda usa los mismos colores de estado', !!d.querySelector('#app .est.st-COBRADO') && !!d.querySelector('#app .est.st-PLANIFICADO'));
 
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

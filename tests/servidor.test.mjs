@@ -312,6 +312,9 @@ const bAnt = await api('adm', 'buscarViajes', { texto: v1id });
 T('96 La búsqueda encuentra un viaje que NO está en la ventana (busca en todo el histórico)', bAnt.ok && bAnt.result.trips.some(t => t.id === v1id), bAnt.result && bAnt.result.trips.map(t => t.id));
 const bNada = await api('adm', 'buscarViajes', { texto: '' });
 T('97 Sin texto la búsqueda no devuelve nada (no recorre la base de gratis)', bNada.ok && bNada.result.trips.length === 0);
+const pMes = rH.result.porMes && Object.keys(rH.result.porMes);
+const mesSql = (await q1("select to_char(fecha_plan::timestamp,'YYYY-MM') m, count(*)::int n from viajes where fecha_plan ~ '^\\d{4}-\\d{2}' group by 1 order by 1 desc limit 1"))[0];
+T('99 El resumen por mes coincide con la base (meses y conteo)', pMes.length > 0 && pMes.includes(mesSql.m) && Object.values(rH.result.porMes[mesSql.m]).reduce((a, b) => a + b, 0) === mesSql.n, [pMes, mesSql]);
 const bLike = await api('adm', 'buscarViajes', { texto: '%' });
 T('98 El comodín «%» se escapa: no se convierte en «trae todo»', bLike.ok && bLike.result.trips.length === 0, bLike.result && bLike.result.trips.length);
 

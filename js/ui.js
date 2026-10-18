@@ -194,6 +194,38 @@ function accionesViaje(t){
   if(['ENTREGADO','RECHAZADO'].includes(t.estado)&&hp('viajes_aprobar_duplicado')&&String(t.shipment||'').trim()&&!/^DUP-/i.test(t.shipment))a+=b('shipmentDupOpen','Aprobar DUP','fix');
   return a;
 }
+/* ---- Gráfica de barras apiladas: viajes por mes, divididos por estado ----
+   Sin librerías: SVG a mano. Cada segmento usa el color del estado (la clase .st-XXX define --tone),
+   así la gráfica respeta los mismos colores que las etiquetas de la app. */
+function chartMeses(porMes,meses,opts){
+  opts=opts||{};
+  const orden=(typeof ESTADOS==='object'?Object.keys(ESTADOS):['PLANIFICADO','EN_RUTA','ENTREGADO','LIQUIDADO','RECHAZADO','ACEPTADO','FACTURADO','COBRADO']);
+  const lista=(meses||Object.keys(porMes||{}).sort()).filter(m=>porMes&&porMes[m]);
+  if(!lista.length)return '';
+  const total=m=>orden.reduce((s,k)=>s+(porMes[m][k]||0),0);
+  const max=Math.max(1,...lista.map(total));
+  const W=760,H=240,PB=26,PT=18,ancho=W/lista.length;
+  const barra=Math.max(10,ancho*0.62);
+  const mesL=m=>{const [a,b]=m.split('-');return ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][Number(b)-1]+' '+a.slice(2);};
+  let svg=`<svg class="chart-meses" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Viajes por mes según su estado" style="display:block">`;
+  lista.forEach((m,i)=>{
+    const x=i*ancho+ancho/2, t=total(m), altoTot=(H-PT-PB)*(t/max);
+    let y=H-PB-altoTot;
+    orden.forEach(k=>{
+      const n=porMes[m][k]||0;if(!n)return;
+      const alto=(H-PT-PB)*(n/max);
+      svg+=`<rect class="st-${k}" x="${(x-barra/2).toFixed(1)}" y="${y.toFixed(1)}" width="${barra.toFixed(1)}" height="${alto.toFixed(1)}" style="fill:var(--tone)"><title>${mesL(m)} · ${(ESTADOS[k]||{}).l||k}: ${n}</title></rect>`;
+      y+=alto;
+    });
+    svg+=`<text x="${x.toFixed(1)}" y="${(H-PB-altoTot-5).toFixed(1)}" text-anchor="middle" font-size="12" fill="#44556B">${t}</text>`;
+    svg+=`<text x="${x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="12" fill="#44556B">${mesL(m)}</text>`;
+  });
+  svg+='</svg>';
+  return svg;
+}
+function leyendaMeses(){
+  return `<div class="bgs" style="margin-top:8px">${Object.keys(ESTADOS).map(k=>`<span class="est st-${k}" style="background:var(--tone);border-color:var(--tone);color:#fff">${esc(ESTADOS[k].l)}</span>`).join('')}</div>`;
+}
 /* ---- Ventana de viajes: qué está cargado y poder traer los anteriores ----
    Solo aparece cuando el servidor informa la ventana (Supabase). En demostración no hay ventana: se ve todo. */
 const PAGINA_VIEJOS=400;

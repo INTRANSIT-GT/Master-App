@@ -137,10 +137,15 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
         B.trips = B.trips.filter(t => vis.has(t.id));
         if (!(E.hasPerm(A, 'comercial_ver') || E.hasPerm(A, 'finanzas_ver'))) B.agrupaciones = [];
         if (!E.hasPerm(A, 'finanzas_ver')) B.pagos = [];
-        const porEstado = {};
-        for (const t of B.trips) porEstado[t.estado] = (porEstado[t.estado] || 0) + 1;
+        const porEstado = {}, porMes = {};
+        for (const t of B.trips) {
+          porEstado[t.estado] = (porEstado[t.estado] || 0) + 1;
+          /* Resumen por mes (fecha plan) y por estado: es lo que dibuja la gráfica de barras apiladas. */
+          const mes = String(t.fechaPlan || '').slice(0, 7);
+          if (/^\d{4}-\d{2}$/.test(mes)) { const m = porMes[mes] = porMes[mes] || {}; m[t.estado] = (m[t.estado] || 0) + 1; }
+        }
         const financiero = E.API.resumenFinanciero(actorId, argsDe(args));
-        return { resp: { ok: true, result: { financiero, porEstado, viajes: B.trips.length } }, commit: false };
+        return { resp: { ok: true, result: { financiero, porEstado, porMes, viajes: B.trips.length } }, commit: false };
       }
       /* Una página del histórico (los viajes que quedan fuera de la ventana) o los resultados de una búsqueda en
          toda la base, con su liquidación, su evidencia y su bitácora, para mostrarlos igual que los recientes. */
