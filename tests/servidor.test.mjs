@@ -10,7 +10,7 @@ const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), '
 /* Migraciones en orden. El 005 es un ejemplo (se ejecuta a mano) y no entra aquí. */
 const MIGRACIONES = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
   '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql',
-  '019_catalogos.sql', '020_arrastres.sql'];   /* 019: las listas del sistema (OPL, orígenes, tipos) viven en master.catalogos */
+  '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql'];   /* 019: las listas del sistema (OPL, orígenes, tipos) viven en master.catalogos */
 
 const db = new PGlite();
 await db.exec('set search_path = master, public');   /* las tablas viven en el esquema master (integración AP_VIAJES) */
@@ -245,6 +245,32 @@ T('71 Una orden ya pagada no se anula', anulPagada.ok === false, anulPagada);
 const rePagar = await api('adm', 'crearOrdenPago', { proveedor: 'J&J', viajeIds: [v1id] });
 T('72 El viaje de una orden pagada ya no se puede volver a incluir', rePagar.ok === false && rePagar.code === 'YA_EN_ORDEN', rePagar);
 T('73 RLS: solo quien puede ver finanzas lee las órdenes de pago', await cuenta('adm', 'ordenes_pago') === 2 && await cuenta('ped', 'ordenes_pago') === 0);
+
+
+/* ---- 10. Viajes de la carga anterior: Entregados/Rechazados sin fecha de entrega ---- */
+const vOld = await api('ped', 'crearViaje', viaje({ shipment: 'S-OLD-1', fechaPlan: '2031-04-01T08:00' }));
+const vOldId = vOld.result?.id;
+await api('ped', 'iniciar', vOldId); await api('ped', 'finalizar', vOldId);
+const rutaOld = f => `viajes/${vOldId}/${f}`;
+await comoUsuario('ped', tx => intenta(() => tx.query(`insert into storage.objects(bucket_id,name,owner) values ('evidencias',$1,$2)`, [rutaOld('evidencia-0002.jpg'), U.ped])));
+await q1('update viajes set finalizado_en=null where id=$1', [vOldId]);   /* así quedaron los viajes migrados (007) */
+const liqOld = await api('ped', 'enviarLiquidacion', vOldId, { path: rutaOld('evidencia-0002.jpg') });
+const fOld = (await q1('select estado,finalizado_en from viajes where id=$1', [vOldId]))[0];
+T('74 Un viaje Entregado sin fecha de entrega (carga anterior) sí puede liquidarse', liqOld.ok && fOld.estado === 'LIQUIDADO', liqOld.message);
+T('75 La fecha de entrega se completa y queda guardada en el viaje', !!fOld.finalizado_en, fOld);
+T('76 Queda la constancia en la auditoría del viaje', (await q1("select count(*)::int n from auditoria where viaje_id=$1 and accion ilike '%Fecha de entrega completada%'", [vOldId]))[0].n === 1);
+await api('mar', 'devolver', vOldId, 'Falta la firma del cliente');
+await q1('update viajes set finalizado_en=null where id=$1', [vOldId]);
+const liqOld2 = await api('ped', 'enviarLiquidacion', vOldId, { path: rutaOld('evidencia-0002.jpg') });
+T('77 Un viaje Rechazado sin fecha de entrega se puede volver a liquidar', liqOld2.ok && (await q1('select estado from viajes where id=$1', [vOldId]))[0].estado === 'LIQUIDADO', liqOld2.message);
+
+
+/* ---- 11. La migración 021 rellena la fecha de entrega de la carga anterior ---- */
+await q1('update viajes set finalizado_en=null where id=$1', [vOldId]);
+await db.exec(sqlDe('021_fecha_entrega_anterior.sql'));
+const fOld21 = (await q1('select finalizado_en from viajes where id=$1', [vOldId]))[0];
+T('78 La migración 021 completa la fecha de entrega de los viajes viejos (la toma de la auditoría)', !!fOld21.finalizado_en, fOld21);
+T('79 La migración no inventa fechas en los viajes que todavía no se entregaron', (await q1("select count(*)::int n from viajes where estado in ('PLANIFICADO','EN_RUTA') and finalizado_en is not null"))[0].n === 0);
 
 console.log(filas.join('\n'));
 console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`);

@@ -343,6 +343,18 @@ function validarLiquidacion(t){
 }
 const pad4=n=>String(n).padStart(4,'0');
 
+/* Viajes que ya estaban entregados o rechazados y quedaron sin fecha de entrega (cargas anteriores al
+   cambio de flujo: la migración 007 renombró los estados y no llenó `finalizado_en`). El estado ya
+   garantiza que el viaje se entregó, así que la fecha se completa —con el paso a Entregado que esté en
+   la bitácora y, si no hay, con el momento de la liquidación— en vez de bloquear la liquidación. */
+function completarEntrega(t,A){
+  if(t.finalizadoEn)return;
+  const h=DB.audit.filter(a=>a.viajeId===t.id&&/^Viaje entregado/.test(String(a.accion||''))).map(a=>a.en).sort();
+  t.finalizadoEn=h.length?h[h.length-1]:nowIso();
+  if(!t.finalizadoPor)t.finalizadoPor=A.nombre;
+  auditAdd({viajeId:t.id,accion:'Fecha de entrega completada automáticamente',campo:'Finalizó',anterior:'(vacío)',nuevo:t.finalizadoEn,por:A,motivo:'El viaje estaba entregado sin fecha de entrega; se completa al enviar la liquidación'});
+}
+
 /* Los importes solo los ven los roles autorizados (se quitan en la capa de datos, no solo en pantalla). */
 function redact(A,t){
   const c=Object.assign({},t);
@@ -834,7 +846,7 @@ const API={
     if(!['ENTREGADO','RECHAZADO'].includes(t.estado)){
       deny(['PLANIFICADO','EN_RUTA'].includes(t.estado)?'La liquidación no puede enviarse antes de entregar el viaje.':`La liquidación no puede enviarse con el viaje en "${ESTADOS[t.estado].l}".`,'ESTADO_INVALIDO');
     }
-    if(!t.finalizadoEn)deny('La liquidación no puede enviarse antes de entregar el viaje.','ESTADO_INVALIDO');
+    if(!t.finalizadoEn)completarEntrega(t,A);
     validarLiquidacion(t);
     const esPath=!!foto&&typeof foto==='object'&&typeof foto.path==='string';
     if(esPath){

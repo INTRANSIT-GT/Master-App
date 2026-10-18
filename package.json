@@ -9,13 +9,14 @@
     "test:servidor": "node tests/servidor.test.mjs",
     "serve": "npx --yes http-server . -p 8080 -c-1",
     "test:cliente": "node tests/cliente-supabase.test.mjs",
-    "test": "npm run test:servidor && npm run test:cliente && npm run test:admin",
+    "test": "npm run test:servidor && npm run test:cliente && npm run test:admin && npm run test:piloto && npm run test:liquidacion",
     "test:admin": "node tests/administrador.test.mjs",
     "test:menu": "node tests/menu-admin.test.mjs",
     "test:piloto": "node tests/piloto-unidad.test.mjs",
     "test:encargado": "node tests/encargado.test.mjs",
     "test:visual": "node tests/prueba-visual.test.mjs",
-    "test:demo": "node tests/exportar.test.mjs"
+    "test:demo": "node tests/exportar.test.mjs",
+    "test:liquidacion": "node tests/liquidacion.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",
