@@ -7,7 +7,7 @@ import { loadState, saveState, fotografia } from './store.mjs';
 export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
   'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'cambiarClave', 'guardarCatalogo'];
-export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores'];
+export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores', 'buscarViajes'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
 
@@ -17,8 +17,9 @@ const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...ext
                           VENTANA_MESES de los cerrados y los Facturados pendientes de pago al proveedor.
      · viajesAnteriores → páginas del histórico, a pedido.
      · resumenHistorico → totales de TODO el histórico, calculados por el mismo motor sobre los viajes visibles. */
-const VENTANA_MESES = 6;
+const VENTANA_MESES = 3;
 const VIAJES_PAGINA = 400;
+const BUSCA_LIMITE = 60;
 const ESTADOS_EN_CURSO = ['PLANIFICADO', 'EN_RUTA', 'ENTREGADO', 'LIQUIDADO', 'RECHAZADO', 'ACEPTADO'];
 const COLA_AUDITORIA = 4000;                 /* eventos recientes que se leen por lectura (la tabla crece sin límite) */
 const SOLO_RESUMEN = ['perfiles', 'permisos', 'acceso_cliente', 'clientes', 'viajes', 'agrupaciones', 'pagos'];
@@ -30,6 +31,11 @@ const COND_VENTANA = `(v.estado = any($1::text[]) or coalesce(v.fecha_plan,'') >
    ni siquiera cuando muchos comparten la misma fecha (los que no tienen fecha van al final). */
 const condAntes = (conId) => `(coalesce(v.fecha_plan,'') < $1${conId ? ` or (coalesce(v.fecha_plan,'') = $1 and v.id < $2)` : ''}) and not (v.estado = any($${conId ? 3 : 2}::text[]))`;
 const idAntes = a => { const v = String(argsDe(a).antesId || '').trim(); return /^[A-Za-z0-9._-]{1,40}$/.test(v) ? v : ''; };
+/* Búsqueda en TODO el histórico (no solo en la ventana cargada): por n.º de viaje, No. de transporte,
+   No. de viaje interno, producto, unidad, placa del arrastre, proveedor (OPL), proyecto o factura. */
+const COND_BUSCA = `(v.id ilike $1 or coalesce(v.shipment,'') ilike $1 or coalesce(v.no_viaje,'') ilike $1 or coalesce(v.producto,'') ilike $1 or coalesce(v.unidad_id,'') ilike $1 or coalesce(v.placa_arrastre,'') ilike $1 or coalesce(v.opl,'') ilike $1 or coalesce(v.proyecto_cat,'') ilike $1 or coalesce(v.numero_factura,'') ilike $1)`;
+const textoDe = a => String(argsDe(a).texto || '').trim().slice(0, 60);
+const likeDe = t => '%' + t.replace(/[\\%_]/g, m => '\\' + m) + '%';
 const desdeVentana = () => { const d = new Date(); d.setMonth(d.getMonth() - VENTANA_MESES); return d.toISOString().slice(0, 10); };
 /* Los argumentos llegan como lista: se toma el primer objeto (si lo hay). */
 const argsDe = a => Array.isArray(a)
@@ -100,7 +106,10 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
          la bitácora de los viajes que se envían, que se agrega después); al escribir basta el último evento. */
       const fullAudit = op === 'verificarAuditoria';
       const opciones = op === 'resumenHistorico' ? { solo: SOLO_RESUMEN }
-        : op === 'viajesAnteriores' ? { solo: SOLO_HISTORICO, auditoriaTail: COLA_AUDITORIA, viajesFiltro: idAntes(args)
+        : op === 'buscarViajes' ? { solo: SOLO_HISTORICO, auditoriaTail: COLA_AUDITORIA, viajesFiltro: textoDe(args)
+            ? { sql: COND_BUSCA, params: [likeDe(textoDe(args))], orden: 'v.fecha_plan desc, v.id desc', limite: BUSCA_LIMITE }
+            : { sql: 'false', params: [] } }
+          : op === 'viajesAnteriores' ? { solo: SOLO_HISTORICO, auditoriaTail: COLA_AUDITORIA, viajesFiltro: idAntes(args)
             ? { sql: condAntes(true), params: [antesDe(args), idAntes(args), ESTADOS_EN_CURSO], orden: 'v.fecha_plan desc, v.id desc', limite: limitePagina(args) }
             : { sql: condAntes(false), params: [antesDe(args), ESTADOS_EN_CURSO], orden: 'v.fecha_plan desc, v.id desc', limite: limitePagina(args) } }
           : fullAudit ? {}
@@ -133,14 +142,16 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
         const financiero = E.API.resumenFinanciero(actorId, argsDe(args));
         return { resp: { ok: true, result: { financiero, porEstado, viajes: B.trips.length } }, commit: false };
       }
-      /* Una página del histórico (los viajes que quedan fuera de la ventana), con su liquidación, su evidencia
-         y su bitácora, para que la pantalla los muestre igual que los recientes. */
-      if (op === 'viajesAnteriores') {
+      /* Una página del histórico (los viajes que quedan fuera de la ventana) o los resultados de una búsqueda en
+         toda la base, con su liquidación, su evidencia y su bitácora, para mostrarlos igual que los recientes. */
+      if (op === 'viajesAnteriores' || op === 'buscarViajes') {
         const B = E.getDB();
         const ids = B.trips.map(t => t.id);
         if (ids.length) B.audit = fusionarAuditoria(B.audit, await auditoriaDeViajes(q, ids));
         const s = await armarSnapshot(E, actorId, deps, null);
-        return { resp: { ok: true, result: { trips: s.trips, liquidaciones: s.liquidaciones, evidencias: s.evidencias, audit: s.audit, antesDe: antesDe(args), limite: limitePagina(args), pagina: ids.length } }, commit: false };
+        const esBusca = op === 'buscarViajes';
+        return { resp: { ok: true, result: { trips: s.trips, liquidaciones: s.liquidaciones, evidencias: s.evidencias, audit: s.audit,
+          antesDe: esBusca ? '' : antesDe(args), texto: esBusca ? textoDe(args) : '', limite: esBusca ? BUSCA_LIMITE : limitePagina(args), pagina: ids.length } }, commit: false };
       }
       /* flota (Fleetio): se consultan bajo demanda, NO entran al snapshot (pueden ser miles de filas) */
       if (op === 'mantenimientos' || op === 'gastos') {

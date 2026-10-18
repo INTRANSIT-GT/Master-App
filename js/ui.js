@@ -206,7 +206,7 @@ function ventanaBar(){
     <span>Cargados <b>${(DB.trips||[]).length}</b> de <b>${v.enBase||(DB.trips||[]).length}</b> viajes · últimos ${v.meses||VENTANA_MESES_PANTALLA} meses y los que están en curso${restantes?` · <b>${restantes}</b> más antiguos sin cargar`:''}</span>
     <span style="margin-left:auto">${btn}</span></div>`;
 }
-const VENTANA_MESES_PANTALLA=6;
+const VENTANA_MESES_PANTALLA=3;
 function viajesTable(list,key='viajes'){
   if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
   const pg=paginar(key,list);
@@ -395,9 +395,10 @@ function estadoChips(){
 const matchEst=(t,f)=>!f||(f==='FIN'?FIN.includes(t.estado):f==='APROBADAS'?LIQ_APROBADA.includes(t.estado):t.estado===f);
 function todosList(){
   const q=S.q.trim().toLowerCase();
-  return vis().filter(t=>matchEst(t,S.fEstado)&&(!S.fProy||t.proyecto===S.fProy)&&(!q||(t.id+' '+(J(t).piloto||'')+' '+(J(t).destino||'')+' '+(J(t).f.placa||'')+' '+(t.numeroFactura||'')+' '+(t.agrupacionId||'')).toLowerCase().includes(q)));
+  const campos=t=>[t.id,J(t).piloto,J(t).destino,J(t).f.placa,J(t).f.unidad,t.numeroFactura,t.agrupacionId,t.shipment,t.noViaje,t.producto,t.opl,t.proyectoCat,t.placaArrastre].join(' ');
+  return vis().filter(t=>matchEst(t,S.fEstado)&&(!S.fProy||t.proyecto===S.fProy)&&(!q||campos(t).toLowerCase().includes(q)));
 }
-BODY.todos=()=>tableHTML(todosList());
+BODY.todos=()=>`${S.buscaRes?`<div class="alertbox info" style="margin-bottom:8px">Se buscó también en <b>todo el histórico</b> («${esc(S.buscaRes.texto)}»): ${S.buscaRes.n?`<b>${S.buscaRes.n}</b> viaje(s) fuera de la ventana cargada`:'sin más coincidencias'}.</div>`:''}${tableHTML(todosList())}`;
 VIEWS.todos=()=>`<div class="inner">${pageHead('Todos los viajes','Sin filtro de proyecto: '+vis().length+' viajes visibles para tu perfil')}
   <div class="row2" style="margin-bottom:12px"><input type="text" id="q" placeholder="Buscar por n.º de viaje, piloto, placa, destino o factura" value="${esc(S.q)}" aria-label="Buscar viajes"><select data-flt="fProy" aria-label="Filtrar por cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fProy===p.id?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></div>
   ${estadoChips()}<div id="vb">${BODY.todos()}</div></div>`;
@@ -715,6 +716,22 @@ const ACT={
     }catch(e){toast(e.message,'err');}
     S.cargandoViejos=false;render();
   },
+  /* El buscador filtra lo que está cargado; con 3 letras o más se pregunta al servidor por TODO el histórico,
+     así un viaje cerrado de hace meses aparece sin necesidad de cargar el histórico completo. */
+  async buscarHistorico(){
+    const term=(S.q||'').trim();
+    if(term.length<3||BACKEND.modo!=='supabase'){S.buscaRes=null;return;}
+    if(S.buscaT)clearTimeout(S.buscaT);
+    S.buscaT=setTimeout(async()=>{
+      if((S.q||'').trim()!==term)return;                      /* escribió otra cosa: se descarta */
+      try{
+        const r=await API.buscarViajes(S.user.id,{texto:term});
+        if((S.q||'').trim()!==term)return;
+        S.buscaRes={texto:term,n:(r.trips||[]).length};
+        const el=$('#vb');if(el&&BODY[S.view])el.innerHTML=BODY[S.view]();   /* solo el cuerpo: no se pierde el foco */
+      }catch(e){/* sin conexión o sin permiso: se queda con lo que ya está en pantalla */}
+    },450);
+  },
   async limpiarFiltros(){S.q='';S.fCli='';S.fPcat='';S.fDesde='';S.fHasta='';S.sortL=null;render();},
   async sortL(d){const def=liqCurrent().k==='apr'?{k:'revision',dir:-1}:{k:'fecha',dir:1},c=S.sortL||def;S.sortL=c.k===d.k?{k:d.k,dir:-c.dir}:{k:d.k,dir:1};render();},
   async sortF(d){const c=S.sortF||{k:'fechaEnvio',dir:-1};S.sortF=c.k===d.k?{k:d.k,dir:-c.dir}:{k:d.k,dir:1};render();},
@@ -787,7 +804,7 @@ app.addEventListener('input',e=>{
   if(t.dataset.live){S[t.dataset.live]=t.value;const fn=S.view==='comercial'?(S.tab.com==='hist'?BODY.hist:S.tab.com==='tar'?BODY.tarifas:BODY.comercial):BODY[S.view];const vb=document.getElementById('vb');if(fn&&vb)vb.innerHTML=fn();}
   if(t.dataset.motivo&&S.edit)S.edit.motivo=t.value;
   if(t.id==='qCli'){S.qCli=t.value;render();const el=document.getElementById('qCli');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}return;}
-  if(t.id==='q'){S.q=t.value;if(BODY[S.view]&&$('#vb'))$('#vb').innerHTML=BODY[S.view]();}
+  if(t.id==='q'){S.q=t.value;if(BODY[S.view]&&$('#vb'))$('#vb').innerHTML=BODY[S.view]();if(S.view==='todos')ACT.buscarHistorico();}
 });
 window.addEventListener('popstate',()=>{
   if(!S.user)return;

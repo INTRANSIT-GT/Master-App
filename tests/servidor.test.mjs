@@ -296,7 +296,7 @@ T('88 Los dos cambios quedan en la bitácora como corrección a mano', (await q1
 /* ---- 13. Ventana de viajes: en pantalla lo diario, el histórico a pedido ---- */
 await q1("update viajes set estado='COBRADO', fecha_plan='2019-01-01T08:00' where id=$1", [v1id]);
 const snV = (await api('adm', 'snapshot')).snapshot;
-T('89 Un viaje de 2019 ya no viaja en la pantalla (ventana de 6 meses)', !snV.trips.some(t => t.id === v1id) && snV.ventana && snV.ventana.meses === 6 && !!snV.ventana.desde, [snV.trips.length, snV.ventana]);
+T('89 Un viaje de 2019 ya no viaja en la pantalla (ventana de 6 meses)', !snV.trips.some(t => t.id === v1id) && snV.ventana && snV.ventana.meses === 3 && !!snV.ventana.desde, [snV.trips.length, snV.ventana]);
 T('90 La pantalla informa cuántos viajes ve en toda la base', snV.ventana.enBase >= (await q1('select count(*)::int n from viajes'))[0].n && snV.ventana.enBase >= snV.ventana.viajes, snV.ventana);
 const rH = await api('adm', 'resumenHistorico');
 T('91 Los totales del histórico SÍ siguen contando el viaje viejo', rH.ok && (rH.result.porEstado.COBRADO || 0) >= 1 && rH.result.viajes >= (await q1('select count(*)::int n from viajes'))[0].n, rH.result && rH.result.porEstado);
@@ -308,6 +308,12 @@ const pSin = await api('adm', 'viajesAnteriores', { antesDe: '2019-01-01' });
 T('94 La página avanza: al pedir antes de 2019 ya no repite el viaje de 2019', pSin.ok && pSin.result.antesDe === '2019-01-01' && !pSin.result.trips.some(t => t.id === v1id), [pSin.result && pSin.result.antesDe, pSin.result && pSin.result.trips.map(t => [t.id, t.fechaPlan])]);
 const pLim = await api('adm', 'viajesAnteriores', { antesDe: '2031-01-01', limite: 2 });
 T('95 La página respeta el límite pedido', pLim.ok && pLim.result.trips.length <= 2, pLim.result && pLim.result.trips.length);
+const bAnt = await api('adm', 'buscarViajes', { texto: v1id });
+T('96 La búsqueda encuentra un viaje que NO está en la ventana (busca en todo el histórico)', bAnt.ok && bAnt.result.trips.some(t => t.id === v1id), bAnt.result && bAnt.result.trips.map(t => t.id));
+const bNada = await api('adm', 'buscarViajes', { texto: '' });
+T('97 Sin texto la búsqueda no devuelve nada (no recorre la base de gratis)', bNada.ok && bNada.result.trips.length === 0);
+const bLike = await api('adm', 'buscarViajes', { texto: '%' });
+T('98 El comodín «%» se escapa: no se convierte en «trae todo»', bLike.ok && bLike.result.trips.length === 0, bLike.result && bLike.result.trips.length);
 
 console.log(filas.join('\n'));
 console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`);

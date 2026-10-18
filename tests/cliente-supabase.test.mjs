@@ -124,7 +124,7 @@ T('24 Ningún JWT ni clave privada incrustada en el código de la interfaz', noS
 await login('admin@intransit.test', 'clave123');
 await db.query("update viajes set estado='COBRADO', fecha_plan='2019-05-01T08:00' where id=$1", [V1]);
 await ev('BACKEND.refrescar()');
-T('25 El servidor informa la ventana (6 meses) y cuántos viajes hay en la base', ev('DB.ventana&&DB.ventana.meses') === 6 && ev('DB.ventana.enBase') >= 2, ev('DB.ventana'));
+T('25 El servidor informa la ventana (3 meses) y cuántos viajes hay en la base', ev('DB.ventana&&DB.ventana.meses') === 3 && ev('DB.ventana.enBase') >= 2, ev('DB.ventana'));
 T('26 El viaje de 2019 no viaja en la pantalla; el reciente sí', !ev(`DB.trips.some(t=>t.id==="${V1}")`) && ev('DB.trips.length') >= 1, ev('DB.trips.map(t=>t.id)'));
 await ev("go('viajes')");
 T('27 La pantalla de Viajes avisa la ventana y ofrece cargar los anteriores', /Cargados/.test(d.querySelector('#app').textContent) && !!d.querySelector('[data-act="cargarViejos"]'));
@@ -134,5 +134,13 @@ const H = await ev(`API.resumenHistorico(S.user.id,{}).then(r=>r,e=>e.code)`);
 T('29 Los totales del histórico incluyen el viaje viejo (no dependen de la ventana)', H && H.viajes >= 2 && (H.porEstado.COBRADO || 0) >= 1, H && H.porEstado);
 await ev("go('finanzas')"); await flush(); await flush();
 T('30 Finanzas avisa que los totales de costos y margen son de toda la base', /toda la base/.test(d.querySelector('#app').textContent));
+/* ---------- 9. Buscar en todo el histórico desde el buscador ---------- */
+await ev('S.cargadosViejos=[];BACKEND.refrescar()');
+T('31 Tras refrescar (lo que pasa en cada guardado) el viaje viejo ya no está en pantalla', !ev(`DB.trips.some(t=>t.id==="${V1}")`));
+await ev("go('todos')"); await flush();
+await ev(`S.q="${V1}";ACT.buscarHistorico()`);
+await new Promise(r => setTimeout(r, 900));        /* el buscador espera 450 ms antes de preguntar al servidor */
+T('32 El buscador trae del servidor un viaje cerrado que no estaba en la ventana', !!ev(`DB.trips.find(t=>t.id==="${V1}")`), ev('DB.trips.map(t=>t.id)'));
+T('33 La pantalla avisa que se buscó en todo el histórico', /todo el histórico/.test(d.querySelector('#app').textContent));
 
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

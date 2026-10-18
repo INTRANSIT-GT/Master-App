@@ -16,6 +16,7 @@ if(!API.mantenimientos)API.mantenimientos=async()=>[];
 if(!API.gastos)API.gastos=async()=>[];
 /* Sin servidor (demostración) no hay ventana ni histórico que cargar: lo que hay en pantalla es todo lo que hay. */
 if(!API.viajesAnteriores)API.viajesAnteriores=async()=>({trips:[],liquidaciones:[],evidencias:[],audit:[],antesDe:'',pagina:0});
+if(!API.buscarViajes)API.buscarViajes=async(uid,o)=>({trips:[],liquidaciones:[],evidencias:[],audit:[],texto:(o&&o.texto)||'',pagina:0});
 if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinanciero(uid,o);
 (function(){
   const C=MASTER_CONFIG;
@@ -105,16 +106,27 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
   API.mantenimientos=async(uid,o)=>(await llamar('mantenimientos',[o||{}])).result;
   /* Totales de TODO el histórico (los calcula el servidor con el mismo motor): no dependen de la ventana cargada. */
   API.resumenHistorico=async(uid,o)=>(await llamar('resumenHistorico',[o||{}])).result;
-  /* Página del histórico: se une a lo que ya está en pantalla (viajes, liquidaciones, evidencias y bitácora). */
-  API.viajesAnteriores=async(uid,o)=>{
-    const r=(await llamar('viajesAnteriores',[o||{}])).result||{};
+  /* Trae viajes que no están en la ventana (páginas del histórico o resultados de una búsqueda) y los une a lo
+     que ya está en pantalla: viajes, liquidaciones, evidencias y bitácora. */
+  const unirPagina=r=>{
     const unir=(arr,clave)=>{const m=new Map((DB[clave]||[]).map(x=>[x.id,x]));for(const x of (arr||[]))m.set(x.id,x);DB[clave]=[...m.values()];};
     unir(r.trips,'trips');unir(r.liquidaciones,'liquidaciones');unir(r.evidencias,'evidencias');unir(r.audit,'audit');
     DB.audit.sort((a,b)=>a.id<b.id?-1:1);
     if(DB.ventana)DB.ventana.cargados=(DB.trips||[]).length;
-    /* Se recuerda lo que el usuario cargó a mano para no perderlo en los refrescos (cada guardado refresca). */
+    /* Se recuerda lo cargado a mano para no perderlo en los refrescos (cada guardado refresca la pantalla). */
     S.cargadosViejos=[...new Set([...(S.cargadosViejos||[]),...(r.trips||[]).map(t=>t.id)])];
     syncRefs();
+  };
+  API.viajesAnteriores=async(uid,o)=>{
+    const r=(await llamar('viajesAnteriores',[o||{}])).result||{};
+    unirPagina(r);
+    return r;
+  };
+  /* Busca en TODO el histórico (n.º de viaje, No. de transporte, producto, unidad, placa, proveedor, proyecto,
+     factura): así un viaje cerrado de hace meses se encuentra sin cargar todo el histórico. */
+  API.buscarViajes=async(uid,o)=>{
+    const r=(await llamar('buscarViajes',[o||{}])).result||{};
+    unirPagina(r);
     return r;
   };
   API.gastos=async(uid,o)=>(await llamar('gastos',[o||{}])).result;
