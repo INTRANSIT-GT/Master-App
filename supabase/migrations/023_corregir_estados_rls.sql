@@ -1,5 +1,5 @@
 -- =====================================================================
--- 017 · Corregir referencias a estados ANTIGUOS que quedaron tras el
+-- 023 · Corregir referencias a estados ANTIGUOS que quedaron tras el
 -- renombrado del flujo operativo (migración 007).
 -- ---------------------------------------------------------------------
 -- El 007 renombró los estados del viaje:
