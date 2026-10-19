@@ -4,7 +4,7 @@
 
 -- 1) La lista de roles admitidos incluye el nuevo
 alter table master.perfiles drop constraint if exists perfiles_rol_check;
-alter table master.perfiles add constraint perfiles_rol_check check (rol = any (array['ADMIN', 'GERENTE_TRANSPORTE', 'VALIDADOR', 'OPERATIVO', 'ANALISTA_COMERCIAL', 'GERENTE_COMERCIAL', 'FACTURACION', 'COBROS', 'PAGO_OPL', 'TORRE', 'PROYECTOS']));
+alter table master.perfiles add constraint perfiles_rol_check check (rol = any (array['ADMIN', 'GERENTE_TRANSPORTE', 'VALIDADOR', 'OPERATIVO', 'ANALISTA_COMERCIAL', 'GERENTE_COMERCIAL', 'FACTURACION', 'COBROS', 'PAGO_OPL', 'TORRE', 'PROYECTOS'])) not valid;
 
 -- 2) Su matriz de permisos (los 45 permisos del sistema)
 insert into master.permisos (rol, permiso, habilitado) values

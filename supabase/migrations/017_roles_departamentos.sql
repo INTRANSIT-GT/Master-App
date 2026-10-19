@@ -476,4 +476,4 @@ insert into master.permisos (rol, permiso, habilitado) values
   ('TORRE', 'unidades_asignar', false);
 
 -- 5) La lista de roles admitidos, ya con los datos migrados
-alter table master.perfiles add constraint perfiles_rol_check check (rol = any (array['ADMIN', 'GERENTE_TRANSPORTE', 'VALIDADOR', 'OPERATIVO', 'ANALISTA_COMERCIAL', 'GERENTE_COMERCIAL', 'FACTURACION', 'COBROS', 'PAGO_OPL', 'TORRE']));
+alter table master.perfiles add constraint perfiles_rol_check check (rol = any (array['ADMIN', 'GERENTE_TRANSPORTE', 'VALIDADOR', 'OPERATIVO', 'ANALISTA_COMERCIAL', 'GERENTE_COMERCIAL', 'FACTURACION', 'COBROS', 'PAGO_OPL', 'TORRE'])) not valid;
