@@ -45,6 +45,7 @@ alter table master.rutas drop constraint if exists rutas_estado_check;
 alter table master.rutas drop constraint if exists ck_ruta_asignada;
 update master.rutas set estado=case estado when 'ASIGNADA' then 'ACTIVA' when 'NO_ASIGNADA' then 'PENDIENTE' else estado end;
 alter table master.rutas add constraint rutas_estado_check check (estado in ('PENDIENTE','EN_TARIFACION','PENDIENTE_APROBACION','ACTIVA','RECHAZADA')) not valid;
+alter table master.rutas drop constraint if exists ck_ruta_activa;
 alter table master.rutas add constraint ck_ruta_activa check ((estado not in ('EN_TARIFACION','PENDIENTE_APROBACION','ACTIVA')) or (codigo<>'' and origen_id<>'' and destino_id<>'')) not valid;
 drop index if exists master.uq_ruta_codigo;
 create unique index if not exists uq_ruta_codigo on master.rutas (codigo) where estado<>'RECHAZADA' and codigo<>'';
