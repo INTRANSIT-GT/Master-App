@@ -23,7 +23,7 @@ export const TABLAS = [
   S('mem', 'mem', ['fecha'], [['fecha', 'fecha', 't'], ['precioDiesel', 'precio_diesel', 'n']], { sinExtra: true }),
   S('viajes', 'trips', ['id'], [['id', 'id', 't'], ['proyecto', 'cliente_id', 't'], ['proyectoCat', 'proyecto_cat', 't'], ['shipment', 'shipment', 't'], ['noViaje', 'no_viaje', 't'], ['opl', 'opl', 't'], ['tipoViaje', 'tipo_viaje', 't'],
      ['tipoCarga', 'tipo_carga', 't'], ['noCarga', 'no_carga', 't'], ['producto', 'producto', 't'], ['fechaPlan', 'fecha_plan', 't'], ['pilotoId', 'piloto_id', 't'], ['unidadId', 'unidad_id', 'tn'], ['placaArrastre', 'placa_arrastre', 't'],
-    ['origenId', 'origen_id', 't'], ['destinoId', 'destino_id', 't'], ['rutaId', 'ruta_id', 't'], ['rutaRef', 'ruta_ref', 't'], ['noDocRetorno', 'no_doc_retorno', 't'],
+    ['origenId', 'origen_id', 't'], ['destinoId', 'destino_id', 't'], ['rutaId', 'ruta_id', 'tn'], ['rutaRef', 'ruta_ref', 't'], ['noDocRetorno', 'no_doc_retorno', 't'],
     ['tIngresoPlanta', 't_ingreso_planta', 't'], ['tEsperaRampa', 't_espera_rampa', 't'], ['tRampa', 't_rampa', 't'], ['tInicioCarga', 't_inicio_carga', 't'], ['tFinCarga', 't_fin_carga', 't'], ['tSalidaPlanta', 't_salida_planta', 't'],
     ['tSalida', 't_salida', 't'], ['tIngresoBodega', 't_ingreso_bodega', 't'], ['tInicioDescarga', 't_inicio_descarga', 't'], ['tFinDescarga', 't_fin_descarga', 't'], ['estado', 'estado', 't'],
     ['creadoPor', 'creado_por', 'tn'], ['creadoPorId', 'creado_por_id', 'tn'], ['creadoEn', 'creado_en', 'ts'], ['iniciadoPor', 'iniciado_por', 'tn'], ['iniciadoEn', 'iniciado_en', 'ts'], ['finalizadoPor', 'finalizado_por', 'tn'], ['finalizadoEn', 'finalizado_en', 'ts'],

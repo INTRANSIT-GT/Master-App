@@ -157,15 +157,15 @@ const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']
 const VIEW_PERM={tarifas:'tarifas_ver',proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
 const NAVLBL={tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
 
-const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
+const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos','gastosAdicionales'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 /* Estados que se pueden corregir a mano (con el permiso viajes_editar_estado). Los demás los genera el flujo:
    LIQUIDADO (liquidación enviada), RECHAZADO (liquidación devuelta), ACEPTADO (liquidación aprobada),
    FACTURADO y COBRADO (Comercial). Nunca se puede saltar un paso: la transición debe existir en EDGES. */
 const ESTADOS_MANUALES=['EN_RUTA','ENTREGADO'];
-Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origenId:'Origen',destinoId:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos'});
-const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos'];
+Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origenId:'Origen',destinoId:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos',gastosAdicionales:'Gastos adicionales',noCarga:'Cantidad de carga'});
+const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos','Gastos adicionales'];
 
 /* ---------- Base de datos ---------- */
 const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1}});
@@ -308,6 +308,7 @@ function fmtVal(k,v){
   if(k==='origenId')return (ORIGENES.find(o=>o.id===v)||{}).nombre||v;
   if(k==='destinoId')return (DESTINOS.find(o=>o.id===v)||{}).nombre||v;
   if(TIEMPO_KEYS.includes(k))return fmtL(v);
+  if(k==='gastosAdicionales')return Array.isArray(v)&&v.length?v.map(x=>`${x.concepto}: Q ${x.importe}`).join(' · '):'(vacío)';
   return String(v);
 }
 const proyectosDe=c=>(DB.clientes.find(x=>x.id===c)||{proyectos:[]}).proyectos;
@@ -319,6 +320,25 @@ function notaPilotoDe(t){
   if(!P||!U)return '';
   return String(P.unidad||'')===U?'':NOTA_PILOTO;
 }
+/* Gastos adicionales de un viaje: lista de {concepto, importe}. Las filas totalmente vacías se ignoran; el resto debe estar completo. */
+function normGastos(g){
+  if(g===''||g==null)return [];
+  if(!Array.isArray(g))return {err:'Gastos adicionales: el formato no es válido.'};
+  if(g.length>40)return {err:'Gastos adicionales: máximo 40 gastos por viaje.'};
+  const out=[];
+  for(let i=0;i<g.length;i++){
+    const x=g[i]||{},n=i+1,c=String(x.concepto==null?'':x.concepto).trim(),raw=String(x.importe==null?'':x.importe).trim();
+    if(!c&&!raw)continue;
+    if(!c)return {err:`Gasto adicional ${n}: escribe el concepto (por ejemplo parqueo, alimentación o peaje).`};
+    if(c.length>80)return {err:`Gasto adicional ${n}: el concepto admite máximo 80 caracteres.`};
+    if(raw==='')return {err:`Gasto adicional ${n} («${c}»): escribe el importe.`};
+    const v=Number(raw);
+    if(!isFinite(v)||v<=0)return {err:`Gasto adicional ${n} («${c}»): el importe debe ser un número mayor que 0.`};
+    if(v>9999999.99)return {err:`Gasto adicional ${n} («${c}»): el importe es demasiado grande.`};
+    out.push({concepto:c,importe:Math.round(v*100)/100});
+  }
+  return out;
+}
 const RX_DT=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 function valKey(cliente,k,v){
   const vacio=v===''||v==null;
@@ -327,6 +347,7 @@ function valKey(cliente,k,v){
     case 'opl':if(!vacio&&!CAT.opl.includes(v))return 'OPL no válido.';break;
     case 'tipoViaje':if(!vacio&&!CAT.tipoViaje.includes(v))return 'Tipo de viaje no válido.';break;
     case 'tipoCarga':if(!vacio&&!CAT.tipoCarga.includes(v))return 'Tipo de carga no válido.';break;
+    case 'gastosAdicionales':{const r=normGastos(v);if(r.err)return r.err;break;}
     case 'noCarga':case 'qViaticos':if(!vacio&&!(isFinite(Number(v))&&Number(v)>=0))return `${LBL[k]}: escribe un número válido (0 o mayor).`;break;
     case 'shipment':case 'noViaje':case 'producto':case 'noDocRetorno':case 'placaArrastre':if(String(v).length>60)return `${LBL[k]}: máximo 60 caracteres.`;break;
     case 'unidadId':{if(!FLOTA.some(f=>f.unidad===v))return 'La unidad no está en la flota.';if(!PILOTOS.some(p=>p.proyecto===cliente&&p.unidad===v))return 'Esa unidad no está asignada a este cliente.';break;}
@@ -371,7 +392,7 @@ function redact(A,t){
   if(!hasPerm(A,'finanzas_ver')){delete c.costoProveedor;delete c.precioMem;delete c.ajusteCombustible;delete c.tarifaBase;}
   if(!hasPerm(A,'tarifas_ver')){delete c.tarifaCliente;delete c.tarifaId;delete c.tarifaAplicadaPor;delete c.tarifaAplicadaEn;}
   if(!hasPerm(A,'finanzas_ver')){delete c.tarifaOpl;delete c.tarifaOplBase;delete c.ajusteOpl;delete c.precioMemOpl;}
-  if(!hasPerm(A,'finanzas_ver')&&!hasPerm(A,'viajes_editar_datos'))delete c.qViaticos;
+  if(!hasPerm(A,'finanzas_ver')&&!hasPerm(A,'viajes_editar_datos')){delete c.qViaticos;delete c.gastosAdicionales;}   /* los gastos adicionales siguen la misma regla que los viáticos */
   return c;
 }
 const r2=n=>Math.round(n*100)/100;
@@ -695,7 +716,7 @@ const API={
       if(e.entidad==='SEGURIDAD')continue;
       if(e.entidad==='AGRUPACION'&&!comercial)continue;
       if(e.entidad==='FINANZAS'&&!verMoney)continue;
-      if(MONEY_LBL.includes(e.campo)&&!(e.campo==='Q viáticos'?verViat:verMoney))continue;
+      if(MONEY_LBL.includes(e.campo)&&!((e.campo==='Q viáticos'||e.campo==='Gastos adicionales')?verViat:verMoney))continue;
       if(soloTiempos&&!TIEMPO_KEYS.some(k=>LBL[k]===e.campo))continue;
       let a=porViaje.get(e.viajeId);if(!a){a=[];porViaje.set(e.viajeId,a);}a.push(e);
     }
@@ -731,21 +752,27 @@ const API={
     if(!cl)deny('Cliente no válido.','VALIDACION');
     if(cl.activo===false)deny('El cliente está desactivado: no admite viajes nuevos.','VALIDACION');
     if(!clientesAsig(A).includes(cliente))deny('No tienes asignado ese cliente: no puedes crear viajes para él.');
-    const keys=[...DATA_KEYS,...TIEMPO_KEYS,'rutaRef'];
+    const keys=[...DATA_KEYS,...TIEMPO_KEYS,'rutaRef','sinRuta'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origenId'||k==='destinoId'?'El origen y el destino se completan solos a partir de la ruta: no se escriben a mano.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
     /* El viaje nace Planificado: los demás estados los produce el flujo paso a paso (en ruta, entregado,
        liquidación, aprobación, facturación, cobro). No se puede crear un viaje ya entregado o facturado. */
     if(v.estado&&v.estado!=='PLANIFICADO')deny('El viaje nuevo nace Planificado: los demás estados los pone el flujo (en ruta, entregado, liquidación, facturación).','ESTADO_NO_AUTORIZADO');
     v.estado='PLANIFICADO';
-    if(!v.rutaId)deny('Falta Ruta.','VALIDACION');
-    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
+    /* SIN RUTA: el viaje se registra sin ruta asignada (queda marcado y se avisa a Gerencia). No es lo mismo que «NUEVA RUTA», que solicita una ruta al catálogo. */
+    const sinRuta=v.sinRuta===true||v.sinRuta==='true';delete v.sinRuta;
+    if(sinRuta&&v.rutaId)deny('Un viaje SIN RUTA no puede traer una ruta seleccionada: quita la ruta o desactiva SIN RUTA.','VALIDACION');
+    if(!v.rutaId&&!sinRuta)deny('Falta Ruta.','VALIDACION');
+    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
     let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
-    if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');}
+    if(sinRuta){if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para registrar un viaje SIN RUTA selecciona el proyecto.','VALIDACION');}
+    else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');}
     else {ruta=DB.rutas.find(r=>r.id===v.rutaId);if(!ruta||ruta.cliente!==cliente)deny('La ruta no corresponde al cliente elegido.','VALIDACION');v.proyectoCat=ruta.proyecto;}
     const clave=pend?'ref:'+v.rutaRef.toLowerCase():v.rutaId;
     const dup=v.fechaPlan&&v.pilotoId&&DB.trips.find(t=>t.fechaPlan===v.fechaPlan&&t.pilotoId===v.pilotoId&&((pend&&t.rutaRef&&('ref:'+t.rutaRef.toLowerCase())===clave)||(!pend&&t.rutaId===clave)));
     if(dup)deny(`Este viaje ya existe (#${dup.id}): misma fecha y hora plan, piloto y ruta.`,'DUPLICADO');
+    const gAd=normGastos(v.gastosAdicionales);if(gAd.err)deny(gAd.err,'VALIDACION');
+    if(gAd.length)v.gastosAdicionales=gAd;else delete v.gastosAdicionales;
     const id=String(DB.seq.trip++).padStart(6,'0');
     let rutaId=v.rutaId;
     if(pend){const rr=crearRutaPendiente(A,{cliente,proyecto:v.proyectoCat,nombre:v.rutaRef,fuente:'VIAJE',viajeRef:id});rutaId=rr.id;}
@@ -753,8 +780,13 @@ const API={
     const t=Object.assign({id,proyecto:cliente,unidadId:P?P.unidad:'',estado:'PLANIFICADO',creadoPor:A.nombre,creadoPorId:A.id,creadoEn:nowIso(),comentarioRevision:'',rechazos:0,duplicadoAprobado:false,liqIntentos:0,liqActualId:'',liqAprobadaEn:'',agrupacionId:'',numeroFactura:'',tarifaCliente:'',tarifaId:'',costoProveedor:''},v,{rutaId,origenId:ruta?ruta.origenId:'',destinoId:ruta?ruta.destinoId:'',rutaRef:pend?v.rutaRef:''});
     if(!t.unidadId)t.unidadId=P?P.unidad:'';            /* si no se eligió placa, se usa la unidad del piloto */
     t.notaPiloto=notaPilotoDe(t);                        /* constancia si el piloto no es el asignado a la unidad */
+    if(sinRuta){t.sinRuta=true;t.sinRutaPor=A.nombre;t.sinRutaEn=t.creadoEn;}
     DB.trips.push(t);
-    auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}`});
+    auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}${sinRuta?' · SIN RUTA':''}`});
+    if(sinRuta&&!DB.notificaciones.some(n=>n.tipo==='VIAJE_SIN_RUTA'&&n.detalle&&n.detalle.viaje===id)){
+      /* Aviso para Gerencia en el mecanismo de notificaciones que ya existe (tabla notificaciones). Una sola vez por viaje. */
+      notificar(A,{tipo:'VIAJE_SIN_RUTA',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Viaje #${id} registrado SIN RUTA`,detalle:{viaje:id,cliente:cl.cliente||cl.nombre||cliente,proyecto:t.proyectoCat,registradoPor:A.nombre,fechaRegistro:t.creadoEn}});
+    }
     return t;
   });},
 
@@ -795,6 +827,7 @@ const API={
       const nv=typeof cambios[k]==='string'?cambios[k].trim():cambios[k];
       const ov=t[k]==null?'':t[k];
       if(k==='estado'&&(nv===''||nv==null))return;   /* sin estado elegido: se conserva el actual */
+      if(k==='gastosAdicionales'){const g=normGastos(nv);if(g.err)deny(g.err,'VALIDACION');if(JSON.stringify(g)===JSON.stringify(Array.isArray(ov)?ov:[]))return;dif.push([k,Array.isArray(ov)?ov:'',g]);return;}
       if(String(nv==null?'':nv)===String(ov))return;
       if(['proyectoCat','fechaPlan','pilotoId','rutaId'].includes(k)&&(nv===''||nv==null))deny(`${LBL[k]} es obligatorio.`,'VALIDACION');
       if(k!=='rutaId'){const m=valKey(t.proyecto,k,nv);if(m)deny(m,'VALIDACION');}

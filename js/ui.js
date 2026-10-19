@@ -415,10 +415,11 @@ VIEWS.detalle=()=>{
   const datos=rev
     ?`${kvr('ID de viaje','<span class="num">#'+t.id+'</span>')}${kvr('No. de viaje',v(t.noViaje))}${kvr('Cliente',esc(j.cliente))}${kvr('Proyecto',v(t.proyectoCat))}${kvr('Producto',v(t.producto))}${kvr('Fecha plan',fmtL(t.fechaPlan))}${kvr('Inicio del viaje',inicio?fmtL(inicio.length>16?toLocal(new Date(inicio)):inicio):dash)}${kvr('Finalización del viaje',fin?fmtL(fin.length>16?toLocal(new Date(fin)):fin):dash)}`
     :`${kvr('ID de viaje','<span class="num">#'+t.id+'</span>')}${kvr('No. de viaje',v(t.noViaje))}${kvr('Cliente',esc(j.cliente))}${kvr('Proyecto',v(t.proyectoCat))}${kvr('Shipment',v(t.shipment))}
-        ${kvr('Tipo de viaje',v(t.tipoViaje))}${kvr('Tipo de carga',v(t.tipoCarga))}${kvr('No. de carga',v(t.noCarga))}${kvr('Producto',v(t.producto))}${kvr('OPL',v(t.opl))}
+        ${kvr('Tipo de viaje',v(t.tipoViaje))}${kvr('Tipo de carga',v(t.tipoCarga))}${kvr('Cantidad de carga',v(t.noCarga))}${kvr('Producto',v(t.producto))}${kvr('OPL',v(t.opl))}
         ${kvr('Ruta',rutaHTML(t))}${kvr('Fecha plan',fmtL(t.fechaPlan))}${kvr('Estado',badge(t.estado))}
         ${t.estado==='EN_RUTA'?kvr('Tiempo transcurrido',`<span class="elapsed" data-since="${since(t)}">${elapsed(since(t))}</span>`):''}
-        ${kvr('No. doc retorno',v(t.noDocRetorno))}${'qViaticos' in t?kvr('Q viáticos',t.qViaticos!==''&&t.qViaticos!=null?'Q '+esc(t.qViaticos):dash):''}`;
+        ${kvr('No. doc retorno',v(t.noDocRetorno))}${'qViaticos' in t?kvr('Q viáticos',t.qViaticos!==''&&t.qViaticos!=null?'Q '+esc(t.qViaticos):dash):''}
+        ${('qViaticos' in t||(t.gastosAdicionales||[]).length)?kvr('Gastos adicionales',gastosDetalleHTML(t)):''}`;
   const horarios=rev?'':`<div class="card" style="grid-column:1/-1"><h3>Horarios del viaje</h3>
         <dl class="kv" style="grid-template-columns:repeat(2,minmax(0,170px) minmax(0,1fr));gap:8px 14px">${CAMPOS_TIEMPO.map(([k,l])=>kvr(lblT(l),t[k]?fmtL(t[k]):dash)).join('')}</dl>
         ${hp('comercial_agrupar')?'<div class="mute" style="margin-top:8px;font-size:13px">Datos del viaje: solo lectura para tu perfil.</div>':`<h3 style="margin:14px 0 0;font-size:14px">Tiempos calculados</h3><div id="durs_box">${dursHTML(t)}</div>`}</div>`;
@@ -426,6 +427,7 @@ VIEWS.detalle=()=>{
     <button class="btn ghost sm" data-act="back" style="margin-bottom:12px">${icon('back',16)} ${esc(fromLbl)}</button>
     ${pageHead('Viaje #'+t.id,`<span class="pchip sm">${esc(j.proyectoNombre)}</span> &nbsp;${esc(j.cliente)}`,`<span class="bgs">${badge(t.estado)}</span>${editBtn}`)}
     ${t.estado==='RECHAZADO'?`<div class="alertbox" style="margin-bottom:14px;padding:14px 16px"><b>Rechazo #${t.rechazos||1}</b><div style="margin:6px 0;font-size:16px">${esc(t.comentarioRevision)}</div><span class="mute" style="font-size:13px">${esc(t.revisadoPor)} · ${fmtDT(t.revisadoEn)}</span></div>`:''}
+    ${t.sinRuta?`<div class="alertbox info" style="margin-bottom:14px"><b>Registrado SIN RUTA</b>${t.sinRutaPor?` por ${esc(t.sinRutaPor)}`:''}${t.sinRutaEn?` · ${fmtDT(t.sinRutaEn)}`:''}${t.rutaId?'. Después se le asignó una ruta.':'. Todavía no tiene ruta asignada.'}</div>`:''}
     <div class="hroute"><div class="pt"><small>Origen</small><b>${esc(j.origen)||'Pendiente de asignar'}</b></div><div class="line"></div><div class="pt"><small>Destino</small><b>${esc(j.destino)||'Pendiente de asignar'}</b></div></div>
     <div class="card next"><h3>Siguiente paso</h3>${nextStep(t)}</div>
     <div class="detgrid">
@@ -524,12 +526,12 @@ VIEWS.catalogos=()=>{
 
 /* ---- Notificaciones (solo dentro de la aplicación) ---- */
 function notifData(){try{return API.notificaciones(S.user.id);}catch(e){return [];}}
-const NOT_L={proyecto:'Proyecto',cliente:'Cliente',ruta:'Ruta propuesta',origen:'Origen',destino:'Destino',solicitadoPor:'Registrada por',fecha:'Fecha de solicitud',viaje:'Viaje',codigo:'Código',motivo:'Motivo'};
+const NOT_L={registradoPor:'Registrado por',fechaRegistro:'Fecha y hora del registro',proyecto:'Proyecto',cliente:'Cliente',ruta:'Ruta propuesta',origen:'Origen',destino:'Destino',solicitadoPor:'Registrada por',fecha:'Fecha de solicitud',viaje:'Viaje',codigo:'Código',motivo:'Motivo'};
 function notifHTML(){
   const ns=notifData();
   if(!ns.length)return '<div class="mute">No tienes notificaciones.</div>';
   return ns.slice(0,30).map(n=>`<div class="cyc" style="${n.leida?'opacity:.7':''}"><div class="tc-top"><b>${esc(n.asunto)}</b>${n.leida?'':'<span class="badge tn-progress">Nueva</span>'}</div>
-    <dl class="kv" style="grid-template-columns:130px 1fr;margin-top:6px;font-size:13px">${Object.keys(n.detalle).filter(k=>n.detalle[k]!==''&&NOT_L[k]).map(k=>`<dt>${NOT_L[k]}</dt><dd>${esc(k==='fecha'?fmtDT(n.detalle[k]):n.detalle[k])}</dd>`).join('')}</dl>
+    <dl class="kv" style="grid-template-columns:130px 1fr;margin-top:6px;font-size:13px">${Object.keys(n.detalle).filter(k=>n.detalle[k]!==''&&NOT_L[k]).map(k=>`<dt>${NOT_L[k]}</dt><dd>${esc((k==='fecha'||k==='fechaRegistro')?fmtDT(n.detalle[k]):n.detalle[k])}</dd>`).join('')}</dl>
     <div class="mute" style="font-size:12px;margin-top:6px">${fmtDT(n.creadaEn)} · Aviso solo dentro de la aplicación: ${esc(n.externo.motivo)}</div>
     ${n.leida?'':`<button class="btn sm" style="margin-top:6px" data-act="notifLeer" data-id="${n.id}">Marcar como leída</button>`}</div>`).join('');
 }
@@ -870,10 +872,12 @@ app.addEventListener('change',async e=>{
   if(t.dataset.mfile&&S.modal){const f=t.files&&t.files[0];if(!f)return;if(f.size>2000000){S.modal.err='El archivo supera 2 MB.';render();return;}const k=t.dataset.mfile;const rd=new FileReader();rd.onload=()=>{S.modal.data[k]=rd.result;S.modal.err='';render();};rd.readAsDataURL(f);return;}
   if(t.dataset.auto){autoSave(t.dataset.id,t.dataset.auto,t.value);return;}
   if(t.dataset.photo){const f=t.files&&t.files[0];if(!f)return;const d=await readPhoto(f);if(d){S.draft[t.dataset.photo]=d;render();}return;}
+  if(t.dataset.gasto){gastoSet(t.dataset.gasto,t.value);return;}
   if(t.dataset.m){
     const M=curModel();if(!M)return;
     if(usaCombo()){aplicarCampo(M,t.dataset.m,t.value);if(t.tagName==='SELECT'||t.type==='datetime-local')render();return;}
     const k=t.dataset.m;M[k]=t.value;if('err' in M)M.err='';
+    if(k==='rutaId'&&t.value)M.sinRuta=false;
     if(k==='proyecto'){M.proyectoCat='';M.pilotoId='';M.rutaId='';M.rutaRef='';const pc=PROYECTOS_X[M.proyecto];if(pc&&pc.length===1)M.proyectoCat=pc[0];}
     if(k==='proyectoCat'){M.rutaId='';M.rutaRef='';}
     if(k==='pilotoId'&&t.value)S.flash=true;
