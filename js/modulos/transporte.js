@@ -279,20 +279,16 @@ function desvioHTML(M,d){
 /* ---- Gastos adicionales (Retorno y viáticos): varias filas concepto + importe; se guardan con el viaje ---- */
 const gastosLista=M=>Array.isArray(M.gastosAdicionales)?M.gastosAdicionales:(M.gastosAdicionales=[]);
 const gastosTotal=l=>Math.round(l.reduce((s,x)=>s+(Number(x.importe)>0?Number(x.importe):0),0)*100)/100;
-function gastosResumenHTML(M){
-  const l=gastosLista(M).filter(x=>String(x.concepto||'').trim()||String(x.importe==null?'':x.importe).trim());
-  if(!l.length)return '<span class="mute">Todavía no has agregado gastos adicionales.</span>';
-  return `<b>Revisión:</b> ${l.length} ${l.length===1?'gasto':'gastos'} · total <b>Q ${gastosTotal(l).toFixed(2)}</b><ul style="margin:4px 0 0 18px;padding:0">${l.map(x=>`<li>${esc(x.concepto||'(sin concepto)')} — ${Number(x.importe)>0?'Q '+Number(x.importe).toFixed(2):'<span class="warnl">falta el importe</span>'}</li>`).join('')}</ul>`;
-}
+/* Conceptos de siempre (Parqueo, Alimentación, Peaje, Otro). Si un gasto ya guardado trae otro texto, se conserva como opción para no perderlo. */
+const GASTOS_CONCEPTOS=['Parqueo','Alimentación','Peaje','Otro'];
+const gastosOpciones=c=>{const v=String(c==null?'':c);return v&&!GASTOS_CONCEPTOS.includes(v)?[...GASTOS_CONCEPTOS,v]:GASTOS_CONCEPTOS;};
 function gastosFormHTML(M,d){
   const l=gastosLista(M);
   return `<h3 style="margin:14px 0 6px;font-size:14px">Gastos adicionales</h3>
     <div class="hint" style="margin-bottom:8px">Parqueo, alimentación, peaje u otros. Son aparte de los viáticos: no los reemplazan ni cambian sus cálculos.</div>
-    <datalist id="gastosConceptos"><option value="Parqueo"><option value="Alimentación"><option value="Peaje"><option value="Otro"></datalist>
-    ${l.map((x,i)=>`<div class="row2" style="align-items:end"><div class="fgroup"><label for="ga_c${i}">Concepto ${i+1}</label><input type="text" id="ga_c${i}" list="gastosConceptos" maxlength="80" data-gasto="${i}|concepto" value="${esc(x.concepto)}" placeholder="Ej. parqueo" autocomplete="off" ${d}></div>
+    ${l.map((x,i)=>`<div class="row2" style="align-items:end"><div class="fgroup"><label for="ga_c${i}">Concepto ${i+1}</label><select id="ga_c${i}" data-gasto="${i}|concepto" ${d}><option value="">Selecciona</option>${gastosOpciones(x.concepto).map(o=>`<option value="${esc(o)}" ${o===x.concepto?'selected':''}>${esc(o)}</option>`).join('')}</select></div>
       <div class="fgroup"><label for="ga_i${i}">Importe (Q)</label><div class="trow"><input type="number" id="ga_i${i}" data-gasto="${i}|importe" value="${esc(x.importe)}" inputmode="decimal" min="0" step="any" placeholder="0.00" ${d}><button type="button" class="btn sm" data-act="gastoDel" data-i="${i}" aria-label="Quitar gasto ${i+1}" ${d}>Quitar</button></div></div></div>`).join('')}
-    <button type="button" class="btn sm" data-act="gastoAdd" ${d}>+ Agregar gasto adicional</button>
-    <div id="gastosResumen" class="alertbox info" style="margin-top:10px" aria-live="polite">${gastosResumenHTML(M)}</div>`;
+    <button type="button" class="btn sm" data-act="gastoAdd" ${d}>+ Agregar gasto adicional</button>`;
 }
 function gastosDetalleHTML(t){
   const l=Array.isArray(t.gastosAdicionales)?t.gastosAdicionales:[];
@@ -303,7 +299,6 @@ function gastoSet(clave,valor){
   const M=curModel();if(!M)return;
   const [i,campo]=clave.split('|'),l=gastosLista(M);if(!l[i])return;
   l[i][campo]=valor;if('err' in M)M.err='';
-  const box=document.getElementById('gastosResumen');if(box)box.innerHTML=gastosResumenHTML(M);
 }
 
 function fieldsHTML(M,groups,dis){

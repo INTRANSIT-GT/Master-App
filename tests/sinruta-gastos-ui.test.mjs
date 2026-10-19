@@ -67,10 +67,10 @@ await click(boton('SIN RUTA'));
 /* Gastos: agregar, revisar total, quitar */
 await click(boton('+ Agregar gasto adicional')); await click(boton('+ Agregar gasto adicional'));
 T('U7 Agregar crea filas de concepto + importe', d.querySelectorAll('[data-gasto$="|concepto"]').length === 2 && d.querySelectorAll('[data-gasto$="|importe"]').length === 2);
-await escribe(d.querySelector('[data-gasto="0|concepto"]'), 'Pernocta'); await escribe(d.querySelector('[data-gasto="0|importe"]'), '150.50');
+await escribe(d.querySelector('[data-gasto="0|concepto"]'), 'Parqueo'); await escribe(d.querySelector('[data-gasto="0|importe"]'), '150.50');
 await escribe(d.querySelector('[data-gasto="1|concepto"]'), 'Peaje'); await escribe(d.querySelector('[data-gasto="1|importe"]'), '45');
-const rs = txt(d.querySelector('#gastosResumen'));
-T('U8 El resumen antes de guardar muestra ambos gastos y el total Q195.50', /Pernocta/.test(rs) && /Peaje/.test(rs) && /195\.50/.test(rs), rs);
+const gm = JSON.parse(ev('JSON.stringify(S.form.gastosAdicionales)'));
+T('U8 Antes de guardar el modelo trae ambos gastos (el recuadro «Revisión» ya no existe)', gm.length === 2 && gm[0].concepto === 'Parqueo' && gm[1].concepto === 'Peaje' && !d.querySelector('#gastosResumen'), gm);
 await click(boton('Quitar')); 
 T('U9 Quitar elimina la fila y actualiza el modelo', JSON.parse(ev('JSON.stringify(S.form.gastosAdicionales)')).length === 1);
 await click(boton('+ Agregar gasto adicional'));
@@ -98,7 +98,7 @@ const n2 = ev('DB.trips.length'); await click(boton('GUARDAR VIAJE'));
 T('U15 Gasto sin importe: no guarda y muestra mensaje claro', ev('DB.trips.length') === n2 && /Gasto adicional 1/.test(ev('S.form.err')) && /importe/i.test(ev('S.form.err')), ev('S.form.err'));
 /* Torre no ve gastos */
 como('U-T', 'torre'); ev(`go('detalle','${id}')`); await tick();
-T('U16 Torre no ve los gastos adicionales en el detalle', !/Pernocta|Gastos adicionales/.test(txt(d.querySelector('#main') || d.body)));
+T('U16 Torre no ve los gastos adicionales en el detalle', !/Parqueo|Gastos adicionales/.test(txt(d.querySelector('#main') || d.body)));
 
 /* ===== Ayuda ===== */
 const navTxt = () => txt(d.querySelector('nav.side') || d.body);
