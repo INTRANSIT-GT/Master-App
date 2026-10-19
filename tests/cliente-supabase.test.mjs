@@ -116,7 +116,7 @@ const jwtSrv = 'x.' + Buffer.from(JSON.stringify({ role: 'service_role' })).toSt
 const w3 = pagina({ SUPABASE_URL: 'https://prueba.supabase.co', SUPABASE_PUBLISHABLE_KEY: jwtSrv }); await flush();
 T('22 Tampoco usa un JWT con rol service_role', w3.eval('BACKEND.modo') === 'bloqueado');
 const w4 = pagina({ SUPABASE_URL: '', SUPABASE_PUBLISHABLE_KEY: '' }); await flush();
-T('23 Sin configuración ni datos de ejemplo, la app lo dice claramente y no inventa datos', w4.eval('BACKEND.modo') === 'demo' && /Sin configurar/.test(w4.document.querySelector('#app').textContent) && w4.eval('DB.trips.length') === 0);
+T('23 Sin configuración ni datos de ejemplo, la app muestra el ingreso y no inventa datos', w4.eval('BACKEND.modo') === 'demo' && /Ingresar/.test(w4.document.querySelector('#app').textContent) && w4.eval('DB.trips.length') === 0);
 /* archivos del proyecto */
 const noSecretos = ['index.html', 'js/backend.js', 'js/ui.js', 'js/engine.js', 'manifest.json', 'service-worker.js'].every(f => !/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/.test(leer(f)));
 T('24 Ningún JWT ni clave privada incrustada en el código de la interfaz', noSecretos);

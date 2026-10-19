@@ -266,4 +266,18 @@ T('U7 Con un filtro puesto la gráfica de Finanzas sale del alcance filtrado (no
 const claveG = ev("claveGrafica()");
 T('U8 La clave de la gráfica cambia con los filtros (así se vuelve a pedir al servidor)', claveG.includes('COLGATE') && ev("filtrosGrafica().cliente==='COLGATE'"));
 ev("S.fCli=''");
+/* Menú de usuario: sin notas de arquitectura, con cambio de modo claro/oscuro. */
+ev("S.menu=true;render()");
+const menuTxt = (d.querySelector('.menu') || { innerHTML: '' }).innerHTML;
+T('U9 El menú de usuario ya no muestra las notas de arquitectura', !/Notas de arquitectura/.test(menuTxt) && /data-act="toggleTema"/.test(menuTxt));
+const antesTema = d.documentElement.dataset.theme || '';
+const btnTema = d.querySelector('.menu button[data-act="toggleTema"]');
+if (btnTema) await click(btnTema);
+const trasTema = d.documentElement.dataset.theme || '';
+T('U10 El botón cambia la aplicación entre modo claro y oscuro', trasTema !== antesTema && ['light', 'dark'].includes(trasTema), [antesTema, trasTema]);
+const medioTema = d.documentElement.dataset.theme || '';
+await ev("ACT.toggleTema()");
+const vuelta = d.documentElement.dataset.theme || '';
+T('U11 Se puede volver al modo anterior (el cambio es reversible)', !!medioTema && vuelta !== medioTema && ['light', 'dark'].includes(vuelta), [medioTema, vuelta]);
+ev("S.menu=false");
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

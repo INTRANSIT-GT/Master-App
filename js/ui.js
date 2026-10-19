@@ -5,7 +5,9 @@ Object.assign(ICON,{
   bell:'<path d="M6 9a6 6 0 1112 0c0 5 2 6 2 7H4c0-1 2-2 2-7z"/><path d="M10 20a2 2 0 004 0"/>',
   dollar:'<path d="M12 3v18M16 7.5c0-1.7-1.8-3-4-3s-4 1.3-4 3 1.8 2.8 4 3.2 4 1.5 4 3.3-1.8 3-4 3-4-1.3-4-3"/>',
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
-  file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'
+  file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>',
+  moon:'<path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/>'
 });
 const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:'',cb:null,cbq:'',opSoloOpl:false,opSel:{},pag:{}};
 const hp=p=>hasPerm(S.user,p);
@@ -97,37 +99,12 @@ function histHTML(evs){
   return `<ul class="tl">${evs.map(h=>`<li><b>${esc(h.accion)}</b>${h.campo?` <span class="mute">· ${esc(lblT(h.campo))}</span>`:''}${h.campo&&(h.anterior||h.nuevo)?`<div>${esc(h.anterior||'(vacío)')} → <b>${esc(h.nuevo||'(vacío)')}</b></div>`:''}<div class="by">${esc(h.por)} · ${esc(rolL(h.rol))} · ${fmtDT(h.en)}</div>${h.motivo?`<div class="nt">“${esc(h.motivo)}”</div>`:''}${h.ref?`<div class="by">Ref. ${esc(h.ref)}</div>`:''}</li>`).join('')}</ul>`;
 }
 
-/* ---------- Notas de arquitectura (Power Apps) ---------- */
-const ARCH={
-  login:{s:'scr_Login',d:'USUARIOS',f:'Set(gblUsuario; LookUp(USUARIOS; Usuario=txtUsuario.Text))',n:'Fase 2: Microsoft 365 (User().Email). La contraseña de demostración desaparece.'},
-  inicio:{s:'scr_InicioEncargado',d:'VIAJES · ACCESO_CLIENTE',f:'Filter(VIAJES; Cliente in gblClientesAsignados)',n:'El alcance sale de ACCESO_CLIENTE; en producción se filtra también del lado del servidor.'},
-  nuevo:{s:'scr_NuevoViaje',d:'PILOTOS · FLOTA · ORIGEN · DESTINOS · CATALOGO',f:'LookUp(FLOTA; Unidad=ddPiloto.Selected.UnidadAsignada)',n:'El alta debe ejecutarse con un flujo/validación servidor (Power Automate / plugin Dataverse).'},
-  viajes:{s:'scr_Viajes',d:'VIAJES',f:'Filter(VIAJES; Estado.Value="EN_RUTA")',n:''},
-  detalle:{s:'scr_DetalleViaje',d:'VIAJES · LIQUIDACIONES · AUDITORIA',f:'Patch(VIAJES; gblViaje; {...})  // solo desde un flujo que valide rol, estado y campos',n:'Torre solo puede escribir las columnas de fecha/hora. Se valida en servidor, no solo con DisplayMode.'},
-  torre:{s:'scr_TorreControl',d:'VIAJES',f:'Filter(VIAJES; Estado.Value="EN_RUTA")',n:'Solo lectura salvo fechas/horas. Sin botón de confirmar entrega.'},
-  liquidaciones:{s:'scr_Liquidaciones',d:'VIAJES · LIQUIDACIONES · EVIDENCIAS',f:'Filter(LIQUIDACIONES; Decision="")',n:'Cada envío es un renglón nuevo en LIQUIDACIONES; no se sobrescribe.'},
-  comercial:{s:'scr_Comercial',d:'VIAJES · AGRUPACIONES_COMERCIALES',f:'Filter(VIAJES; Estado.Value="ACEPTADO")',n:'La validación de un solo cliente por factura debe vivir en el servidor.'},
-  proyectos:{s:'scr_Proyectos',d:'CLIENTES · VIAJES',f:'GroupBy(VIAJES; "Cliente"; "Viajes")',n:''},
-  proyecto:{s:'scr_Proyecto',d:'VIAJES',f:'Filter(VIAJES; Cliente=gblClienteSel)',n:''},
-  todos:{s:'scr_Viajes_Todos',d:'VIAJES',f:'Search(VIAJES; txtBuscar.Text; "IdViaje"; "Piloto")',n:''},
-  catalogos:{s:'scr_Catalogos',d:'PILOTOS · FLOTA · ORIGEN · DESTINOS',f:'PILOTOS; FLOTA; ORIGEN; DESTINOS',n:'Solo lectura.'},
-  usuarios:{s:'scr_Usuarios',d:'USUARIOS · ACCESO_CLIENTE · PERMISOS',f:'LookUp(PERMISOS; Rol=gblRol && Permiso="liq_aprobar").Habilitado',n:'Solo el rol con permisos_gestionar puede cambiar la matriz; cada cambio queda en AUDITORIA.'},
-  auditoria:{s:'scr_Auditoria',d:'AUDITORIA',f:'SortByColumns(AUDITORIA; "FechaHora"; Descending)',n:'La tabla debe ser de solo agregar (sin permiso de editar/eliminar para nadie).'},
-  finanzas:{s:'scr_Finanzas',d:'VIAJES · AGRUPACIONES_COMERCIALES · COBROS · PAGOS',f:'finCalc(VIAJES; AGRUPACIONES; PAGOS; filtros)',n:'Cada factura se suma una sola vez; un dato faltante nunca se toma como cero. Cálculo y permisos deben ejecutarse en el servidor.'},
-  opl:{s:'scr_OPL',d:'TARIFAS · VIAJES · ÓRDENES_PAGO',f:'Filter(TARIFAS; Proyecto in gblProyectosAsignados)',n:'Solo el proceso del proveedor (OPL): no expone la tarifa de cobro al cliente.'},
-  rutas:{s:'scr_Rutas',d:'RUTAS · NOTIFICACIONES',f:'Filter(RUTAS; Cliente in gblClientesAsignados && Proyecto in gblProyectosAsignados)',n:'Las notificaciones requieren un flujo de Power Automate (correo/Teams) para salir de la aplicación.'},
-  modelo:{s:'scr_Modelo',d:'—',f:'',n:'Pantalla de documentación.'}
-};
-function archBar(){
-  if(!PREF.arch)return'';const a=ARCH[S.view];if(!a)return'';
-  return `<aside class="arch"><b>Power Apps</b> · Pantalla <code>${a.s}</code> · Origen de datos <code>${a.d}</code>${a.f?`<br><code>${esc(a.f)}</code>`:''}${a.n?`<br>${esc(a.n)}`:''}</aside>`;
-}
 
 const VIEWS={},BODY={};
 /* ---- Login ---- */
 function loginHTML(){
   const sb=BACKEND.modo==='supabase';
-  let host='';if(sb){try{host=new URL(MASTER_CONFIG.SUPABASE_URL).host;}catch(e){}}
+
   const demo=sb?'':DB.usuarios.filter(u=>u.activo).map(u=>`<button type="button" data-act="fill" data-u="${u.usuario}"><b>${esc(first(u.nombre))}</b><small>${esc(rolL(u.rol))}${cliLista(u)}</small></button>`).join('');
   const inst=PWA.puedeMostrarInstalar()?`<button class="btn" type="button" data-act="${PWA.prompt?'instalar':'instalarAyuda'}" style="width:100%;margin-top:14px">${icon('phone',18)} ${PWA.prompt?'Instalar aplicación':'Cómo instalar la aplicación'}</button>`:'';
   return `<div class="login">
@@ -140,7 +117,7 @@ function loginHTML(){
     <section class="lf"><div class="box">
       <img class="brandc" src="${LOGO_COLOR}" alt="In Transit · innovative outsourcing" width="280" height="95">
       <h2>Ingresar</h2>
-      <div class="cnx ${sb?'':'demo'}">${sb?`Servidor configurado: <b>${esc(host)}</b>`:(SIN_DEMO?'<b>Sin configurar.</b> Falta la conexión con Supabase: escribe la URL y la clave publishable en <code>js/config.js</code> (consulta el README).':'<b>Modo demostración.</b> Los datos son de ejemplo y viven solo en este navegador: no es una base de datos real.')}</div>
+
       <form id="loginform" autocomplete="off">
         <div class="fgroup"><label for="u">${sb?'Correo electrónico':'Usuario'}</label><input type="${sb?'email':'text'}" id="u" value="${esc(S.loginU)}" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="${sb?'username':'off'}" enterkeyhint="next"></div>
         <div class="fgroup"><label for="p">Contraseña</label><input type="password" id="p" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="${sb?'current-password':'off'}" enterkeyhint="go"></div>
@@ -566,7 +543,7 @@ function menuHTML(){
   return `<div class="mback" data-act="menuClose"></div><div class="menu" role="menu">
     ${u?`<div class="mh"><b>${esc(u.nombre)}</b><small>${esc(rolL(u.rol))}</small></div>`:`<div class="mh"><b>Opciones</b></div>`}
     <button data-act="togglePhone">${icon('phone',18)} Vista teléfono<span class="tag">${PREF.phone?'Activada':'Desactivada'}</span></button>
-    <button data-act="toggleArch">${icon('code',18)} Notas de arquitectura<span class="tag">${PREF.arch?'Activadas':'Desactivadas'}</span></button>
+    <button data-act="toggleTema" aria-pressed="${temaActual()==='claro'}">${icon(temaActual()==='claro'?'moon':'sun',18)} ${temaActual()==='claro'?'Modo oscuro':'Modo claro'}<span class="tag">${temaActual()==='claro'?'Claro':'Oscuro'}</span></button>
     ${PWA.puedeMostrarInstalar()?`<button data-act="${PWA.prompt?'instalar':'instalarAyuda'}">${icon('phone',18)} ${PWA.prompt?'Instalar aplicación':'Cómo instalar la aplicación'}</button>`:''}
     ${(BACKEND.modo==='demo'&&typeof seedDB==='function'&&(!u||u.rol==='ADMIN'))?`<button data-act="reset">${icon('undo',18)} Reiniciar datos de ejemplo</button>`:''}
     ${u?`<button data-act="logout">${icon('out',18)} Cerrar sesión</button>`:''}</div>`;
@@ -639,6 +616,16 @@ function headerHTML(){
     <button class="bell" data-act="notifOpen" aria-label="Notificaciones${notifData().filter(n=>!n.leida).length?' ('+notifData().filter(n=>!n.leida).length+' sin leer)':''}">${icon('bell',20)}${notifData().filter(n=>!n.leida).length?`<span class="bcount">${notifData().filter(n=>!n.leida).length}</span>`:''}</button>
     <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(rolL(u.rol))}${cliLista(u)}</span></span></button></header>`;
 }
+/* Tema de la aplicación: claro u oscuro. Sin elección guardada se sigue el modo del sistema (el CSS ya lo hace);
+   la elección del usuario manda con data-theme en la raíz. */
+function temaActual(){
+  if(PREF.tema==='claro'||PREF.tema==='oscuro')return PREF.tema;
+  try{return typeof window.matchMedia==='function'&&window.matchMedia('(prefers-color-scheme:dark)').matches?'oscuro':'claro';}catch(e){return 'claro';}
+}
+function aplicarTema(){
+  try{const t=PREF.tema==='claro'?'light':PREF.tema==='oscuro'?'dark':'';const d=document.documentElement;
+    if(t)d.dataset.theme=t;else delete d.dataset.theme;}catch(e){}
+}
 /* ---- Perfil «Administrador»: menú lateral agrupado por módulos. Solo reordena el acceso a pantallas que YA existen;
    cada opción respeta los mismos permisos de siempre (allowed) y los demás perfiles conservan su menú tal cual. ----
    v: pantalla existente · l: etiqueta si difiere de la habitual · k: clave propia cuando dos opciones abren la misma pantalla · tab: pestaña con la que abre */
@@ -686,6 +673,7 @@ function render(){
   document.body.classList.toggle('mob',movil);
   document.body.classList.toggle('nav-open',!!(movil&&S.nav));
   const root=$('#app');
+  aplicarTema();
   /* El diálogo abierto conserva su desplazamiento al re-renderizar (mover un cliente o proyecto refresca el
      formulario: antes volvía al principio y había que bajar de nuevo hasta la lista de asignados). */
   const dlgPrev=$('.dlg'),claveModal=S.modal?((S.modal.type||'')+':'+(S.modal.act||'')+':'+(S.modal.id||'')):'';
@@ -694,7 +682,7 @@ function render(){
   if(!S.user||S.view==='login'){root.innerHTML=bannerHTML()+loginHTML()+menuHTML();return;}
   if(!allowed(S.view)){S.view=homeOf(S.user);S.param=null;}
   const prev=$('#main'),keep=prev&&S._lv===S.view&&S._lp===S.param,st=keep?prev.scrollTop:0;
-  root.innerHTML=bannerHTML()+headerHTML()+`<div class="body">${navHTML()}${movil&&S.nav?'<div class="mback" data-act="navClose"></div>':''}<main id="main" class="main">${archBar()}${VIEWS[S.view]()}</main></div>`+modalHTML()+menuHTML();
+  root.innerHTML=bannerHTML()+headerHTML()+`<div class="body">${navHTML()}${movil&&S.nav?'<div class="mback" data-act="navClose"></div>':''}<main id="main" class="main">${VIEWS[S.view]()}</main></div>`+modalHTML()+menuHTML();
   S._lv=S.view;S._lp=S.param;
   if(keep){const m=$('#main');if(m)m.scrollTop=st;}
   reponer();
@@ -789,7 +777,8 @@ const ACT={
   async navClose(){S.nav=false;render();},
   async histReintentar(){S.finHist=undefined;S.finHistErr='';S.finHistCargando=false;S.graf=null;render();},
   async togglePhone(){PREF.phone=!PREF.phone;savePref();S.menu=false;render();},
-  async toggleArch(){PREF.arch=!PREF.arch;savePref();S.menu=false;render();},
+  /* Modo claro / oscuro: se guarda en las preferencias del equipo y se aplica al instante en toda la app. */
+  async toggleTema(){PREF.tema=temaActual()==='claro'?'oscuro':'claro';savePref();aplicarTema();S.menu=false;render();},
   async reset(){
     if(S.user&&S.user.rol!=='ADMIN')return;
     seedDB();syncRefs();S.form=null;S.draft={};S.sel=[];S.menu=false;S.modal=null;S.edit=null;

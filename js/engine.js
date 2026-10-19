@@ -17,7 +17,7 @@
 const DB_VERSION=8;
 /* Ganchos del entorno (el servidor los reemplaza): verificación de archivos en el almacenamiento protegido */
 const ENV={storageExists:()=>false};
-let DB=null,PROYECTOS=[],PROYECTOS_X={},PREF={phone:false,arch:false},CLOCK=null;
+let DB=null,PROYECTOS=[],PROYECTOS_X={},PREF={phone:false,arch:false,tema:''},CLOCK=null;
 class ApiError extends Error{constructor(code,msg){super(msg);this.code=code;this.name='ApiError';}}
 const nowIso=()=>CLOCK?CLOCK():new Date().toISOString();
 const nowLoc=()=>toLocal(new Date(nowIso()));
