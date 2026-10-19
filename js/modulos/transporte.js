@@ -587,7 +587,7 @@ Object.assign(ACT,{
   async rutaValidarOpen(d){
     const r=DB.rutas.find(x=>x.id===d.id);if(!r)return;
     formM({title:`Validar y asignar · ${r.nombre}`,text:`${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente)} · ${esc(r.proyecto)}. Solicitada por ${esc(r.solicitadaPor)}.<br>Origen propuesto: <b>${esc(r.origenProp||'no indicado')}</b> · Destino propuesto: <b>${esc(r.destinoProp||'no indicado')}</b>. Al asignarla se completan el origen y el destino de los viajes que la usan. El <b>código se asigna solo</b> (sigla del cliente y correlativo).`,
-      fields:[{k:'origenId',label:'Origen (catálogo)',type:'select',req:1,optsFn:optsOrigenes,ph:'Selecciona el origen'},{k:'destinoId',label:'Destino (catálogo del cliente)',type:'select',req:1,optsFn:()=>optsDestinos({cliente:r.cliente}),ph:'Selecciona el destino'}],
+      fields:[{k:'origenId',label:'Origen (del cliente)',type:'select',req:1,optsFn:()=>optsOrigenes({cliente:r.cliente}),ph:'Selecciona el origen'},{k:'destinoId',label:'Destino (catálogo del cliente)',type:'select',req:1,optsFn:()=>optsDestinos({cliente:r.cliente}),ph:'Selecciona el destino'}],
       data:{origenId:'',destinoId:''},ok:'VALIDAR Y ASIGNAR',okCls:'ok',act:'rutaValidarOk',id:r.id});
   },
   async rutaValidarOk(d){const m=S.modal.data;const r=await run(()=>API.validarRuta(S.user.id,d.id,m),x=>`Ruta ${x.codigo} asignada: los viajes asociados ya tienen origen y destino.`,true);if(r.ok)afterWrite();},

@@ -513,17 +513,17 @@ function flePanel(){
 }
 VIEWS.catalogos=()=>{
   const k0=S.tab.cat||'pil',verFle=hp('catalogos_ver')||hp('finanzas_ver'),k=(k0==='fle'&&!verFle)?'pil':k0;
-  const T=[{k:'pil',l:'PILOTOS',f:()=>true},{k:'flo',l:'FLOTA',f:()=>true},{k:'ori',l:'ORIGEN',f:()=>true},{k:'des',l:'DESTINOS',f:()=>true},{k:'cat',l:'CATALOGO (listas)',f:()=>true},...(verFle?[{k:'fle',l:'FLEETIO',f:()=>true}]:[])];
+  const T=[{k:'pil',l:'PILOTOS',f:()=>true},{k:'flo',l:'FLOTA',f:()=>true},{k:'lug',l:'LUGARES',f:()=>true},{k:'cat',l:'CATALOGO (listas)',f:()=>true},...(verFle?[{k:'fle',l:'FLEETIO',f:()=>true}]:[])];
   const tb=(h,rows,key)=>{const pg=paginar(key||'cat',rows);return `<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${pg.filas.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${paginador(key||'cat',pg)}`;};
   const pn=id=>esc((PROYECTOS.find(p=>p.id===id)||{}).nombre||id);
   const body={
     pil:tb(['Id','Piloto','Unidad asignada','Proyecto'],PILOTOS.map(p=>[p.id,esc(p.nombre),p.unidad?esc(p.unidad):'<span class="mute">Sin unidad</span>',pn(p.proyecto)]),'catpil'),
     flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)]),'catflo'),
-    ori:`${puedeEditarListas()?`<div style="margin-bottom:8px"><button class="btn sm" data-act="catalogoOpen" data-k="origen">Editar orígenes</button></div>`:''}${tb(['Origen'],ORIGENES.map(o=>[esc(o.nombre)]),'catori')}`,
+    lug:`${puedeEditarListas()?`<div style="margin-bottom:8px"><button class="btn sm primary" data-act="lugarOpen">Agregar lugar</button></div>`:''}${tb(['Id','Cliente','Tipo','Lugar','Dirección','Estado',''],(DB.lugares||[]).slice().sort((a,b)=>String(a.cliente+a.tipo+a.nombre).localeCompare(String(b.cliente+b.tipo+b.nombre),'es')).map(l=>[esc(l.id),pn(l.cliente),l.tipo==='ORIGEN'?'Origen':'Destino',esc(l.nombre),esc(l.direccion||''),l.activo!==false?'Activo':'Inactivo',puedeEditarListas()?`<button class="btn sm ghost" data-act="lugarOpen" data-id="${esc(l.id)}">Editar</button>`:'']),'catlug')}`,
     cat:`<div class="grid g2">${Object.entries({'clientes':'CLIENTES','proyectos':'PROYECTOS','tipoUnidad':'TIPO DE UNIDAD','opl':'OPL · TRANSPORTISTAS','tipoCarga':'TIPO CARGA','tipoViaje':'TIPO DE VIAJE','arrastre':'EQUIPOS DE ARRASTRE (PLACAS)'}).map(([k,n])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${(CAT[k]||[]).length}</span>${puedeEditarListas()?` <button class="btn sm ghost" data-act="catalogoOpen" data-k="${k}">Editar</button>`:''}</h3><div class="bgs">${(CAT[k]||[]).map(x=>`<span class="est">${esc(x)}</span>`).join('')||'<span class="mute">Sin valores</span>'}</div>${LISTAS_SISTEMA.includes(k)?'<div class="mute" style="font-size:12px;margin-top:6px">Se guarda en la base y la app lo usa de inmediato.</div>':'<div class="mute" style="font-size:12px;margin-top:6px">Se arma solo con la ficha de cada cliente.</div>'}</div>`).join('')}</div>`,
-    des:tb(['Id','Destino','Proyecto'],DESTINOS.map(d=>[d.id,esc(d.nombre),pn(d.proyecto)]),'catdes'),fle:flePanel()}[k];
+    fle:flePanel()}[k];
   return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; todos vienen de la base (Supabase)')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
-    <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS, FLOTA y DESTINOS se leen de sus tablas; las listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje y orígenes) se guardan en la tabla <code>catalogos</code> y se editan desde aquí. CLIENTES y PROYECTOS se arman con la ficha de cada cliente.</div></div>`;
+    <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS y FLOTA se leen de sus tablas; los <b>LUGARES</b> (orígenes y destinos, por cliente) se administran en esta pantalla y las rutas/viajes apuntan a ellos; las listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje y arrastre) se guardan en <code>catalogos</code>. CLIENTES y PROYECTOS se arman con la ficha de cada cliente.</div></div>`;
 };
 
 /* ---- Notificaciones (solo dentro de la aplicación) ---- */
@@ -731,12 +731,30 @@ async function doLogin(){
 const optsClientes=()=>clientesAsig(S.user).map(id=>{const c=DB.clientes.find(x=>x.id===id);return c&&c.activo!==false?{id,nombre:c.cliente+' ('+c.nombre+')'}:null;}).filter(Boolean);
 const optsProyectos=d=>d.cliente?proyectosAsig(S.user,d.cliente).map(p=>({id:p,nombre:p})):[];
 const optsDestinos=d=>DESTINOS.filter(x=>x.proyecto===d.cliente).map(x=>({id:x.id,nombre:x.nombre}));
-const optsOrigenes=()=>ORIGENES.map(o=>({id:o.id,nombre:o.nombre}));
+const optsOrigenes=d=>d&&d.cliente?ORIGENES.filter(x=>x.proyecto===d.cliente).map(x=>({id:x.id,nombre:x.nombre})):[];
 const puedeEditarListas=()=>hp('catalogos_editar');
 const ACT={
   /* Entrar a la aplicación (botón INGRESAR del formulario de acceso) */
   login:doLogin,
-  /* editar una lista del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje, orígenes) */
+  /* alta/edición de un lugar (origen o destino) del catálogo */
+  async lugarOpen(d){
+    if(!puedeEditarListas()){toast('Tu perfil no puede administrar los lugares.','err');return;}
+    const l=d.id?(DB.lugares||[]).find(x=>x.id===d.id):null;
+    formM({title:l?('Lugar · '+l.nombre):'Nuevo lugar',
+      text:'Los orígenes y destinos son por cliente. El cliente y el tipo no se cambian después de crear el lugar.',
+      fields:[{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:optsClientes,ph:'Selecciona el cliente'},
+              {k:'tipo',label:'Tipo',type:'select',req:1,opts:[{id:'ORIGEN',nombre:'Origen'},{id:'DESTINO',nombre:'Destino'}]},
+              {k:'nombre',label:'Nombre del lugar',req:1},
+              {k:'direccion',label:'Dirección (opcional)'}],
+      data:{cliente:l?l.cliente:'',tipo:l?l.tipo:'ORIGEN',nombre:l?l.nombre:'',direccion:l?(l.direccion||''):''},
+      ok:'GUARDAR LUGAR',act:'lugarSave',id:l?l.id:''});
+  },
+  async lugarSave(d){
+    const m=S.modal;if(!m)return;const x=m.data;
+    const r=await run(()=>API.guardarLugar(S.user.id,{id:d.id||'',cliente:x.cliente,tipo:x.tipo,nombre:x.nombre,direccion:x.direccion}),'Lugar guardado.');
+    if(r.ok){try{await BACKEND.refrescar();}catch(e){/* quedó guardado */}afterWrite();}
+  },
+  /* editar una lista del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje) */
   async catalogoOpen(d){
     if(!puedeEditarListas()){toast('Tu perfil no puede editar las listas.','err');return;}
     const clave=String(d.k||'');
@@ -888,7 +906,7 @@ app.addEventListener('change',async e=>{
     return;
   }
   if(t.dataset.mf&&S.modal){const k=t.dataset.mf;S.modal.data[k]=t.type==='checkbox'?t.checked:t.value;
-    if(S.modal.rerender&&S.modal.rerender.includes(k)){if(k==='cliente'){S.modal.data.proyecto='';S.modal.data.rutaId='';S.modal.data.destinoId='';}if(k==='proyecto')S.modal.data.rutaId='';render();return;}
+    if(S.modal.rerender&&S.modal.rerender.includes(k)){if(k==='cliente'){S.modal.data.proyecto='';S.modal.data.rutaId='';S.modal.data.destinoId='';S.modal.data.origenId='';if(S.modal.data.desvioDestinoId)S.modal.data.desvioDestinoId='';}if(k==='proyecto')S.modal.data.rutaId='';render();return;}
     updateLive();return;}
   if(t.dataset.mfm&&S.modal){const k=t.dataset.mfm;
     if(t.tagName==='SELECT'&&t.multiple){S.modal.data[k]=Array.from(t.selectedOptions).map(o=>o.value);}
