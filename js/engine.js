@@ -175,6 +175,7 @@ const ayudaModulosDe=A=>{
 
 const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos','gastosAdicionales'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
+const TIEMPO_DV_KEYS=[...TIEMPO_KEYS,...DVKEYS];   /* + horarios de descarga del desvío (solo viajes con Desvío) */
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 /* Estados que se pueden corregir a mano (con el permiso viajes_editar_estado). Los demás los genera el flujo:
    LIQUIDADO (liquidación enviada), RECHAZADO (liquidación devuelta), ACEPTADO (liquidación aprobada),
@@ -323,7 +324,7 @@ function fmtVal(k,v){
   if(k==='pilotoId')return (PILOTOS.find(p=>p.id===v)||{}).nombre||v;
   if(k==='origenId')return (ORIGENES.find(o=>o.id===v)||{}).nombre||v;
   if(k==='destinoId')return (DESTINOS.find(o=>o.id===v)||{}).nombre||v;
-  if(TIEMPO_KEYS.includes(k))return fmtL(v);
+  if(TIEMPO_DV_KEYS.includes(k))return fmtL(v);
   if(k==='gastosAdicionales')return Array.isArray(v)&&v.length?v.map(x=>`${x.concepto}: Q ${x.importe}`).join(' · '):'(vacío)';
   return String(v);
 }
@@ -370,7 +371,7 @@ function valKey(cliente,k,v){
     case 'pilotoId':{const P=PILOTOS.find(p=>p.id===v);if(!P)return 'Piloto no válido.';if(P.proyecto!==cliente)return 'El piloto no pertenece a este cliente.';break;}
     case 'origenId':if(!ORIGENES.some(o=>o.id===v))return 'Origen no válido.';break;
     case 'destinoId':{const D=DESTINOS.find(o=>o.id===v);if(!D)return 'Destino no válido.';if(D.proyecto!==cliente)return 'El destino no pertenece a este cliente.';break;}
-    default:if(TIEMPO_KEYS.includes(k)){if(k==='fechaPlan'&&vacio)return 'La fecha plan es obligatoria.';if(!vacio&&!RX_DT.test(v))return `${LBL[k]}: fecha y hora no válidas.`;}
+    default:if(TIEMPO_DV_KEYS.includes(k)){if(k==='fechaPlan'&&vacio)return 'La fecha plan es obligatoria.';if(!vacio&&!RX_DT.test(v))return `${LBL[k]}: fecha y hora no válidas.`;}
   }
   return '';
 }
@@ -733,7 +734,7 @@ const API={
       if(e.entidad==='AGRUPACION'&&!comercial)continue;
       if(e.entidad==='FINANZAS'&&!verMoney)continue;
       if(MONEY_LBL.includes(e.campo)&&!((e.campo==='Q viáticos'||e.campo==='Gastos adicionales')?verViat:verMoney))continue;
-      if(soloTiempos&&!TIEMPO_KEYS.some(k=>LBL[k]===e.campo))continue;
+      if(soloTiempos&&!TIEMPO_DV_KEYS.some(k=>LBL[k]===e.campo))continue;
       let a=porViaje.get(e.viajeId);if(!a){a=[];porViaje.set(e.viajeId,a);}a.push(e);
     }
     return porViaje;
@@ -768,7 +769,7 @@ const API={
     if(!cl)deny('Cliente no válido.','VALIDACION');
     if(cl.activo===false)deny('El cliente está desactivado: no admite viajes nuevos.','VALIDACION');
     if(!clientesAsig(A).includes(cliente))deny('No tienes asignado ese cliente: no puedes crear viajes para él.');
-    const keys=[...DATA_KEYS,...TIEMPO_KEYS,'rutaRef','sinRuta','desvio','desvioDestinoId'];
+    const keys=[...DATA_KEYS,...TIEMPO_KEYS,...DVKEYS,'rutaRef','sinRuta','desvio','desvioDestinoId'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origenId'||k==='destinoId'?'El origen y el destino se completan solos a partir de la ruta: no se escriben a mano.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
     /* El viaje nace Planificado: los demás estados los produce el flujo paso a paso (en ruta, entregado,
@@ -787,6 +788,12 @@ const API={
       const Dv=DESTINOS.find(o=>o.id===dvId);
       if(!Dv||Dv.proyecto!==cliente)deny('El destino del desvío no es válido para este cliente.','VALIDACION');
     }
+    /* Horarios de descarga del desvío: solo con Desvío activo; solo descarga; en orden y sin reemplazar los horarios normales. */
+    const dvT={};DVKEYS.forEach(k=>{const x=String(v[k]==null?'':v[k]).trim();if(x)dvT[k]=x;delete v[k];});
+    if(!desvio&&Object.keys(dvT).length)deny('Los horarios de descarga del desvío solo se registran cuando el viaje tiene Desvío.','VALIDACION');
+    Object.keys(dvT).forEach(k=>{const m=valKey(cliente,k,dvT[k]);if(m)deny(m,'VALIDACION');});
+    if(dvT.dvIngresoBodega&&dvT.dvInicioDescarga&&dvT.dvInicioDescarga<dvT.dvIngresoBodega)deny('Desvío: el inicio de descarga no puede ser antes del ingreso a bodega.','VALIDACION');
+    if(dvT.dvInicioDescarga&&dvT.dvFinDescarga&&dvT.dvFinDescarga<dvT.dvInicioDescarga)deny('Desvío: el fin de descarga no puede ser antes del inicio de descarga.','VALIDACION');
     keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestinoId'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
     let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
     if(sinRuta){if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para registrar un viaje SIN RUTA selecciona el proyecto.','VALIDACION');}
@@ -805,7 +812,7 @@ const API={
     if(!t.unidadId)t.unidadId=P?P.unidad:'';            /* si no se eligió placa, se usa la unidad del piloto */
     t.notaPiloto=notaPilotoDe(t);                        /* constancia si el piloto no es el asignado a la unidad */
     if(sinRuta){t.sinRuta=true;t.sinRutaPor=A.nombre;t.sinRutaEn=t.creadoEn;}
-    if(desvio){t.desvio=true;t.desvioDestinoId=dvId;t.desvioPor=A.nombre;t.desvioEn=t.creadoEn;}
+    if(desvio){t.desvio=true;t.desvioDestinoId=dvId;t.desvioPor=A.nombre;t.desvioEn=t.creadoEn;Object.assign(t,dvT);}
     DB.trips.push(t);
     auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}${sinRuta?' · SIN RUTA':''}${desvio?' · DESVÍO → '+nombreDestino(dvId):''}`});
     if(sinRuta&&!DB.notificaciones.some(n=>n.tipo==='VIAJE_SIN_RUTA'&&n.detalle&&n.detalle.viaje===id)){
@@ -937,7 +944,7 @@ const API={
     if(!cl.torreEstatus)deny(`Torre de Control solo edita horarios de los clientes autorizados. ${cl.cliente||t.proyecto} es solo consulta.`,'CLIENTE_NO_AUTORIZADO');
     if(['FACTURADO','COBRADO'].includes(t.estado))deny('El viaje ya fue facturado: sus fechas y horas ya no se pueden modificar.','ESTADO_BLOQUEADO');
     const ks=Object.keys(cambios||{});if(!ks.length)deny('No hay cambios que guardar.','VALIDACION');
-    ks.forEach(k=>{if(!TIEMPO_KEYS.includes(k))deny(`El campo "${LBL[k]||k}" no es una fecha ni un horario: Torre de Control no puede editarlo.`,'CAMPO_NO_EDITABLE');});
+    ks.forEach(k=>{if(DVKEYS.includes(k)){if(!t.desvio)deny('Este viaje no tiene Desvío: no tiene horarios de descarga del desvío.','CAMPO_NO_EDITABLE');return;}if(!TIEMPO_KEYS.includes(k))deny(`El campo "${LBL[k]||k}" no es una fecha ni un horario: Torre de Control no puede editarlo.`,'CAMPO_NO_EDITABLE');});
     const dif=[];
     ks.forEach(k=>{
       const nv=typeof cambios[k]==='string'?cambios[k].trim():cambios[k],ov=t[k]==null?'':t[k];
@@ -946,6 +953,9 @@ const API={
       dif.push([k,ov,nv==null?'':nv]);
     });
     if(!dif.length)return {cambios:0};
+    {const g=k=>{const x=dif.find(z=>z[0]===k);return x?x[2]:(t[k]||'');};
+      if(g('dvIngresoBodega')&&g('dvInicioDescarga')&&g('dvInicioDescarga')<g('dvIngresoBodega'))deny('Desvío: el inicio de descarga no puede ser antes del ingreso a bodega.','VALIDACION');
+      if(g('dvInicioDescarga')&&g('dvFinDescarga')&&g('dvFinDescarga')<g('dvInicioDescarga'))deny('Desvío: el fin de descarga no puede ser antes del inicio de descarga.','VALIDACION');}
     dif.forEach(([k,ov,nv])=>{
       auditAdd({viajeId:t.id,accion:'Fecha/hora modificada (Torre de Control)',campo:LBL[k]||k,anterior:fmtVal(k,ov),nuevo:fmtVal(k,nv),por:A,motivo:motivo||''});
       t[k]=nv;

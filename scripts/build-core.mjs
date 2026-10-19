@@ -28,6 +28,9 @@ ${línea('const CAMPOS_TIEMPO=')}
 ${línea('const TKEYS=')}
 ${línea('const LBL=')}
 ${línea('CAMPOS_TIEMPO.forEach(')}
+${línea('const CAMPOS_TIEMPO_DESVIO=')}
+${línea('const DVKEYS=')}
+${línea('CAMPOS_TIEMPO_DESVIO.forEach(')}
 ${catBloque}
 const FLOTA=[],PILOTOS=[],DESTINOS=[];   /* los carga el servidor desde las tablas flota, pilotos y destinos */
 ${origenes}

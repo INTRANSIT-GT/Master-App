@@ -86,8 +86,8 @@ Object.assign(ACT,{
   /* Editar horarios: ventana con la identificación del viaje, todos sus campos de fecha/hora y el resumen de lo que cambia */
   async torreHorOpen(d){
     const t=DB.trips.find(x=>x.id===d.id);if(!t)return;
-    const j=J(t),ini={};TIEMPO_KEYS.forEach(k=>{ini[k]=t[k]||'';});
-    const difs=m=>TIEMPO_KEYS.filter(k=>String(m[k]||'')!==String(ini[k]||'')).map(k=>({campo:'chg:'+k,msg:`${LBL[k]||k}: ${ini[k]?fmtL(ini[k]):'(vacío)'} → ${m[k]?fmtL(m[k]):'(vacío)'}`}))
+    const j=J(t),ini={},KS=t.desvio?TIEMPO_DV_KEYS:TIEMPO_KEYS;KS.forEach(k=>{ini[k]=t[k]||'';});
+    const difs=m=>KS.filter(k=>String(m[k]||'')!==String(ini[k]||'')).map(k=>({campo:'chg:'+k,msg:`${LBL[k]||k}: ${ini[k]?fmtL(ini[k]):'(vacío)'} → ${m[k]?fmtL(m[k]):'(vacío)'}`}))
       .concat(m.estadoNuevo?[{campo:'chg:estado',msg:`Estatus: ${ESTADOS[t.estado].l} → ${ESTADOS[m.estadoNuevo].l}`}]:[]);
     /* Estatus: solo el paso siguiente que ya permite Torre (mismas reglas y validaciones que «Enviar a ruta / Confirmar entrega») */
     const sig=TORRE_SIGUIENTE[t.estado];
@@ -95,7 +95,7 @@ Object.assign(ACT,{
     formM({title:`Horarios del viaje #${t.id}`,
       text:`Escribe un horario que falte o corrige uno existente. Se guarda en el viaje y otros usuarios verán el cambio; queda registrado quién lo hizo y el valor anterior.`,
       summary:`<div class="alertbox info" style="margin-bottom:10px"><b>Viaje #${esc(t.id)}</b> · ${esc(j.cliente)} · ${esc(t.proyectoCat)} · Placa <b>${esc(j.f.placa||'—')}</b> · ${esc(ESTADOS[t.estado].l)}</div>`,
-      fields:[...campoEstatus,{k:'fechaPlan',label:'Fecha plan',type:'datetime-local',req:1},...CAMPOS_TIEMPO.map(([k,l])=>({k,label:l,type:'datetime-local'}))],
+      fields:[...campoEstatus,{k:'fechaPlan',label:'Fecha plan',type:'datetime-local',req:1},...CAMPOS_TIEMPO.map(([k,l])=>({k,label:l,type:'datetime-local'})),...(t.desvio?CAMPOS_TIEMPO_DESVIO.map(([k,l])=>({k,label:l,type:'datetime-local'})):[])],
       data:Object.assign({estadoNuevo:''},ini),ancho:'760px',
       live:difs,liveRender:f=>f.length?`<div class="alertbox info" style="margin:10px 0"><b>Cambios por guardar (${f.length}):</b><ul style="margin:4px 0 0 18px;padding:0">${f.map(x=>`<li>${esc(x.msg)}</li>`).join('')}</ul></div>`:`<div class="mute" style="margin:10px 0">Todavía no has cambiado ningún horario.</div>`,
       ok:'GUARDAR CAMBIOS',act:'torreHorGuardar',id:t.id,ini});
@@ -103,7 +103,7 @@ Object.assign(ACT,{
   async torreHorGuardar(d){
     const m=S.modal;if(!m)return;
     if(m.guardando)return;                                   /* un doble clic no guarda dos veces */
-    const cambios={};TIEMPO_KEYS.forEach(k=>{if(String(m.data[k]||'')!==String(m.ini[k]||''))cambios[k]=m.data[k]||'';});
+    const cambios={};TIEMPO_DV_KEYS.forEach(k=>{if(!(k in m.ini))return;if(String(m.data[k]||'')!==String(m.ini[k]||''))cambios[k]=m.data[k]||'';});
     const nuevo=m.data.estadoNuevo||'';
     if(!Object.keys(cambios).length&&!nuevo){m.err='No hay cambios que guardar.';render();return;}
     if('fechaPlan' in cambios&&!cambios.fechaPlan){m.err='La fecha plan es obligatoria.';render();return;}

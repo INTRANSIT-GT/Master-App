@@ -63,6 +63,10 @@ const DUR=[['Espera de rampa','tEsperaRampa','tRampa'],['En rampa','tRampa','tSa
 const GRUPOKEYS={cliente:['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto'],plan:['fechaPlan'],unidad:['pilotoId','unidadId','placaArrastre'],ruta:['rutaId'],tiempos:TKEYS,otros:['noDocRetorno','qViaticos','gastosAdicionales']};
 const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'Cantidad de carga',producto:'Producto',fechaPlan:'Fecha plan',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
 CAMPOS_TIEMPO.forEach(([k,l])=>LBL[k]=l);
+/* Horarios de DESCARGA del desvío (solo cuando el viaje tiene Desvío). Se guardan en el mismo viaje (viajes.extra); no reemplazan los horarios normales. */
+const CAMPOS_TIEMPO_DESVIO=[['dvIngresoBodega','Ingreso a bodega (desvío)'],['dvInicioDescarga','Inicio de descarga (desvío)'],['dvFinDescarga','Fin de descarga (desvío)']];
+const DVKEYS=CAMPOS_TIEMPO_DESVIO.map(x=>x[0]);
+CAMPOS_TIEMPO_DESVIO.forEach(([k,l])=>LBL[k]=l);
 
 function sampleSlip(no){
   const bars=[0,1,2,3,4,5,6].map(i=>`<rect x="48" y="${250+i*34}" width="${300+((i*53)%180)}" height="9" rx="4" fill="#C9CFD8"/><rect x="430" y="${250+i*34}" width="120" height="9" rx="4" fill="#D8DDE4"/>`).join('');

@@ -42,7 +42,7 @@ function initForm(){
   const d=new Date();d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
     const m={proyecto:esEnc()?(clientesAsig(S.user).length===1?clientesAsig(S.user)[0]:''):(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',estado:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',placaArrastreOtro:'',
     fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',placaSel:'',rutaId:'',rutaRef:'',sinRuta:false,desvio:false,desvioDestinoId:'',noDocRetorno:'',qViaticos:'',gastosAdicionales:[],savedId:null,err:''};
-  TKEYS.forEach(k=>m[k]='');
+  TKEYS.forEach(k=>m[k]='');DVKEYS.forEach(k=>m[k]='');
   const pc=usaCombo()?(m.proyecto?proyectosAsig(S.user,m.proyecto):[]):PROYECTOS_X[m.proyecto];if(pc&&pc.length===1)m.proyectoCat=pc[0];
   return m;
 }
@@ -332,7 +332,7 @@ function fieldsHTML(M,groups,dis){
       ${hp('viajes_editar_estado')&&S.edit?`<div class="row2">${sel('estado','Estado',Object.keys(ESTADOS).map(k=>({id:k,nombre:ESTADOS[k].l})))}</div>`:''}
       <div class="row2">${sel('tipoViaje','Tipo de viaje',CAT.tipoViaje,{src:'CATALOGO'})}${sel('tipoCarga','Tipo de carga',CAT.tipoCarga,{src:'CATALOGO'})}</div>
       <div class="row2">${txt('noCarga','Cantidad de carga',{type:'number',num:1,hint:'Cantidad, según el tipo de carga'})}</div>
-      <div class="row2">${txt('producto','Producto')}${txt('noViaje','Referencia interna (opcional)')}</div></div>`;
+      <div class="row2">${txt('producto','Producto')}</div></div>`;
   }
   if(has('plan')){
     h+=`<div class="card fsec"><h3>Fecha plan</h3>
@@ -402,6 +402,8 @@ function fieldsHTML(M,groups,dis){
     h+=`<div class="card fsec"><h3>Horarios del viaje</h3><div class="lead">Llena cada hora cuando ocurra: toca “Ahora” o escríbela. Puedes dejarlas vacías al registrar el viaje y completarlas después. Los tiempos de abajo se calculan solos.</div>
       <div class="tgrid">${CAMPOS_TIEMPO.map(([k,l])=>`<div class="fgroup"><label for="m_${k}">${lblT(l)}</label><div class="trow"><input type="datetime-local" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${d}><button type="button" class="btn sm" data-act="ahora" data-k="${k}" ${d}>Ahora</button><button type="button" class="btn ghost sm" data-act="limpiar" data-k="${k}" aria-label="Borrar ${lblT(l)}" ${d}>×</button></div></div>`).join('')}</div>
       <h3 style="margin-top:8px;font-size:14px">Tiempos calculados</h3>${dursHTML(M)}</div>`;
+    if(M.desvio&&!S.edit)h+=`<div class="card fsec"><h3>Horarios de descarga del desvío</h3><div class="lead">Solo las horas de la descarga en el destino del desvío. Son aparte de los horarios del viaje y no los reemplazan. Puedes dejarlas vacías y completarlas después.</div>
+      <div class="tgrid">${CAMPOS_TIEMPO_DESVIO.map(([k,l])=>`<div class="fgroup"><label for="m_${k}">${lblT(l)}</label><div class="trow"><input type="datetime-local" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${d}><button type="button" class="btn sm" data-act="ahora" data-k="${k}" ${d}>Ahora</button><button type="button" class="btn ghost sm" data-act="limpiar" data-k="${k}" aria-label="Borrar ${lblT(l)}" ${d}>×</button></div></div>`).join('')}</div></div>`;
   }
   if(has('otros')){
     h+=`<div class="card fsec"><h3>Retorno y viáticos</h3><div class="row2">${txt('noDocRetorno','No. doc retorno')}${txt('qViaticos','Q viáticos',{type:'number',num:1,hint:'Monto en quetzales'})}</div>${gastosFormHTML(M,d)}</div>`;
@@ -532,7 +534,7 @@ Object.assign(ACT,{
       f.err=ps.length>1?'Esta placa tiene más de un piloto asignado: elige el piloto del viaje.':'Esta placa no tiene un piloto asignado para este cliente: elige otra placa o pide a la administradora que asigne la unidad a un piloto.';render();topScroll();return;}
     const d={cliente:f.proyecto,fechaPlan:f.fechaPlanD&&f.fechaPlanT?f.fechaPlanD+'T'+f.fechaPlanT:'',rutaRef:f.rutaRef||''};
     [...DATA_KEYS,...TKEYS].forEach(k=>{d[k]=f[k];});
-    d.desvio=!!f.desvio;if(f.desvio)d.desvioDestinoId=f.desvioDestinoId||'';   /* Desvío: sin él activo no se envía nada más */
+    d.desvio=!!f.desvio;if(f.desvio){d.desvioDestinoId=f.desvioDestinoId||'';DVKEYS.forEach(k=>{d[k]=f[k]||'';});}   /* Desvío: sin él activo no se envía nada más */
     d.sinRuta=!!f.sinRuta;                         /* SIN RUTA: se guarda con el viaje y avisa a Gerencia */
     if(f.sinRuta)d.rutaId='';
     d.unidadId=f.placaSel||'';                     /* la placa elegida es la unidad del viaje */
@@ -544,7 +546,7 @@ Object.assign(ACT,{
   async desvio(){
     if(S.edit)return;
     const M=curModel();if(!M)return;
-    M.desvio=!M.desvio;if(!M.desvio)M.desvioDestinoId='';   /* solo se muestra/oculta el campo: no se toca ningún otro dato */
+    M.desvio=!M.desvio;if(!M.desvio){M.desvioDestinoId='';DVKEYS.forEach(k=>{M[k]='';});}   /* solo se muestra/oculta el campo: no se toca ningún otro dato */
     if('err' in M)M.err='';render();
   },
   async sinRuta(){

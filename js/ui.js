@@ -406,7 +406,7 @@ VIEWS.detalle=()=>{
   const editBtn=!auto&&canEdit(t)?`<button class="btn primary" data-act="editar" data-id="${t.id}">${icon('clock',18)} Editar viaje y horarios</button>`:'';
   const ls=verLiq?liqsOf(t):[];
   let hist=null;try{hist=API.historial(S.user.id,t.id);}catch(e){}
-  if(hist&&rev)hist=hist.filter(e=>!TIEMPO_KEYS.some(k=>LBL[k]===e.campo)&&e.accion!=='Dato actualizado (automático)');
+  if(hist&&rev)hist=hist.filter(e=>!TIEMPO_DV_KEYS.some(k=>LBL[k]===e.campo)&&e.accion!=='Dato actualizado (automático)');
   let agrs=[];if(hp('comercial_ver')){try{agrs=API.agrupaciones(S.user.id).filter(g=>g.viajeIds.includes(t.id));}catch(e){}}
   const liqHTML=ls.length?ls.slice().reverse().map(l=>`<div class="cyc"><div class="tc-top"><b>Envío ${l.ciclo}</b><span class="badge ${l.decision==='APROBADA'?'st-APROBADA':l.decision==='DEVUELTA'?'st-PENDIENTE_CORRECCION':'st-EN_REVISION'}">${l.decision==='APROBADA'?'Aprobada':l.decision==='DEVUELTA'?'Devuelta':'En revisión'}</span></div>
       <div class="cycb">${l.evidencia?`<button class="thumb" style="width:92px;min-height:110px" data-act="photoEv" data-id="${t.id}" data-ev="${l.evidenciaId}" aria-label="Ampliar evidencia"><img src="${l.evidencia}" alt="Evidencia del envío ${l.ciclo}"></button>`:''}
@@ -422,6 +422,7 @@ VIEWS.detalle=()=>{
         ${('qViaticos' in t||(t.gastosAdicionales||[]).length)?kvr('Gastos adicionales',gastosDetalleHTML(t)):''}`;
   const horarios=rev?'':`<div class="card" style="grid-column:1/-1"><h3>Horarios del viaje</h3>
         <dl class="kv" style="grid-template-columns:repeat(2,minmax(0,170px) minmax(0,1fr));gap:8px 14px">${CAMPOS_TIEMPO.map(([k,l])=>kvr(lblT(l),t[k]?fmtL(t[k]):dash)).join('')}</dl>
+        ${t.desvio?`<h3 style="margin:14px 0 6px;font-size:14px">Horarios de descarga del desvío</h3><dl class="kv" style="grid-template-columns:repeat(2,minmax(0,170px) minmax(0,1fr));gap:8px 14px">${CAMPOS_TIEMPO_DESVIO.map(([k,l])=>kvr(lblT(l),t[k]?fmtL(t[k]):dash)).join('')}</dl>`:''}
         ${hp('comercial_agrupar')?'<div class="mute" style="margin-top:8px;font-size:13px">Datos del viaje: solo lectura para tu perfil.</div>':`<h3 style="margin:14px 0 0;font-size:14px">Tiempos calculados</h3><div id="durs_box">${dursHTML(t)}</div>`}</div>`;
   return `<div class="inner">
     <button class="btn ghost sm" data-act="back" style="margin-bottom:12px">${icon('back',16)} ${esc(fromLbl)}</button>
