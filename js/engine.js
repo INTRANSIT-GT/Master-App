@@ -393,14 +393,29 @@ function etapaAgr(g){
 /* Cálculo financiero PURO. Reglas: cada factura se cuenta una sola vez; un dato faltante nunca se trata como cero. */
 function finCalc(trips,agrs,pagos,f){
   f=f||{};
-  const tr=id=>trips.find(t=>t.id===id);
+  /* Índices por identificador: antes cada viaje buscaba sus pagos y su agrupación recorriendo las listas
+     completas (viajes × pagos, viajes × agrupaciones). Con 7.000 viajes eso son millones de comparaciones y la
+     Edge Function se pasaba del límite de CPU (HTTP 546). Con los mapas el resumen queda lineal. */
+  const porId=new Map();for(const t of trips)if(t&&!porId.has(t.id))porId.set(t.id,t);
+  const tr=id=>porId.get(id);
   /* Una agrupación vieja puede no traer la lista de viajes: sin esta red, un dato así rompía todo el resumen. */
   const vIds=a=>Array.isArray(a&&a.viajeIds)?a.viajeIds:[];
+  const pagosDe=new Map();
+  for(const p of pagos){if(p.anulado)continue;const k=p.tipo+'|'+p.viajeId;const l=pagosDe.get(k);if(l)l.push(p);else pagosDe.set(k,[p]);}
+  const sumaDe=new Map(),ultimoDe=new Map();
+  for(const [k,l] of pagosDe){
+    let s=0;for(const p of l)s+=p.monto;sumaDe.set(k,r2(s));
+    const o=l.slice().sort((a,b)=>a.fecha<b.fecha?-1:1),u=o[o.length-1];
+    ultimoDe.set(k,{fecha:u&&u.fecha?u.fecha:'',ref:o.map(x=>x.referencia).join(', ')});
+  }
+  /* Primera agrupación en curso que incluye el viaje (mismo criterio y mismo orden que el .find() anterior). */
+  const agrDe=new Map();
+  for(const a of agrs){if(a.estado!=='ACTIVA'||a.fase==='PREPARADA')continue;for(const i of vIds(a))if(!agrDe.has(i))agrDe.set(i,a);}
   const tIn=t=>{const d=(t.fechaPlan||'').slice(0,10);return (!f.desde||d>=f.desde)&&(!f.hasta||d<=f.hasta)&&(!f.cliente||t.proyecto===f.cliente)&&(!f.proyecto||t.proyectoCat===f.proyecto)&&(!f.proveedor||t.opl===f.proveedor);};
   const T=trips.filter(tIn);
   const A=agrs.filter(a=>a.estado==='ACTIVA'&&a.fase!=='PREPARADA'&&(!f.cliente||a.cliente===f.cliente)&&(!f.proyecto||vIds(a).some(i=>(tr(i)||{}).proyectoCat===f.proyecto))&&(!f.desde||dLoc(a.creadoEn)>=f.desde)&&(!f.hasta||dLoc(a.creadoEn)<=f.hasta));
-  const pg=(tipo,id)=>r2(pagos.filter(p=>p.tipo===tipo&&p.viajeId===id&&!p.anulado).reduce((s,p)=>s+p.monto,0));
-  const lastPg=(tipo,id)=>{const l=pagos.filter(p=>p.tipo===tipo&&p.viajeId===id&&!p.anulado).sort((a,b)=>a.fecha<b.fecha?-1:1);return {fecha:l.length?l[l.length-1].fecha:'',ref:l.map(x=>x.referencia).join(', ')};};
+  const pg=(tipo,id)=>sumaDe.get(tipo+'|'+id)||0;
+  const lastPg=(tipo,id)=>ultimoDe.get(tipo+'|'+id)||{fecha:'',ref:''};
   const estPago=(ob,pa)=>ob==null?'SIN_IMPORTE':pa<=0?'PENDIENTE':pa<ob-0.005?'PARCIAL':'PAGADO';
   const agrRows=A.map(a=>{
     const cob=cobradoDe(a),fact=a.fase==='EMITIDA'?nn(a.importeFacturado):null;
@@ -408,7 +423,7 @@ function finCalc(trips,agrs,pagos,f){
   });
   const tripRows=T.filter(t=>FIN.includes(t.estado)).map(t=>{
     const costo=nn(t.tarifaOpl)!=null?nn(t.tarifaOpl):nn(t.costoProveedor),via=nn(t.qViaticos),pp=pg('PROVEEDOR',t.id),pl=pg('PILOTO',t.id);
-    const ag=agrs.find(a=>a.estado==='ACTIVA'&&a.fase!=='PREPARADA'&&vIds(a).includes(t.id));
+    const ag=agrDe.get(t.id);
     const ingreso=ag?(ag.importesViaje&&ag.importesViaje[t.id]!=null?ag.importesViaje[t.id]:null):nn(t.tarifaCliente);
     const lp=lastPg('PROVEEDOR',t.id),ll=lastPg('PILOTO',t.id);
     return {id:t.id,cliente:t.proyecto,proyecto:t.proyectoCat,periodo:(t.fechaPlan||'').slice(0,7),proveedor:t.opl||'',pilotoId:t.pilotoId,

@@ -75,12 +75,11 @@ const fusionarAuditoria = (cola, viajes) => {
   return [...m.values()].sort((x, y) => x.id < y.id ? -1 : 1);
 };
 /* Cuántos viajes ve este usuario en TODA la base (para poder decir «N de M» en la pantalla). */
-/* Cuántos viajes abarca la base para este perfil (el «M» de «Cargados N de M»). Antes se contaba evaluando la
-   función de RLS viaje por viaje: 2,7 s de promedio con 7.000 viajes y creciendo. Ahora es una sola consulta de
-   conjunto: quien ve todos los viajes cuenta la tabla; el resto, sus clientes y proyectos en una sola pasada
-   (usa el índice ix_viajes_cliente). */
-async function contarVisibles(q, A, db, E) {
-  if (E.hasPerm(A, 'viajes_ver_todos')) { const { rows } = await q('select count(*)::int n from master.viajes'); return rows[0] ? rows[0].n : 0; }
+/* Condición SQL con la MISMA visibilidad que el motor: los clientes y proyectos del perfil, más lo que ve un
+   perfil comercial (viajes ya aceptados/facturados/cobrados). Devuelve null si el perfil no ve ningún viaje.
+   La usan el conteo de «Cargados N de M» y el resumen por mes de la gráfica: así no hace falta cargar y recorrer
+   los 7.000 viajes para contestar esas dos cosas. */
+function filtroVisible(A, db, E) {
   const cli = [...new Set(db.acceso.filter(a => a.userId === A.id).map(a => a.cliente))];
   const proy = [...new Set((A.proyectos || []).filter(Boolean))];
   const partes = [], params = [];
@@ -90,10 +89,16 @@ async function contarVisibles(q, A, db, E) {
     if (proy.length) { params.push(proy); c += ` and v.proyecto_cat = any($${params.length}::text[])`; }
     partes.push('(' + c + ')');
   }
-  /* Un perfil comercial ve además los viajes ya aceptados/facturados/cobrados (la regla del motor, en SQL). */
   if (E.hasPerm(A, 'comercial_ver')) partes.push(`v.estado = any(array['ACEPTADO','FACTURADO','COBRADO'])`);
-  if (!partes.length) return 0;
-  const { rows } = await q(`select count(*)::int n from master.viajes v where ${partes.join(' or ')}`, params);
+  return partes.length ? { sql: partes.join(' or '), params } : null;
+}
+/* Cuántos viajes abarca la base para este perfil (el «M» de «Cargados N de M»). Antes se contaba evaluando la
+   función de RLS viaje por viaje: 2,7 s de promedio con 7.000 viajes y creciendo. */
+async function contarVisibles(q, A, db, E) {
+  if (E.hasPerm(A, 'viajes_ver_todos')) { const { rows } = await q('select count(*)::int n from master.viajes'); return rows[0] ? rows[0].n : 0; }
+  const f = filtroVisible(A, db, E);
+  if (!f) return 0;
+  const { rows } = await q(`select count(*)::int n from master.viajes v where ${f.sql}`, f.params);
   return rows[0] ? rows[0].n : 0;
 }
 
@@ -156,23 +161,32 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
         const puedeFin = E.hasPerm(A, 'finanzas_ver') || E.hasPerm(A, 'tarifas_opl_ver');
         if (!puedeFin && !E.hasPerm(A, 'viajes_ver') && !E.hasPerm(A, 'viajes_ver_todos') && !E.hasPerm(A, 'comercial_ver'))
           return { resp: falla('SIN_PERMISO', 'Tu perfil no puede consultar los viajes.'), commit: false };
+        const todo = E.hasPerm(A, 'viajes_ver_todos');
+        const fv = todo ? null : filtroVisible(A, db, E);
+        /* La gráfica se resume en la base (una sola consulta, agrupada por estado y mes): es lo que ve todo el
+           mundo y así no depende de cargar el histórico entero en memoria. */
+        const consulta = `select v.estado, substring(coalesce(v.fecha_plan,''),1,7) mes, count(*)::int n from master.viajes v`
+          + (fv ? ` where ${fv.sql}` : '') + ' group by 1,2';
+        const filas = (await q(consulta, fv ? fv.params : [])).rows;
+        const porEstado = {}, porMes = {};
+        let total = 0;
+        for (const r of filas) {
+          porEstado[r.estado] = (porEstado[r.estado] || 0) + r.n;
+          total += r.n;
+          if (/^\d{4}-\d{2}$/.test(r.mes)) { const m = porMes[r.mes] = porMes[r.mes] || {}; m[r.estado] = (m[r.estado] || 0) + r.n; }
+        }
+        /* El bloque financiero SÍ necesita el motor (son las mismas reglas que la pantalla de Finanzas), así que
+           se le dejan solo los viajes que este perfil puede ver. */
         const vis = new Set(E.API.listarViajes(actorId).map(t => t.id));
         const B = E.getDB();
         B.trips = B.trips.filter(t => vis.has(t.id));
         if (!(E.hasPerm(A, 'comercial_ver') || E.hasPerm(A, 'finanzas_ver'))) B.agrupaciones = [];
         if (!E.hasPerm(A, 'finanzas_ver')) B.pagos = [];
-        const porEstado = {}, porMes = {};
-        for (const t of B.trips) {
-          porEstado[t.estado] = (porEstado[t.estado] || 0) + 1;
-          /* Resumen por mes (fecha plan) y por estado: es lo que dibuja la gráfica de barras apiladas. */
-          const mes = String(t.fechaPlan || '').slice(0, 7);
-          if (/^\d{4}-\d{2}$/.test(mes)) { const m = porMes[mes] = porMes[mes] || {}; m[t.estado] = (m[t.estado] || 0) + 1; }
-        }
         /* Los números financieros van aparte y protegidos: si algún dato del histórico los rompe, la gráfica
            (que es lo que ve todo el mundo) igual se devuelve, y el motivo viaja en `finError` para mostrarlo. */
         let financiero = null, finError = '';
         if (puedeFin) { try { financiero = E.API.resumenFinanciero(actorId, argsDe(args)); } catch (e) { finError = String((e && e.message) || e).slice(0, 300); } }
-        return { resp: { ok: true, result: { financiero, finError, porEstado, porMes, viajes: B.trips.length } }, commit: false };
+        return { resp: { ok: true, result: { financiero, finError, porEstado, porMes, viajes: total } }, commit: false };
       }
       /* Una página del histórico (los viajes que quedan fuera de la ventana) o los resultados de una búsqueda en
          toda la base, con su liquidación, su evidencia y su bitácora, para mostrarlos igual que los recientes. */

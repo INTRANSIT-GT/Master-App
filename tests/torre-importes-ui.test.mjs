@@ -96,4 +96,20 @@ como('U-1', 'torre'); await click(boton('Horarios y fechas', '.chip')); ev("S.ta
 T('I11 Torre/Horarios usa los mismos nombres en columnas', !/planta CP|bodega CG/.test(txt(d.querySelector('#tablaHorarios'))) && /Ingreso a bodega/.test(txt(d.querySelector('#tablaHorarios'))));
 T('I12 Sin errores de JavaScript durante toda la prueba', N.errs.length === 0, N.errs);
 
+/* Rendimiento: el resumen financiero recorre todo el histórico, así que debe ser LINEAL. Antes cada viaje
+   buscaba sus pagos y su agrupación recorriendo las listas completas: con el volumen real (3.000 viajes al mes)
+   la Edge Function se pasaba del límite de CPU (HTTP 546) y la gráfica no cargaba para los perfiles con finanzas. */
+const tRend = JSON.parse(ev(`(() => {
+  const estados = ['PLANIFICADO','EN_RUTA','ENTREGADO','LIQUIDADO','ACEPTADO','RECHAZADO','FACTURADO','COBRADO'];
+  const ids = [];
+  for (let i = 0; i < 6000; i++) {
+    const id = 'R' + String(100000 + i); ids.push(id);
+    DB.trips.push({ id, proyecto:'COLGATE', proyectoCat:'COLGATE', shipment:'S'+i, opl:'INTRANSIT', tipoViaje:'ONE WAY', tipoCarga:'KG', noCarga:'1', producto:'P', placaArrastre:'', fechaPlan:'2026-'+String(1+(i%12)).padStart(2,'0')+'-10T08:00', pilotoId:'P-1', unidadId:'T-1', rutaId:'R-0001', estado:estados[i%8], tarifaOpl:1000, costoProveedor:1000, qViaticos:200, tarifaCliente:4000, creadoPorId:'U-1', creadoPor:'Admin', creadoEn:'2026-01-01T08:00:00.000Z' });
+  }
+  for (let a = 0; a < 750; a++) DB.agrupaciones.push({ id:'AR'+a, cliente:'COLGATE', modalidad:'AGRUPADA', fase:a%3?'ENVIADA':'EMITIDA', viajeIds:ids.slice(a*8, a*8+8), numeroFactura:'F'+a, importeEnviado:40000, importeFacturado:a%3?null:40000, importesViaje:{}, viajesSinImporte:[], cobros:[], estado:'ACTIVA', creadoEn:'2026-01-05T08:00:00.000Z' });
+  for (let p = 0; p < 2000; p++) DB.pagos.push({ id:'PG'+p, tipo:p%2?'PROVEEDOR':'PILOTO', viajeId:ids[(p*3)%6000], monto:150, fecha:'2026-02-10', referencia:'REF'+p, anulado:null });
+  const t0 = performance.now(); const R = API.resumenFinanciero('U-1', {}); const ms = performance.now() - t0;
+  return JSON.stringify({ ms: Math.round(ms), ok: !!R.M, viajes: R.tripRows.length });
+})()`));
+T('I13 El resumen financiero con 6.000 viajes es lineal (antes se pasaba del límite de CPU del servidor)', tRend.ok && tRend.ms < 900, tRend);
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);
