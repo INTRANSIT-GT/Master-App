@@ -768,7 +768,7 @@ const API={
     if(!cl)deny('Cliente no válido.','VALIDACION');
     if(cl.activo===false)deny('El cliente está desactivado: no admite viajes nuevos.','VALIDACION');
     if(!clientesAsig(A).includes(cliente))deny('No tienes asignado ese cliente: no puedes crear viajes para él.');
-    const keys=[...DATA_KEYS,...TIEMPO_KEYS,'rutaRef','sinRuta'];
+    const keys=[...DATA_KEYS,...TIEMPO_KEYS,'rutaRef','sinRuta','desvio','desvioDestinoId'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origenId'||k==='destinoId'?'El origen y el destino se completan solos a partir de la ruta: no se escriben a mano.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
     /* El viaje nace Planificado: los demás estados los produce el flujo paso a paso (en ruta, entregado,
@@ -779,7 +779,15 @@ const API={
     const sinRuta=v.sinRuta===true||v.sinRuta==='true';delete v.sinRuta;
     if(sinRuta&&v.rutaId)deny('Un viaje SIN RUTA no puede traer una ruta seleccionada: quita la ruta o desactiva SIN RUTA.','VALIDACION');
     if(!v.rutaId&&!sinRuta)deny('Falta Ruta.','VALIDACION');
-    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
+    /* DESVÍO: el viaje conserva sus datos (ruta, horarios, etc.); solo se registra hacia qué destino se desvió. El destino sale del
+       catálogo de destinos del cliente (master.destinos.cliente_id), la misma regla que ya usan las rutas. Sin Desvío activo no interviene. */
+    const desvio=v.desvio===true||v.desvio==='true',dvId=String(v.desvioDestinoId||'').trim();delete v.desvio;delete v.desvioDestinoId;
+    if(desvio){
+      if(!dvId)deny('Selecciona hacia dónde fue el desvío.','VALIDACION');
+      const Dv=DESTINOS.find(o=>o.id===dvId);
+      if(!Dv||Dv.proyecto!==cliente)deny('El destino del desvío no es válido para este cliente.','VALIDACION');
+    }
+    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestinoId'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
     let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
     if(sinRuta){if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para registrar un viaje SIN RUTA selecciona el proyecto.','VALIDACION');}
     else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');}
@@ -797,8 +805,9 @@ const API={
     if(!t.unidadId)t.unidadId=P?P.unidad:'';            /* si no se eligió placa, se usa la unidad del piloto */
     t.notaPiloto=notaPilotoDe(t);                        /* constancia si el piloto no es el asignado a la unidad */
     if(sinRuta){t.sinRuta=true;t.sinRutaPor=A.nombre;t.sinRutaEn=t.creadoEn;}
+    if(desvio){t.desvio=true;t.desvioDestinoId=dvId;t.desvioPor=A.nombre;t.desvioEn=t.creadoEn;}
     DB.trips.push(t);
-    auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}${sinRuta?' · SIN RUTA':''}`});
+    auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}${sinRuta?' · SIN RUTA':''}${desvio?' · DESVÍO → '+nombreDestino(dvId):''}`});
     if(sinRuta&&!DB.notificaciones.some(n=>n.tipo==='VIAJE_SIN_RUTA'&&n.detalle&&n.detalle.viaje===id)){
       /* Aviso para Gerencia en el mecanismo de notificaciones que ya existe (tabla notificaciones). Una sola vez por viaje. */
       notificar(A,{tipo:'VIAJE_SIN_RUTA',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Viaje #${id} registrado SIN RUTA`,detalle:{viaje:id,cliente:cl.cliente||cl.nombre||cliente,proyecto:t.proyectoCat,registradoPor:A.nombre,fechaRegistro:t.creadoEn}});

@@ -427,6 +427,7 @@ VIEWS.detalle=()=>{
     <button class="btn ghost sm" data-act="back" style="margin-bottom:12px">${icon('back',16)} ${esc(fromLbl)}</button>
     ${pageHead('Viaje #'+t.id,`<span class="pchip sm">${esc(j.proyectoNombre)}</span> &nbsp;${esc(j.cliente)}`,`<span class="bgs">${badge(t.estado)}</span>${editBtn}`)}
     ${t.estado==='RECHAZADO'?`<div class="alertbox" style="margin-bottom:14px;padding:14px 16px"><b>Rechazo #${t.rechazos||1}</b><div style="margin:6px 0;font-size:16px">${esc(t.comentarioRevision)}</div><span class="mute" style="font-size:13px">${esc(t.revisadoPor)} · ${fmtDT(t.revisadoEn)}</span></div>`:''}
+    ${t.desvio?`<div class="alertbox info" style="margin-bottom:14px"><b>Desvío</b> hacia ${esc(nombreDestino(t.desvioDestinoId))}${t.desvioPor?` · registrado por ${esc(t.desvioPor)}`:''}${t.desvioEn?` · ${fmtDT(t.desvioEn)}`:''}</div>`:''}
     ${t.sinRuta?`<div class="alertbox info" style="margin-bottom:14px"><b>Registrado SIN RUTA</b>${t.sinRutaPor?` por ${esc(t.sinRutaPor)}`:''}${t.sinRutaEn?` · ${fmtDT(t.sinRutaEn)}`:''}${t.rutaId?'. Después se le asignó una ruta.':'. Todavía no tiene ruta asignada.'}</div>`:''}
     <div class="hroute"><div class="pt"><small>Origen</small><b>${esc(j.origen)||'Pendiente de asignar'}</b></div><div class="line"></div><div class="pt"><small>Destino</small><b>${esc(j.destino)||'Pendiente de asignar'}</b></div></div>
     <div class="card next"><h3>Siguiente paso</h3>${nextStep(t)}</div>
@@ -879,7 +880,7 @@ app.addEventListener('change',async e=>{
     if(usaCombo()){aplicarCampo(M,t.dataset.m,t.value);if(t.tagName==='SELECT'||t.type==='datetime-local')render();return;}
     const k=t.dataset.m;M[k]=t.value;if('err' in M)M.err='';
     if(k==='rutaId'&&t.value)M.sinRuta=false;
-    if(k==='proyecto'){M.proyectoCat='';M.pilotoId='';M.rutaId='';M.rutaRef='';const pc=PROYECTOS_X[M.proyecto];if(pc&&pc.length===1)M.proyectoCat=pc[0];}
+    if(k==='proyecto'){M.desvioDestinoId='';M.proyectoCat='';M.pilotoId='';M.rutaId='';M.rutaRef='';const pc=PROYECTOS_X[M.proyecto];if(pc&&pc.length===1)M.proyectoCat=pc[0];}
     if(k==='proyectoCat'){M.rutaId='';M.rutaRef='';}
     if(k==='pilotoId'&&t.value)S.flash=true;
     if(t.tagName==='SELECT'||t.type==='datetime-local')render();

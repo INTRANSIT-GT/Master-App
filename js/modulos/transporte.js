@@ -41,7 +41,7 @@ const curModel=()=>S.edit?S.edit.data:S.form;
 function initForm(){
   const d=new Date();d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
     const m={proyecto:esEnc()?(clientesAsig(S.user).length===1?clientesAsig(S.user)[0]:''):(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',estado:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',placaArrastreOtro:'',
-    fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',placaSel:'',rutaId:'',rutaRef:'',sinRuta:false,noDocRetorno:'',qViaticos:'',gastosAdicionales:[],savedId:null,err:''};
+    fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',placaSel:'',rutaId:'',rutaRef:'',sinRuta:false,desvio:false,desvioDestinoId:'',noDocRetorno:'',qViaticos:'',gastosAdicionales:[],savedId:null,err:''};
   TKEYS.forEach(k=>m[k]='');
   const pc=usaCombo()?(m.proyecto?proyectosAsig(S.user,m.proyecto):[]):PROYECTOS_X[m.proyecto];if(pc&&pc.length===1)m.proyectoCat=pc[0];
   return m;
@@ -102,12 +102,12 @@ function resolverRuta(M){const e=estadoRuta(M);M.rutaId=e.combo?e.combo.id:'';}
 function aplicarCampo(M,k,v){
   M[k]=v;if('err' in M)M.err='';
   const limpiaRuta=()=>{M.rutaId='';M.rutaRef='';M.rutaGrupo='';M.rutaO='';M.rutaD='';};
-  if(k==='proyecto'){M.proyectoCat='';M.pilotoId='';M.placaSel='';limpiaRuta();const pc=M.proyecto?proyectosAsig(S.user,M.proyecto):[];if(pc.length===1)M.proyectoCat=pc[0];}
+  if(k==='proyecto'){M.desvioDestinoId='';M.proyectoCat='';M.pilotoId='';M.placaSel='';limpiaRuta();const pc=M.proyecto?proyectosAsig(S.user,M.proyecto):[];if(pc.length===1)M.proyectoCat=pc[0];}
   if(k==='proyectoCat')limpiaRuta();
   if(k==='rutaGrupo'){
     M.rutaO='';M.rutaD='';if(v)M.sinRuta=false;
     if(v==='NO_ASIGNADA')M.rutaId='NO_ASIGNADA';
-    else{M.rutaRef='';const g=rutasGrupos(M).find(x=>x.key===v);if(g){if(M.proyecto!==g.cliente){M.proyecto=g.cliente;M.pilotoId='';M.placaSel='';}M.proyectoCat=g.proyecto;}resolverRuta(M);}   /* cliente y proyecto salen de la ruta elegida */
+    else{M.rutaRef='';const g=rutasGrupos(M).find(x=>x.key===v);if(g){if(M.proyecto!==g.cliente){M.proyecto=g.cliente;M.pilotoId='';M.placaSel='';M.desvioDestinoId='';}M.proyectoCat=g.proyecto;}resolverRuta(M);}   /* cliente y proyecto salen de la ruta elegida */
   }
   if(k==='rutaO'||k==='rutaD')resolverRuta(M);
   if(k==='placaSel'){
@@ -267,6 +267,15 @@ function sinRutaHTML(M,d){
     ${M.sinRuta?`<div class="alertbox info" style="margin-bottom:10px"><b>Viaje SIN RUTA:</b> se guarda sin ruta asignada, queda identificado como «registrado sin ruta» y se envía una notificación a Gerencia. Elige el cliente y el proyecto en el formulario. Para quitarlo, vuelve a pulsar SIN RUTA o elige una ruta.</div>`:''}`;
 }
 
+/* ---- DESVÍO: botón en el espacio Ruta + «¿Hacia dónde fue el desvío?» (destinos del cliente, catálogo master.destinos) ---- */
+const destinosDesvio=M=>M.proyecto?DESTINOS.filter(x=>x.proyecto===M.proyecto).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es')):[];
+function desvioHTML(M,d){
+  if(S.edit)return '';
+  const listo=!!M.proyecto,ds=destinosDesvio(M);
+  return `<div class="fgroup"><button type="button" class="btn ${M.desvio?'primary':''}" data-act="desvio" aria-pressed="${!!M.desvio}" ${d}>Desvío</button><span class="hint">Actívalo si el viaje se desvió hacia otro destino. No cambia la ruta ni los demás datos del viaje.</span></div>
+    ${M.desvio?`<div class="fgroup"><label for="m_desvioDestinoId">¿Hacia dónde fue el desvío? <span class="mute">*</span> ${src('DESTINOS')}</label><select id="m_desvioDestinoId" data-m="desvioDestinoId" ${(d||!listo||!ds.length)?'disabled':''}><option value="">${listo?(ds.length?'Selecciona el destino del desvío':'Este cliente no tiene destinos registrados'):'Primero elige el cliente o la ruta'}</option>${ds.map(x=>`<option value="${esc(x.id)}" ${x.id===M.desvioDestinoId?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select></div>`:''}`;
+}
+
 /* ---- Gastos adicionales (Retorno y viáticos): varias filas concepto + importe; se guardan con el viaje ---- */
 const gastosLista=M=>Array.isArray(M.gastosAdicionales)?M.gastosAdicionales:(M.gastosAdicionales=[]);
 const gastosTotal=l=>Math.round(l.reduce((s,x)=>s+(Number(x.importe)>0?Number(x.importe):0),0)*100)/100;
@@ -348,8 +357,8 @@ function fieldsHTML(M,groups,dis){
     const opts=placas.concat(actual?[actual]:[]).map(f=>({id:f.unidad,nombre:etiquetaPlaca(f)}));
     const sinPlacas=ready&&!falla&&!opts.length;
     h+=`<div class="card fsec"><h3>Piloto y unidad</h3>
-      ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?'Selecciona un piloto':'Primero elige el cliente'})}
       ${fcombo('placaSel','Placa del equipo',opts,plSel,{req:1,src:'FLOTA',dis:!ready||!!falla||sinPlacas,ph:!ready?'Primero elige el cliente':(falla?'No disponible':(sinPlacas?'Sin placas disponibles':'Selecciona la placa')),hint:sinPlacas?'Este cliente no tiene placas disponibles: ninguno de sus pilotos tiene una unidad asignada en la flota.':'Puedes cambiar la placa (unidad) del piloto: siempre dentro de este cliente. El cliente no se cambia.'})}
+      ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?'Selecciona un piloto':'Primero elige el cliente'})}
       ${autoCard(M)}
       ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}</div>`;
   }
@@ -360,6 +369,7 @@ function fieldsHTML(M,groups,dis){
     h+=`<div class="card fsec"><h3>Ruta</h3>
       ${sel('rutaId','Ruta',opts,{req:1,src:'RUTAS',dis:!ready||!M.proyectoCat,ph:(ready&&M.proyectoCat)?'Selecciona la ruta':'Primero elige el cliente y el proyecto',hint:(ready&&M.proyectoCat)?rs.length+' rutas asignadas de '+esc(M.proyectoCat):''})}
       ${sinRutaHTML(M,d)}
+      ${desvioHTML(M,d)}
       ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
       <div class="${R?'auto'+(S.flash?' flash':''):'auto empty2'}">${R?`<div class="ah">${icon('check',18)} Origen y destino tomados de la ruta · no se escriben a mano</div><div class="cells"><div class="cell"><small>Código ${src('RUTAS')}</small><b>${esc(R.codigo)}</b></div><div class="cell"><small>Origen ${src('RUTAS')}</small><b>${esc(nombreOrigen(R.origenId))}</b></div><div class="cell"><small>Destino ${src('RUTAS')}</small><b>${esc(nombreDestino(R.destinoId))}</b></div></div>`:(pend?'Origen y destino: pendientes de asignar.':'Elige la ruta: el origen y el destino se completan solos.')}</div></div>`;
   }
@@ -384,6 +394,7 @@ function fieldsHTML(M,groups,dis){
       ${fcombo('rutaGrupo','Ruta',opts,val,{req:1,src:'RUTAS',dis:!listo,ph:listo?'Selecciona la ruta':'No disponible',hint:(listo&&R.grupos.length&&!elegido&&!R.g)?'Puedes elegir la ruta primero: el cliente y el proyecto se completan solos.':''})}
       ${sinRutas?`<div class="alertbox info" style="margin-bottom:10px">${elegido?`No hay rutas activas para ${esc(M.proyectoCat)}.${puedeNuevaAqui?' Puedes solicitar una nueva con la opción «NUEVA RUTA».':' Pide a Comercial que active una ruta para este proyecto.'}`:'No hay rutas activas disponibles para tu usuario. Pide a Comercial que active una ruta, o elige primero el cliente y el proyecto para solicitar una nueva.'}${esAdm()?REINTENTAR:''}</div>`:''}
       ${sinRutaHTML(M,d)}
+      ${desvioHTML(M,d)}
       ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
       ${od}</div>`;
   }
@@ -521,6 +532,7 @@ Object.assign(ACT,{
       f.err=ps.length>1?'Esta placa tiene más de un piloto asignado: elige el piloto del viaje.':'Esta placa no tiene un piloto asignado para este cliente: elige otra placa o pide a la administradora que asigne la unidad a un piloto.';render();topScroll();return;}
     const d={cliente:f.proyecto,fechaPlan:f.fechaPlanD&&f.fechaPlanT?f.fechaPlanD+'T'+f.fechaPlanT:'',rutaRef:f.rutaRef||''};
     [...DATA_KEYS,...TKEYS].forEach(k=>{d[k]=f[k];});
+    d.desvio=!!f.desvio;if(f.desvio)d.desvioDestinoId=f.desvioDestinoId||'';   /* Desvío: sin él activo no se envía nada más */
     d.sinRuta=!!f.sinRuta;                         /* SIN RUTA: se guarda con el viaje y avisa a Gerencia */
     if(f.sinRuta)d.rutaId='';
     d.unidadId=f.placaSel||'';                     /* la placa elegida es la unidad del viaje */
@@ -529,6 +541,12 @@ Object.assign(ACT,{
     catch(e){f.err=sinPerfil(e.message);render();topScroll();}
   },
   async otro(){S.form=initForm();render();},
+  async desvio(){
+    if(S.edit)return;
+    const M=curModel();if(!M)return;
+    M.desvio=!M.desvio;if(!M.desvio)M.desvioDestinoId='';   /* solo se muestra/oculta el campo: no se toca ningún otro dato */
+    if('err' in M)M.err='';render();
+  },
   async sinRuta(){
     const M=curModel();if(!M||S.edit)return;
     if(M.sinRuta)M.sinRuta=false;
@@ -539,7 +557,7 @@ Object.assign(ACT,{
   async gastoDel(d){const M=curModel();if(!M)return;gastosLista(M).splice(Number(d.i),1);render();},
   async terminar(){
     const f=S.form||{};
-    if(!f.savedId&&(f.pilotoId||f.rutaId||f.sinRuta)){confirmM('¿Salir sin guardar?','Hay datos del formulario que no se han guardado. Los viajes ya guardados no se pierden.','Salir sin guardar','terminarOk');return;}
+    if(!f.savedId&&(f.pilotoId||f.rutaId||f.sinRuta||f.desvio)){confirmM('¿Salir sin guardar?','Hay datos del formulario que no se han guardado. Los viajes ya guardados no se pierden.','Salir sin guardar','terminarOk');return;}
     ACT.terminarOk();
   },
   async terminarOk(){S.form=null;S.modal=null;go(homeOf(S.user));},
