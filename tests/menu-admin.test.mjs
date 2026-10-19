@@ -120,4 +120,10 @@ for (const r of roles) {
 }
 T(`M22 Los otros ${roles.length} perfiles (${roles.join(', ')}) conservan su menú: cada uno muestra exactamente las pantallas de su perfil`, difs.length === 0 && roles.length >= 7, difs);
 T('M23 Todas las pantallas de todos los menús existen (ninguna opción rota)', ev("Object.keys(ROLES).every(r=>ROLES[r].nav.every(v=>!!VIEWS[v]))"));
+/* El Gerente de Transporte: visibilidad total (Inicio, Nuevo viaje, Viajes) y control financiero en consulta. */
+const navGerente = JSON.parse(ev(`(()=>{let u=DB.usuarios.find(x=>x.rol==='GERENTE_TRANSPORTE');if(!u){u={id:'U-GTR',usuario:'gtr',clave:'x',nombre:'Gerente Transporte',rol:'GERENTE_TRANSPORTE',activo:true,proyectos:[]};DB.usuarios.push(u);}S.user=u;S.view='inicio';S.menu=false;S.form=null;S.modal=null;try{render();}catch(e){return JSON.stringify({err:e.message});}return JSON.stringify(navItems());})()`));
+T('M24 El Gerente de Transporte ve Inicio, Nuevo viaje, Viajes, Liquidaciones y Finanzas (consulta)', ['inicio','nuevo','todos','viajes','liquidaciones','finanzas'].every(v => navGerente.includes(v)) && !navGerente.includes('usuarios') && !navGerente.includes('auditoria'), navGerente);
+const chipGerente = ev("document.querySelector('.userchip').textContent.replace(/\\s+/g,' ')");
+T('M25 Su botón de perfil muestra solo el perfil: sin lista de clientes ni códigos internos', /Gerente de Transporte/.test(chipGerente) && !/CIT-U|CLI-0/.test(chipGerente), chipGerente);
+
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

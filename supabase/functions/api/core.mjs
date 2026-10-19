@@ -136,7 +136,7 @@ const LISTAS_ETIQUETA={tipoUnidad:'Tipo de unidad',opl:'OPL · Transportistas',t
 function refrescarOrigenes(){ORIGENES.length=0;(CAT.origen||[]).forEach(n=>ORIGENES.push({id:n,nombre:n}));}
 const ROLES={
   ADMIN:{label:'Administradora',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
-  GERENTE_TRANSPORTE:{label:'Gerente de Transporte',home:'todos',nav:['todos','rutas','opl','liquidaciones','catalogos'],alcance:'Ver todo, asignar unidades/pilotos, autorizar/crear tarifas OPL'},
+  GERENTE_TRANSPORTE:{label:'Gerente de Transporte',home:'inicio',nav:['inicio','nuevo','todos','viajes','rutas','opl','liquidaciones','finanzas','catalogos'],alcance:'Ver todo y registrar viajes; asignar unidades/pilotos y autorizar/crear tarifas OPL; control financiero en modo consulta'},
   VALIDADOR:{label:'Validador',home:'liquidaciones',nav:['viajes','liquidaciones'],alcance:'Revisar/aprobar liquidaciones de clientes asignados'},
   OPERATIVO:{label:'Operativo',home:'inicio',nav:['inicio','nuevo','viajes','rutas','liquidaciones'],alcance:'Registrar, editar y liquidar viajes de clientes asignados. Ve y solicita rutas de su proyecto.'},
   ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
@@ -149,7 +149,7 @@ const ROLES={
 };
 const PERM_DEFAULT={
   ADMIN:PERM_KEYS.slice(),
-  GERENTE_TRANSPORTE:['viajes_ver_todos','historial_ver','liq_ver','rutas_ver','rutas_validar','rutas_aprobar_transporte','viajes_aprobar_duplicado','unidades_asignar','tarifas_opl_ver','tarifas_opl_crear','viajes_editar_estado','tarifas_ver','liq_aprobar','liq_devolver'],
+  GERENTE_TRANSPORTE:['viajes_ver','viajes_ver_todos','viajes_crear','viajes_editar_datos','historial_ver','liq_ver','rutas_ver','rutas_validar','rutas_aprobar_transporte','viajes_aprobar_duplicado','unidades_asignar','tarifas_opl_ver','tarifas_opl_crear','viajes_editar_estado','tarifas_ver','finanzas_ver','liq_aprobar','liq_devolver'],
   VALIDADOR:['viajes_ver','liq_ver','liq_aprobar','liq_devolver','historial_ver'],
   OPERATIVO:['viajes_ver','viajes_crear','viajes_editar_datos','viajes_editar_tiempos','viajes_iniciar','viajes_finalizar','liq_ver','liq_enviar','historial_ver','rutas_ver','rutas_solicitar'],
   ANALISTA_COMERCIAL:['comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_solicitar','rutas_validar','historial_ver','clientes_gestionar'],
@@ -232,11 +232,16 @@ function rechain(){
 function actor(uid){const u=DB&&DB.usuarios.find(x=>x.id===uid);if(!u||!u.activo)throw new ApiError('NO_AUTENTICADO','Usuario no válido o inactivo.');return u;}
 function hasPerm(A,p){
   if(!A||!A.activo)return false;
+  /* Quien ve TODO el universo de viajes también «ve viajes»: sin esto, un perfil de visibilidad total
+     (Gerente de Transporte, Torre, Facturación) no podía abrir Inicio ni Viajes. */
+  if(p==='viajes_ver'&&hasPerm(A,'viajes_ver_todos'))return true;
   if((PROHIBIDO[A.rol]||[]).includes(p))return false;
   const r=DB.permisos.find(x=>x.rol===A.rol&&x.permiso===p);
   return !!(r&&r.habilitado);
 }
-const clientesAsig=A=>A.rol==='ADMIN'?DB.clientes.filter(c=>c.activo!==false).map(c=>c.id):DB.acceso.filter(a=>a.userId===A.id).map(a=>a.cliente);
+/* Clientes que puede usar el perfil: la administradora y los perfiles con «ver todos los viajes» (Gerente de
+   Transporte, Torre, Facturación, Gerencia Comercial) ven todos los clientes activos; el resto, los asignados. */
+const clientesAsig=A=>(A.rol==='ADMIN'||hasPerm(A,'viajes_ver_todos'))?DB.clientes.filter(c=>c.activo!==false).map(c=>c.id):DB.acceso.filter(a=>a.userId===A.id).map(a=>a.cliente);
 const asignado=(A,t)=>A.rol==='ADMIN'||(DB.acceso.some(a=>a.userId===A.id&&a.cliente===t.proyecto)&&proyectosAsig(A,t.proyecto).includes(t.proyectoCat));
 function puedeVer(A,t){
   if(hasPerm(A,'viajes_ver_todos'))return true;
