@@ -133,8 +133,9 @@ VIEWS.finanzas=()=>{
   const H=sinFiltro&&S.finHist&&S.finHist.financiero?S.finHist.financiero.M:null;
   if(H)['porPagarProv','pendProv','porPagarPil','pendPil','costoTotal','costoIncompletos','provSinCosto','pilSinImporte','margenEst','margenPct','margenIngreso','margenCostos'].forEach(x=>{if(x in H)M[x]=H[x];});
   cargaHistorico();
-  const histNota=k==='res'&&H?`<div class="alertbox info" style="margin-bottom:10px">Costos y margen: <b>toda la base</b> (histórico completo), no solo los viajes cargados en pantalla. Los detalles de cada total listan los viajes que están cargados.</div>`
-    :(k==='res'&&S.finHistCargando?'<div class="mute" style="margin-bottom:10px">Calculando los totales del histórico…</div>':'');
+  const histErr=S.finHist&&S.finHist.finError?`<div class="alertbox" style="margin-bottom:10px"><b>No se pudieron calcular los totales del histórico.</b> La gráfica por mes sí está al día. Motivo: ${esc(S.finHist.finError)}</div>`:'';
+  const histNota=histErr||(k==='res'&&H?`<div class="alertbox info" style="margin-bottom:10px">Costos y margen: <b>toda la base</b> (histórico completo), no solo los viajes cargados en pantalla. Los detalles de cada total listan los viajes que están cargados.</div>`
+    :(k==='res'&&S.finHistCargando?'<div class="mute" style="margin-bottom:10px">Calculando los totales del histórico…</div>':''));
   const filt=`<div class="lfilters" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde)}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta)}"></label>
     <select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>
     <select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
@@ -170,7 +171,9 @@ VIEWS.finanzas=()=>{
         ${leyendaMeses()}
         <div class="mute" style="font-size:12.5px;margin-top:8px">Cada barra es un mes (por <b>fecha plan</b> del viaje) y cada color, un estado. Un mes «todo verde» significa que todos sus viajes ya están liquidados/facturados/cobrados; si queda un tramo de otro color, hay viajes pendientes en ese mes. Pasa el cursor sobre un tramo para ver el número. Se muestran los últimos 12 meses con actividad.</div></div>
       <div class="mute" style="margin-top:10px">Total en la base: <b>${S.finHist.viajes}</b> viajes · ${Object.entries(S.finHist.porEstado||{}).map(([e,n])=>`${esc((ESTADOS[e]||{}).l||e)}: ${n}`).join(' · ')}</div>`
-      : (S.finHistCargando?empty('Calculando el resumen por mes…','Se está consultando toda la base.') : empty('Sin datos para el resumen por mes',''));
+      : (S.finHistCargando?empty('Calculando el resumen por mes…','Se está consultando toda la base.')
+        : empty('Sin datos para el resumen por mes',(S.finHistErr?String(S.finHistErr).slice(0,240):(S.finHist&&S.finHist.viajes?'Se leyeron '+S.finHist.viajes+' viajes, pero ninguno tiene fecha plan.':'')))
+          +'<div style="margin-top:10px"><button class="btn sm" data-act="histReintentar">Reintentar</button></div>');
   }else if(k==='prov'){
     const rows=R.tripRows.filter(r=>r.proveedor).sort((a,b)=>a.proveedor.localeCompare(b.proveedor)||a.id.localeCompare(b.id));
     const by={};rows.forEach(r=>{const p=by[r.proveedor]=by[r.proveedor]||{por:0,pag:0,sal:0,sin:0,n:0};p.n++;if(r.costo==null)p.sin++;else{p.por+=r.costo;p.sal+=r.saldoProv;}p.pag+=r.pagadoProv;});

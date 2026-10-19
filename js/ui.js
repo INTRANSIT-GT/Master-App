@@ -164,11 +164,11 @@ VIEWS.inicio=()=>{
       <button class="bigbtn" data-act="nav" data-v="liquidaciones"><span class="ico">${icon('receipt',24)}</span><span><b>LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>
     </div>
     ${fix?`<div class="alertbox" style="margin-top:18px;display:flex;gap:10px;align-items:center">${icon('alert',20)}<span><b>${fix} ${fix===1?'viaje fue rechazado':'viajes fueron rechazados'}</b>. Ábrelos para ver los comentarios y corregirlos.</span></div>`:''}
-    <section class="section"><h2>Requiere tu atención</h2>${act.length?`<div class="cards">${act.map(tripCard).join('')}</div>`:empty('Todo al día','No tienes viajes esperando una acción.')}</section>
     <section class="section"><h2>Viajes por mes · por estado</h2>
-      <div class="card"><div id="chartMes">${historicoMeses()||(S.finHistCargando?'<div class="mute">Calculando el resumen de tus viajes…</div>':'<div class="mute">Aún no hay viajes registrados.</div>')}</div>
+      <div class="card"><div id="chartMes">${historicoMeses()||(S.finHistCargando?'<div class="mute">Calculando el resumen de tus viajes…</div>':histVacio())}</div>
       <div class="mute" style="font-size:12.5px;margin-top:8px">Tus viajes por <b>fecha plan</b> (todos, no solo los cargados en pantalla), divididos por estado con el color de cada estado. Pasa el cursor por un tramo para ver el número; un mes «todo verde» ya está liquidado, facturado o cobrado.</div></div>
     </section>
+    <section class="section"><h2>Requiere tu atención</h2>${act.length?`<div class="cards">${act.map(tripCard).join('')}</div>`:empty('Todo al día','No tienes viajes esperando una acción.')}</section>
   </div>`;
 };
 
@@ -235,21 +235,33 @@ function leyendaMeses(){
    (El servidor lo calcula sobre los viajes que este usuario puede ver, así que respeta el alcance del perfil.) */
 function cargaHistorico(){
   if(S.finHist!==undefined||S.finHistCargando||typeof API.resumenHistorico!=='function')return;
-  S.finHistCargando=true;
+  S.finHistCargando=true;S.finHistErr='';
   Promise.resolve().then(()=>API.resumenHistorico(S.user.id,{}))
     .then(h=>{
       S.finHist=h||null;S.finHistCargando=false;
       /* Se actualiza solo la gráfica (no toda la pantalla): así no se pierde el clic de quien está navegando. */
       const el=$('#chartMes');
-      if(el)el.innerHTML=historicoMeses()||'<div class="mute">Aún no hay viajes registrados.</div>';
+      if(el)el.innerHTML=historicoMeses()||histVacio();
       else render();
     })
-    .catch(()=>{S.finHist=null;S.finHistCargando=false;});
+    /* Si el resumen no se pudo calcular se guarda el motivo y se muestra en la gráfica: así el problema
+       (servidor sin desplegar, sin permiso, dato raro) se ve en pantalla y no queda un hueco mudo. */
+    .catch(e=>{S.finHist=null;S.finHistCargando=false;S.finHistErr=(e&&e.message)||(typeof e==='string'?e:'No se pudo consultar el resumen.');});
 }
 function historicoMeses(){
   const pm=S.finHist&&S.finHist.porMes;if(!pm)return '';
   const ms=Object.keys(pm).sort().slice(-12);if(!ms.length)return '';
   return chartMeses(pm,ms)+leyendaMeses();
+}
+/* Motivo por el que la gráfica no tiene datos + botón para volver a pedirlos. */
+function histVacio(){
+  const n=S.finHist&&Number(S.finHist.viajes)||0;
+  const motivo=S.finHistErr?'No se pudo consultar el resumen en el servidor.'
+    :n?'Se leyeron '+n+' viajes, pero ninguno tiene fecha plan (la gráfica los agrupa por esa fecha).'
+    :'Aún no hay viajes registrados.';
+  return '<div class="mute">'+esc(motivo)+'</div>'
+    +(S.finHistErr?'<div class="mute" style="margin-top:6px;font-size:12.5px">'+esc(String(S.finHistErr).slice(0,240))+'</div>':'')
+    +'<div style="margin-top:10px"><button class="btn sm" data-act="histReintentar">Reintentar</button></div>';
 }
 
 /* ---- Ventana de viajes: qué está cargado y poder traer los anteriores ----
@@ -728,6 +740,7 @@ const ACT={
   /* menú lateral en el teléfono (botón de tres líneas) */
   async navToggle(){S.nav=!S.nav;if(S.nav)S.menu=false;render();},
   async navClose(){S.nav=false;render();},
+  async histReintentar(){S.finHist=undefined;S.finHistErr='';S.finHistCargando=false;render();},
   async togglePhone(){PREF.phone=!PREF.phone;savePref();S.menu=false;render();},
   async toggleArch(){PREF.arch=!PREF.arch;savePref();S.menu=false;render();},
   async reset(){

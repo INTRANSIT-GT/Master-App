@@ -69,7 +69,7 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
     /* Ventana de viajes que llegó del servidor (null en demostración): la pantalla la muestra y ofrece cargar más. */
     db.ventana=sn.ventana||null;
     conservarViejos(db,previo);
-    S.finHist=undefined;                       /* los totales del histórico se vuelven a pedir al servidor */
+    S.finHist=undefined;S.finHistErr='';        /* los totales del histórico se vuelven a pedir al servidor */
     db.catalogosListas=(sn.catalogos&&sn.catalogos.listas)||{};   /* las listas del sistema vienen de la base */
     DB=db;
     [[PILOTOS,sn.catalogos.pilotos],[FLOTA,sn.catalogos.flota],[DESTINOS,sn.catalogos.destinos]].forEach(([a,n])=>{a.length=0;a.push(...(n||[]));});

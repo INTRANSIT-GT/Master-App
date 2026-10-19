@@ -1,0 +1,15 @@
+import { JSDOM, VirtualConsole } from 'jsdom';
+import fs from 'node:fs'; import path from 'node:path';
+const raíz='/Users/manuelab/Documents/InTransit/MASTER-APP';
+const leer=f=>fs.readFileSync(path.join(raíz,f),'utf8');
+const html=leer('prueba-visual.html').replace(/<script src="(js\/[^"]+)"><\/script>/g,(m,f)=>`<script>${leer(f)}</script>`);
+const errs=[];const vc=new VirtualConsole();vc.on('jsdomError',e=>errs.push(String(e.message).slice(0,200)));
+const w=new JSDOM(html,{runScripts:'dangerously',url:'file:///prueba-visual.html',pretendToBeVisual:true,virtualConsole:vc}).window;
+const d=w.document,ev=c=>w.eval(c);
+console.log('modo:',ev('BACKEND.modo'),'| errores:',errs);
+ev(`S.finHist={viajes:6800,porEstado:{ENTREGADO:396,FACTURADO:6339,RECHAZADO:4,ACEPTADO:1},porMes:{'2026-08':{FACTURADO:120,ENTREGADO:8},'2026-09':{FACTURADO:90},'2026-10':{RECHAZADO:2,ENTREGADO:4}}};S.finHistCargando=false;S.tab.fin='mes';go('finanzas')`);
+const el=d.querySelector('#chartMes');
+console.log('vista S.view:',ev('S.view'),'| tab:',ev('S.tab.fin'));
+console.log('#chartMes existe:',!!el);
+if(el)console.log('chart-meses en el HTML:',/chart-meses/.test(el.innerHTML),'| largo:',el.innerHTML.length);
+console.log('texto de la sección:',(d.querySelector('#main')?.textContent||'').replace(/\s+/g,' ').slice(0,240));

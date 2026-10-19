@@ -149,8 +149,11 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
           const mes = String(t.fechaPlan || '').slice(0, 7);
           if (/^\d{4}-\d{2}$/.test(mes)) { const m = porMes[mes] = porMes[mes] || {}; m[t.estado] = (m[t.estado] || 0) + 1; }
         }
-        const financiero = puedeFin ? E.API.resumenFinanciero(actorId, argsDe(args)) : null;
-        return { resp: { ok: true, result: { financiero, porEstado, porMes, viajes: B.trips.length } }, commit: false };
+        /* Los números financieros van aparte y protegidos: si algún dato del histórico los rompe, la gráfica
+           (que es lo que ve todo el mundo) igual se devuelve, y el motivo viaja en `finError` para mostrarlo. */
+        let financiero = null, finError = '';
+        if (puedeFin) { try { financiero = E.API.resumenFinanciero(actorId, argsDe(args)); } catch (e) { finError = String((e && e.message) || e).slice(0, 300); } }
+        return { resp: { ok: true, result: { financiero, finError, porEstado, porMes, viajes: B.trips.length } }, commit: false };
       }
       /* Una página del histórico (los viajes que quedan fuera de la ventana) o los resultados de una búsqueda en
          toda la base, con su liquidación, su evidencia y su bitácora, para mostrarlos igual que los recientes. */

@@ -9,7 +9,7 @@ const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), '
 
 /* Migraciones en orden. El 005 es un ejemplo (se ejecuta a mano) y no entra aquí. */
 const MIGRACIONES = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
-  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '017_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql',
+  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql',
   '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql'];   /* 019: las listas del sistema (OPL, orígenes, tipos) viven en master.catalogos */
 
 const db = new PGlite();
@@ -317,6 +317,13 @@ const mesSql = (await q1("select to_char(fecha_plan::timestamp,'YYYY-MM') m, cou
 T('99 El resumen por mes coincide con la base (meses y conteo)', pMes.length > 0 && pMes.includes(mesSql.m) && Object.values(rH.result.porMes[mesSql.m]).reduce((a, b) => a + b, 0) === mesSql.n, [pMes, mesSql]);
 const bLike = await api('adm', 'buscarViajes', { texto: '%' });
 T('98 El comodín «%» se escapa: no se convierte en «trae todo»', bLike.ok && bLike.result.trips.length === 0, bLike.result && bLike.result.trips.length);
+
+/* El bloque financiero viaja protegido: si un dato del histórico lo rompe, la gráfica por mes (lo que ve
+   todo el mundo, incluidas las administradoras) se devuelve igual y el motivo viene en `finError`. */
+T('100 El resumen histórico separa la gráfica de los números financieros (`porMes` + `finError`)', rH.ok && 'finError' in rH.result && !!rH.result.porMes && rH.result.finError === '', [rH.result && rH.result.finError, rH.result && Object.keys(rH.result.porMes || {}).length]);
+T('101 La suma de los meses del resumen coincide con los viajes contados por estado', rH.ok && Object.values(rH.result.porMes).reduce((a, m) => a + Object.values(m).reduce((x, n) => x + n, 0), 0) === Object.values(rH.result.porEstado).reduce((a, n) => a + n, 0));
+const rOper = await api('ped', 'resumenHistorico');
+T('102 Un perfil sin permiso de finanzas recibe la gráfica con «financiero» en null', rOper.ok && !!rOper.result.porMes && rOper.result.financiero === null && rOper.result.finError === '', rOper.result && Object.keys(rOper.result.porMes || {}).length);
 
 console.log(filas.join('\n'));
 console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`);
