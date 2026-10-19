@@ -475,11 +475,16 @@ tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
   .side .grp-p[hidden]{display:none}
 }
 
-/* ---- Listas de selección múltiple (asignar clientes y proyectos) ----
-   Sin altura propia el navegador las deja en una sola línea: las opciones están, pero no se leen. */
-select[multiple]{height:auto;min-height:170px;max-height:320px;padding:6px;line-height:1.7;border-radius:10px}
-select[multiple] option{padding:5px 8px;background:var(--surface);color:var(--ink)}
-select[multiple] option:checked{background:color-mix(in srgb,#0088FF 32%,var(--surface));color:var(--ink)}
+/* ---- Listas de selección múltiple: altura propia y texto legible ---- */
+select[multiple]{height:auto;min-height:150px;padding:6px}
+select[multiple] option{background:var(--surface);color:var(--ink)}
+
+/* ---- Listas de asignación (clientes / proyectos): casillas con el texto de la aplicación ---- */
+.mv-list{min-height:170px;max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:6px}
+.mv-list .mv-it{display:flex;gap:8px;align-items:center;padding:5px 6px;border-radius:6px;color:var(--ink);font-size:13px;cursor:pointer}
+.mv-list .mv-it:hover{background:var(--surface2)}
+.mv-list .mv-it input{flex:none;margin:0}
+.mv-list .mute{font-size:12.5px;padding:4px 6px;display:block}
 
 /* ---- Selector de dos listas (mover asignados): Usuarios → clientes y proyectos ---- */
 .mv{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:start;margin-top:4px}

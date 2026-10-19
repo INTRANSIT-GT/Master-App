@@ -246,4 +246,17 @@ if (filaPed) {
   T('U3 La confirmación avisa el efecto y desactiva al usuario', !!okBtn && /no podrá iniciar sesión/i.test(d.querySelector('.dlg').textContent));
   if (okBtn) { await click(okBtn); const u = JSON.parse(ev(`JSON.stringify(DB.usuarios.find(x=>x.id==='${ev('DB.usuarios.find(u=>u.rol===\'OPERATIVO\').id')}'))`)); T('U4 El usuario queda inactivo y la fila ofrece «Activar»', u.activo === false && /ACTIVAR|Activar/.test(d.querySelector('#main').textContent)); }
 }
+/* Asignar clientes/proyectos: las listas muestran los nombres con casilla y mover no devuelve al inicio del formulario. */
+ev("S.view='usuarios';S.modal=null;S.form=null;S.edit=null;render()");
+ev("(()=>{const u=DB.usuarios.find(x=>x.rol==='OPERATIVO');ACT.usuarioOpen({id:u.id});})()");
+const listasMv = () => [...d.querySelectorAll('.mv-list')];
+const itMv = d.querySelector('.mv-list .mv-it');
+T('U5 Las listas de asignación muestran los nombres con casilla (no un cuadro del navegador)', !!itMv && /[A-Za-zÁÉÍÓÚáéíóúÑñ]{3,}/.test(itMv.textContent), itMv && itMv.textContent.trim());
+const antesCli = ev("JSON.stringify(S.modal.data.clientes||[])");
+const chkLibre = d.querySelector('.mv-list input[type=checkbox]:not([data-mfm])');
+if (chkLibre) { chkLibre.checked = true; await tick(); }
+const btnMover = d.querySelector('.mv-btns button[data-act="mvMove"][data-dir="to"][data-k="clientes"]');
+if (btnMover) await click(btnMover);
+const despuesCli = ev("JSON.stringify(S.modal.data.clientes||[])");
+T('U6 Al mover un cliente el formulario sigue abierto y la asignación se actualiza', !!d.querySelector('.dlg') && antesCli !== despuesCli && listasMv().length === 4, [antesCli.slice(0, 60), despuesCli.slice(0, 60)]);
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

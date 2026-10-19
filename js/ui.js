@@ -544,17 +544,21 @@ function fieldM(f,data){
   if(f.type==='textarea')return `${W}${lab}<textarea id="${id}" data-mf="${f.k}" placeholder="${esc(f.ph||'')}">${esc(val)}</textarea>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   if(f.type==='select'){const op=f.optsFn?f.optsFn(data):f.opts;return `${W}${lab}<select id="${id}" data-mf="${f.k}"><option value="">${esc(f.ph||'Selecciona')}</option>${op.map(o=>`<option value="${esc(o.id)}" ${o.id===val?'selected':''}>${esc(o.nombre)}</option>`).join('')}</select></div>`;}
   if(f.type==='check')return `<div class="fgroup"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-mf="${f.k}" ${val?'checked':''}> ${f.label}</label></div>`;
-    if(f.type==='multiselect'){const op=f.optsFn?f.optsFn(data):(f.opts||[]);return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><select id="${id}" data-mfm="${f.k}" multiple size="6" style="height:auto">${op.map(o=>`<option value="${esc(o.id)}" ${(val||[]).includes(o.id)?'selected':''}>${esc(o.nombre)}</option>`).join('')}</select><span class="hint">Mantén presionada la tecla Ctrl (o Cmd en Mac) para elegir varios proyectos.</span></div>`;}
+    if(f.type==='multiselect'){const op=f.optsFn?f.optsFn(data):(f.opts||[]);return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><div class="chips">${op.length?op.map(o=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mfm="${f.k}" value="${esc(o.id)}" ${(val||[]).includes(o.id)?'checked':''}> ${esc(o.nombre)}</label>`).join(''):'<span class="mute">Sin opciones</span>'}</div><span class="hint">Marca uno o varios.</span></div>`;}
   if(f.type==='mover'){
     const op=(f.optsFn?f.optsFn(data):(f.opts||[]));
     const asg=(val||[]).filter(id=>op.some(o=>o.id===id));
     const no=op.filter(o=>!asg.includes(o.id));
-    const col=(id,items,ph)=>`<select id="${id}" multiple size="8" aria-label="${esc(ph)}" style="width:100%;height:auto">${items.length?items.map(o=>`<option value="${esc(o.id)}">${esc(o.nombre)}</option>`).join(''):`<option disabled value="">${esc(ph)}</option>`}</select>`;
+    /* Listas con casillas: el <select multiple> nativo se veía distinto en cada navegador y aquí los nombres
+       quedaban ilegibles. Con casillas el texto es el de la aplicación y se puede marcar lo que se mueve. */
+    const col=(id,items,ph,asignado)=>`<div class="mv-list" id="${id}" role="group" aria-label="${esc(ph)}">${items.length
+      ?items.map(o=>`<label class="mv-it"><input type="checkbox" value="${esc(o.id)}"${asignado?` data-mfm="${f.k}" checked`:''}> <span>${esc(o.nombre)}</span></label>`).join('')
+      :`<span class="mute">${esc(ph)}</span>`}</div>`;
     const b=(dir,lab,tip,cls)=>`<button type="button" class="btn sm ${cls||''}" data-act="mvMove" data-k="${f.k}" data-dir="${dir}" title="${esc(tip)}" aria-label="${esc(tip)}">${lab}</button>`;
     return `${W}${lab}<div class="mv">
-      <div class="mv-col"><div class="mv-t">Sin asignar · ${no.length}</div>${col('mv_'+f.k+'_no',no,'No queda nada por asignar')}</div>
+      <div class="mv-col"><div class="mv-t">Sin asignar · ${no.length}</div>${col('mv_'+f.k+'_no',no,'No queda nada por asignar',false)}</div>
       <div class="mv-btns">${b('to','\u203A','Asignar lo seleccionado')}${b('from','\u2039','Quitar lo seleccionado')}${b('toall','\u00BB','Asignar todo','ghost')}${b('fromall','\u00AB','Quitar todo','ghost')}</div>
-      <div class="mv-col"><div class="mv-t">Asignados · ${asg.length}</div>${col('mv_'+f.k+'_si',asg,'Todavía no hay nada asignado')}</div>
+      <div class="mv-col"><div class="mv-t">Asignados · ${asg.length}</div>${col('mv_'+f.k+'_si',asg,'Todavía no hay nada asignado',true)}</div>
     </div>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   }
   if(f.type==='checks'){const op=f.optsFn?f.optsFn(data):(f.opts||[]);return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><div class="chips">${op.length?op.map(o=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mfm="${f.k}" value="${esc(o.id)}" ${(val||[]).includes(o.id)?'checked':''}> ${esc(o.nombre)}</label>`).join(''):'<span class="mute">Primero elige el cliente para ver sus proyectos</span>'}</div></div>`;}
@@ -649,12 +653,18 @@ function render(){
   document.body.classList.toggle('mob',movil);
   document.body.classList.toggle('nav-open',!!(movil&&S.nav));
   const root=$('#app');
+  /* El diálogo abierto conserva su desplazamiento al re-renderizar (mover un cliente o proyecto refresca el
+     formulario: antes volvía al principio y había que bajar de nuevo hasta la lista de asignados). */
+  const dlgPrev=$('.dlg'),claveModal=S.modal?((S.modal.type||'')+':'+(S.modal.act||'')+':'+(S.modal.id||'')):'';
+  const scrollPrev=dlgPrev?dlgPrev.scrollTop:0;
+  const reponer=()=>{const d=$('.dlg');if(d&&scrollPrev&&S.modal&&claveModal===((S.modal.type||'')+':'+(S.modal.act||'')+':'+(S.modal.id||'')))d.scrollTop=scrollPrev;};
   if(!S.user||S.view==='login'){root.innerHTML=bannerHTML()+loginHTML()+menuHTML();return;}
   if(!allowed(S.view)){S.view=homeOf(S.user);S.param=null;}
   const prev=$('#main'),keep=prev&&S._lv===S.view&&S._lp===S.param,st=keep?prev.scrollTop:0;
   root.innerHTML=bannerHTML()+headerHTML()+`<div class="body">${navHTML()}${movil&&S.nav?'<div class="mback" data-act="navClose"></div>':''}<main id="main" class="main">${archBar()}${VIEWS[S.view]()}</main></div>`+modalHTML()+menuHTML();
   S._lv=S.view;S._lp=S.param;
   if(keep){const m=$('#main');if(m)m.scrollTop=st;}
+  reponer();
 }
 function toast(msg,type){
   const el=document.createElement('div');el.className='toast'+(type==='err'?' err':'');el.textContent=msg;$('#toasts').appendChild(el);
@@ -720,7 +730,7 @@ const ACT={
   async mvMove(d){
     const m=S.modal;if(!m||!d.k)return;
     const k=d.k,dir=d.dir||'to',cur=(m.data[k]||[]).slice();
-    const leer=id=>{const el=document.getElementById(id);return el?[...el.selectedOptions].map(o=>o.value).filter(Boolean):[];};
+    const leer=id=>{const el=document.getElementById(id);return el?[...el.querySelectorAll('input[type=checkbox]:checked')].map(o=>o.value).filter(Boolean):[];};
     const op=(m.fields||[]).find(x=>x.k===k);
     const todos=(op?(op.optsFn?op.optsFn(m.data):(op.opts||[])):[]).map(o=>o.id);
     if(dir==='to')m.data[k]=[...new Set(cur.concat(leer('mv_'+k+'_no')))];
