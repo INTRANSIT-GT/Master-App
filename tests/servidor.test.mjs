@@ -10,7 +10,7 @@ const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), '
 /* Migraciones en orden. El 005 es un ejemplo (se ejecuta a mano) y no entra aquí. */
 const MIGRACIONES = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
   '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql',
-  '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql'];   /* 019: las listas del sistema (OPL, orígenes, tipos) viven en master.catalogos */
+  '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql', '025_indices_viajes.sql'];   /* 019: las listas del sistema (OPL, orígenes, tipos) viven en master.catalogos */
 
 const db = new PGlite();
 await db.exec('set search_path = master, public');   /* las tablas viven en el esquema master (integración AP_VIAJES) */
@@ -270,7 +270,7 @@ T('79 Un viaje Rechazado sin fecha de entrega se puede volver a liquidar', liqOl
 
 /* ---- 11. La migración 021 rellena la fecha de entrega de la carga anterior ---- */
 await q1('update viajes set finalizado_en=null where id=$1', [vOldId]);
-await db.exec(sqlDe('021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql'));
+await db.exec(sqlDe('021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql', '025_indices_viajes.sql'));
 const fOld21 = (await q1('select finalizado_en from viajes where id=$1', [vOldId]))[0];
 T('80 La migración 021 completa la fecha de entrega de los viajes viejos (la toma de la auditoría)', !!fOld21.finalizado_en, fOld21);
 T('81 La migración no inventa fechas en los viajes que todavía no se entregaron', (await q1("select count(*)::int n from viajes where estado in ('PLANIFICADO','EN_RUTA') and finalizado_en is not null"))[0].n === 0);
@@ -330,6 +330,11 @@ const gFin = await api('gtr', 'resumenHistorico');
 T('104 El Gerente de Transporte consulta el control financiero (ingresos y gastos)', gFin.ok && gFin.result && gFin.result.financiero && gFin.result.financiero.M && typeof gFin.result.financiero.M.costoTotal !== 'undefined', gFin.result && gFin.result.finError);
 const gCosto = await api('gtr', 'registrarImportes', gViaje.result.id, { costoProveedor: '100' });
 T('105 …pero NO puede registrar costos: el control financiero es solo de consulta', !gCosto.ok && gCosto.code === 'SIN_PERMISO', gCosto);
+/* El «M» de «Cargados N de M» de un perfil limitado cuenta solo sus viajes visibles, con una sola consulta
+   de conjunto (antes se evaluaba la función de RLS viaje por viaje: 2,7 s de promedio con 7.000 viajes). */
+const snImpR = await api('imp', 'snapshot'); const snImp = snImpR.snapshot || {};
+const impSql = (await q1("select count(*)::int n from viajes v where v.cliente_id='COLGATE' and v.proyecto_cat='COLGATE'"))[0].n;
+T('106 El perfil limitado informa «en la base» solo sus viajes visibles', snImpR.ok && snImp.ventana && snImp.ventana.enBase === impSql, [snImp.ventana && snImp.ventana.enBase, impSql]);
 const rOper = await api('ped', 'resumenHistorico');
 T('102 Un perfil sin permiso de finanzas recibe la gráfica con «financiero» en null', rOper.ok && !!rOper.result.porMes && rOper.result.financiero === null && rOper.result.finError === '', rOper.result && Object.keys(rOper.result.porMes || {}).length);
 

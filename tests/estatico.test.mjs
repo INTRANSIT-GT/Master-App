@@ -36,4 +36,8 @@ T('13 El motor del servidor está al día con js/engine.js (ejecuta: npm run bui
 T('14 No existe la clave service_role en ningún archivo de la interfaz', !/SUPABASE_SERVICE_ROLE_KEY/.test(código));
 T('15 La Edge Function usa la clave de servicio solo desde variables de entorno del servidor', /Deno\.env\.get\("SUPABASE_SERVICE_ROLE_KEY"\)/.test(leer('supabase/functions/api/index.ts')) && !/eyJ/.test(leer('supabase/functions/api/index.ts')));
 T('16 El menú del teléfono respeta el área segura: la primera opción no queda bajo el notch', /body\.mob \.side\{[^}]*padding:calc\(var\(--safe-t\)/.test(css) && /--safe-t:\s*env\(safe-area-inset-top/.test(css) && /body\.mob \.side\{[^}]*overflow:auto/.test(css));
+/* Rendimiento: estas dos formas de consultar ya se midieron como lentas en Supabase y no deben volver. */
+const handler = leer('supabase/functions/api/handler.mjs');
+T('17 Las lecturas no esperan el lock de escritura (era la espera de hasta 12 s de Supabase)', /if \(!OPS_LECTURA\.includes\(op\)\) await q\('select pg_advisory_xact_lock\(727001\)'\)/.test(handler) && !/pg_advisory_xact_lock\$\{/.test(handler));
+T('18 El conteo de viajes visibles es una sola consulta de conjunto (no evalúa la función de RLS fila por fila)', !/count\(\*\)[\s\S]{0,120}app\.ve_viaje/.test(handler) && /from master\.viajes v where \$\{partes\.join/.test(handler));
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

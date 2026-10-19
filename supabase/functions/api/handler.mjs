@@ -75,9 +75,25 @@ const fusionarAuditoria = (cola, viajes) => {
   return [...m.values()].sort((x, y) => x.id < y.id ? -1 : 1);
 };
 /* Cuántos viajes ve este usuario en TODA la base (para poder decir «N de M» en la pantalla). */
-async function contarVisibles(q, uid) {
-  await q(`select set_config('request.jwt.claim.sub',$1,true)`, [uid]);
-  const { rows } = await q('select count(*)::int n from master.viajes v where app.ve_viaje(v.cliente_id, v.proyecto_cat, v.estado)');
+/* Cuántos viajes abarca la base para este perfil (el «M» de «Cargados N de M»). Antes se contaba evaluando la
+   función de RLS viaje por viaje: 2,7 s de promedio con 7.000 viajes y creciendo. Ahora es una sola consulta de
+   conjunto: quien ve todos los viajes cuenta la tabla; el resto, sus clientes y proyectos en una sola pasada
+   (usa el índice ix_viajes_cliente). */
+async function contarVisibles(q, A, db, E) {
+  if (E.hasPerm(A, 'viajes_ver_todos')) { const { rows } = await q('select count(*)::int n from master.viajes'); return rows[0] ? rows[0].n : 0; }
+  const cli = [...new Set(db.acceso.filter(a => a.userId === A.id).map(a => a.cliente))];
+  const proy = [...new Set((A.proyectos || []).filter(Boolean))];
+  const partes = [], params = [];
+  if (cli.length) {
+    params.push(cli);
+    let c = `v.cliente_id = any($${params.length}::text[])`;
+    if (proy.length) { params.push(proy); c += ` and v.proyecto_cat = any($${params.length}::text[])`; }
+    partes.push('(' + c + ')');
+  }
+  /* Un perfil comercial ve además los viajes ya aceptados/facturados/cobrados (la regla del motor, en SQL). */
+  if (E.hasPerm(A, 'comercial_ver')) partes.push(`v.estado = any(array['ACEPTADO','FACTURADO','COBRADO'])`);
+  if (!partes.length) return 0;
+  const { rows } = await q(`select count(*)::int n from master.viajes v where ${partes.join(' or ')}`, params);
   return rows[0] ? rows[0].n : 0;
 }
 
@@ -100,8 +116,11 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
       /* Una operación de ESCRITURA a la vez (exclusivo): sin carreras ni duplicados. Las LECTURAS toman un lock
          compartido: pueden correr en paralelo entre sí, pero nunca a la vez que una escritura (así el snapshot se
          arma sobre un estado consistente sin bloquear a las demás lecturas). */
-      const soloLectura = OPS_LECTURA.includes(op);
-      await q(`select pg_advisory_xact_lock${soloLectura ? '_shared' : ''}(727001)`);
+      /* Solo las ESCRITURAS toman el lock. Serializan su «leer → calcular → guardar» (y la cadena de la
+         auditoría), que es donde sí hay carrera. Las LECTURAS no lo toman: la transacción ya ve un estado
+         consistente por MVCC, y así un resumen largo no deja esperando a quien está guardando (esa espera de
+         hasta 12 s era el primer motivo de «consultas lentas» en Supabase). */
+      if (!OPS_LECTURA.includes(op)) await q('select pg_advisory_xact_lock(727001)');
       /* La auditoría crece sin límite: para verificar la cadena se lee entera; en el snapshot se lee la cola (más
          la bitácora de los viajes que se envían, que se agrega después); al escribir basta el último evento. */
       const fullAudit = op === 'verificarAuditoria';
@@ -126,7 +145,7 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
         const ventana = aplicarVentana(E);
         const ids = E.getDB().trips.map(t => t.id);
         if (ids.length) E.getDB().audit = fusionarAuditoria(E.getDB().audit, await auditoriaDeViajes(q, ids));
-        const enBase = await contarVisibles(q, actorId);
+        const enBase = await contarVisibles(q, A, db, E);
         return { resp: { ok: true, snapshot: await armarSnapshot(E, actorId, deps, Object.assign(ventana, { viajes: ids.length, enBase })) }, commit: false };
       }
       /* Totales de TODO el histórico (no de la ventana que se ve en pantalla): los calcula el mismo motor sobre
