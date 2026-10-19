@@ -257,14 +257,47 @@ function historicoMeses(){
   const ms=Object.keys(pm).sort().slice(-12);if(!ms.length)return '';
   return chartMeses(pm,ms)+leyendaMeses();
 }
+/* ---- Gráfica de Finanzas con los filtros de la pantalla ----
+   Inicio no tiene filtros: usa el resumen completo (S.finHist). En Finanzas, cuando hay filtros puestos
+   (cliente, proyecto, proveedor, fechas plan) se pide el mismo resumen acotado y la gráfica cambia.
+   Los totales de abajo salen de la MISMA serie que la gráfica, para que nunca digan una cosa distinta. */
+function filtrosGrafica(){return {desde:S.fDesde||'',hasta:S.fHasta||'',cliente:S.fCli||'',proyecto:S.fPcat||'',proveedor:S.fProv||''};}
+function claveGrafica(){const f=filtrosGrafica();return Object.values(f).some(Boolean)?JSON.stringify(f):'';}
+function graficaActual(){
+  const k=claveGrafica();
+  if(!k)return S.finHist||null;
+  return S.graf&&S.graf.key===k?(S.graf.data||null):null;
+}
+function cargaGrafica(){
+  const k=claveGrafica();
+  if(!k||typeof API.resumenHistorico!=='function')return;
+  if(S.graf&&S.graf.key===k&&(S.graf.data||S.graf.cargando))return;
+  S.graf={key:k,data:null,cargando:true,err:''};
+  Promise.resolve().then(()=>API.resumenHistorico(S.user.id,JSON.parse(k)))
+    .then(h=>{if(!S.graf||S.graf.key!==k)return;S.graf={key:k,data:h||null,cargando:false,err:''};
+      const el=$('#chartMes');if(el)el.innerHTML=graficaMeses()||histVacio('grafica');else render();})
+    .catch(e=>{if(!S.graf||S.graf.key!==k)return;
+      S.graf={key:k,data:null,cargando:false,err:(e&&e.message)||(typeof e==='string'?e:'No se pudo consultar el resumen.')};
+      const el=$('#chartMes');if(el)el.innerHTML=histVacio('grafica');else render();});
+}
+function graficaMeses(){
+  const d=graficaActual(),pm=d&&d.porMes;if(!pm)return '';
+  const ms=Object.keys(pm).sort().slice(-12);if(!ms.length)return '';
+  return chartMeses(pm,ms)+leyendaMeses();
+}
 /* Motivo por el que la gráfica no tiene datos + botón para volver a pedirlos. */
-function histVacio(){
-  const n=S.finHist&&Number(S.finHist.viajes)||0;
-  const motivo=S.finHistErr?'No se pudo consultar el resumen en el servidor.'
+function histVacio(fuente){
+  const g=fuente==='grafica';
+  const err=g?(S.graf&&S.graf.err):S.finHistErr;
+  const d=g?(S.graf&&S.graf.data):S.finHist;
+  const n=d&&Number(d.viajes)||0;
+  const filtros=g&&!!claveGrafica();
+  const motivo=err?'No se pudo consultar el resumen en el servidor.'
     :n?'Se leyeron '+n+' viajes, pero ninguno tiene fecha plan (la gráfica los agrupa por esa fecha).'
+    :filtros?'No hay viajes con esos filtros en el periodo elegido.'
     :'Aún no hay viajes registrados.';
   return '<div class="mute">'+esc(motivo)+'</div>'
-    +(S.finHistErr?'<div class="mute" style="margin-top:6px;font-size:12.5px">'+esc(String(S.finHistErr).slice(0,240))+'</div>':'')
+    +(err?'<div class="mute" style="margin-top:6px;font-size:12.5px">'+esc(String(err).slice(0,240))+'</div>':'')
     +'<div style="margin-top:10px"><button class="btn sm" data-act="histReintentar">Reintentar</button></div>';
 }
 
@@ -754,7 +787,7 @@ const ACT={
   /* menú lateral en el teléfono (botón de tres líneas) */
   async navToggle(){S.nav=!S.nav;if(S.nav)S.menu=false;render();},
   async navClose(){S.nav=false;render();},
-  async histReintentar(){S.finHist=undefined;S.finHistErr='';S.finHistCargando=false;render();},
+  async histReintentar(){S.finHist=undefined;S.finHistErr='';S.finHistCargando=false;S.graf=null;render();},
   async togglePhone(){PREF.phone=!PREF.phone;savePref();S.menu=false;render();},
   async toggleArch(){PREF.arch=!PREF.arch;savePref();S.menu=false;render();},
   async reset(){
@@ -874,7 +907,9 @@ app.addEventListener('change',async e=>{
     else S.sel=[...new Set([...S.sel,...pend.map(x=>x.id)])];
     $('#vb').innerHTML=BODY.comercial();return;
   }
-  if(t.dataset.flt){S[t.dataset.flt]=t.value;render();return;}
+  if(t.dataset.flt){S[t.dataset.flt]=t.value;render();
+    if(/^f(Desde|Hasta|Cli|Pcat|Prov)$/.test(t.dataset.flt))cargaGrafica();
+    return;}
   if(t.dataset.fltchk){S[t.dataset.fltchk]=t.checked;render();return;}
   if(t.dataset.perm){
     const [rol,perm]=t.dataset.perm.split('|');

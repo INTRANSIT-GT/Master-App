@@ -92,6 +92,19 @@ function filtroVisible(A, db, E) {
   if (E.hasPerm(A, 'comercial_ver')) partes.push(`v.estado = any(array['ACEPTADO','FACTURADO','COBRADO'])`);
   return partes.length ? { sql: partes.join(' or '), params } : null;
 }
+/* Filtros de la pantalla de Finanzas (cliente, proyecto, proveedor y fechas plan) traducidos a SQL: la gráfica
+   por mes se calcula en la base, así que el filtro tiene que viajar hasta la consulta. */
+function filtrosGrafica(f) {
+  const sql = [], params = [];
+  const t = v => (v == null ? '' : String(v).trim());
+  const add = (col, val) => { params.push(val); sql.push(`${col} = $${params.length}`); };
+  if (t(f.desde)) { params.push(t(f.desde)); sql.push(`v.fecha_plan >= $${params.length}`); }
+  if (t(f.hasta)) { params.push(t(f.hasta)); sql.push(`v.fecha_plan <= $${params.length}`); }
+  if (t(f.cliente)) add('v.cliente_id', t(f.cliente));
+  if (t(f.proyecto)) add('v.proyecto_cat', t(f.proyecto));
+  if (t(f.proveedor)) add('v.opl', t(f.proveedor));
+  return { sql, params };
+}
 /* Cuántos viajes abarca la base para este perfil (el «M» de «Cargados N de M»). Antes se contaba evaluando la
    función de RLS viaje por viaje: 2,7 s de promedio con 7.000 viajes y creciendo. */
 async function contarVisibles(q, A, db, E) {
@@ -165,9 +178,14 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
         const fv = todo ? null : filtroVisible(A, db, E);
         /* La gráfica se resume en la base (una sola consulta, agrupada por estado y mes): es lo que ve todo el
            mundo y así no depende de cargar el histórico entero en memoria. */
+        /* Los filtros de la pantalla (cliente, proyecto, proveedor, fechas plan) acotan la gráfica: así el
+           resumen del mes cambia cuando se ajustan, sin cargar el histórico en memoria. */
+        const fm = filtrosGrafica((args[0] && typeof args[0] === 'object') ? args[0] : {});
+        const cond = [fv ? `(${fv.sql})` : '', ...fm.sql].filter(Boolean);
+        const params = [...(fv ? fv.params : []), ...fm.params];
         const consulta = `select v.estado, substring(coalesce(v.fecha_plan,''),1,7) mes, count(*)::int n from master.viajes v`
-          + (fv ? ` where ${fv.sql}` : '') + ' group by 1,2';
-        const filas = (await q(consulta, fv ? fv.params : [])).rows;
+          + (cond.length ? ` where ${cond.join(' and ')}` : '') + ' group by 1,2';
+        const filas = (await q(consulta, params)).rows;
         const porEstado = {}, porMes = {};
         let total = 0;
         for (const r of filas) {

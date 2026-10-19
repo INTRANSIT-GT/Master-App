@@ -312,6 +312,18 @@ const bAnt = await api('adm', 'buscarViajes', { texto: v1id });
 T('96 La búsqueda encuentra un viaje que NO está en la ventana (busca en todo el histórico)', bAnt.ok && bAnt.result.trips.some(t => t.id === v1id), bAnt.result && bAnt.result.trips.map(t => t.id));
 const bNada = await api('adm', 'buscarViajes', { texto: '' });
 T('97 Sin texto la búsqueda no devuelve nada (no recorre la base de gratis)', bNada.ok && bNada.result.trips.length === 0);
+/* ---- La gráfica de Finanzas responde a los filtros (cliente, proyecto, proveedor, fechas plan) ---- */
+const rCliG = await api('adm', 'resumenHistorico', { cliente: 'COLGATE' });
+const sqlCliG = (await q1("select count(*)::int n from viajes where cliente_id='COLGATE'"))[0].n;
+T('115 El resumen por mes se acota al cliente elegido', rCliG.ok && rCliG.result.viajes === sqlCliG && rCliG.result.viajes <= rH.result.viajes, [rCliG.result && rCliG.result.viajes, sqlCliG]);
+const rFecG = await api('adm', 'resumenHistorico', { desde: '2019-01-01', hasta: '2019-12-31' });
+const sqlFecG = (await q1("select count(*)::int n from viajes where fecha_plan >= '2019-01-01' and fecha_plan <= '2019-12-31'"))[0].n;
+T('116 El resumen por mes se acota al periodo de fechas plan', rFecG.ok && rFecG.result.viajes === sqlFecG && Object.keys(rFecG.result.porMes || {}).every(m => m.startsWith('2019')), [rFecG.result && rFecG.result.viajes, sqlFecG]);
+const rProG = await api('adm', 'resumenHistorico', { proveedor: 'Transportes Cumbre' });
+const sqlProG = (await q1("select count(*)::int n from viajes where opl='Transportes Cumbre'"))[0].n;
+const rProyG = await api('adm', 'resumenHistorico', { proyecto: 'COLGATE' });
+const sqlProyG = (await q1("select count(*)::int n from viajes where proyecto_cat='COLGATE'"))[0].n;
+T('117 El resumen por mes se acota al proveedor (OPL) y al proyecto', rProG.ok && rProG.result.viajes === sqlProG && rProyG.ok && rProyG.result.viajes === sqlProyG, [rProG.result && rProG.result.viajes, sqlProG, rProyG.result && rProyG.result.viajes, sqlProyG]);
 const pMes = rH.result.porMes && Object.keys(rH.result.porMes);
 const mesSql = (await q1("select to_char(fecha_plan::timestamp,'YYYY-MM') m, count(*)::int n from viajes where fecha_plan ~ '^\\d{4}-\\d{2}' group by 1 order by 1 desc limit 1"))[0];
 T('99 El resumen por mes coincide con la base (meses y conteo)', pMes.length > 0 && pMes.includes(mesSql.m) && Object.values(rH.result.porMes[mesSql.m]).reduce((a, b) => a + b, 0) === mesSql.n, [pMes, mesSql]);

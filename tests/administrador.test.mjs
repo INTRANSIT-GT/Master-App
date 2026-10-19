@@ -259,4 +259,11 @@ const btnMover = d.querySelector('.mv-btns button[data-act="mvMove"][data-dir="t
 if (btnMover) await click(btnMover);
 const despuesCli = ev("JSON.stringify(S.modal.data.clientes||[])");
 T('U6 Al mover un cliente el formulario sigue abierto y la asignación se actualiza', !!d.querySelector('.dlg') && antesCli !== despuesCli && listasMv().length === 4, [antesCli.slice(0, 60), despuesCli.slice(0, 60)]);
+/* La gráfica de Finanzas responde a los filtros: con un cliente puesto ya no muestra el total de toda la base. */
+ev("S.view='finanzas';S.tab.fin='mes';S.fDesde='';S.fHasta='';S.fCli='COLGATE';S.fPcat='';S.fProv='';S.graf=null;render()");
+const mesHtml = (d.querySelector('#main') || { innerHTML: '' }).innerHTML;
+T('U7 Con un filtro puesto la gráfica de Finanzas sale del alcance filtrado (no del total de la base)', !/Total en la base/.test(mesHtml) && /(Calculando el resumen por mes|Sin viajes con esos filtros)/.test(mesHtml));
+const claveG = ev("claveGrafica()");
+T('U8 La clave de la gráfica cambia con los filtros (así se vuelve a pedir al servidor)', claveG.includes('COLGATE') && ev("filtrosGrafica().cliente==='COLGATE'"));
+ev("S.fCli=''");
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

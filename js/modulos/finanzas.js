@@ -132,7 +132,7 @@ VIEWS.finanzas=()=>{
   const sinFiltro=!S.fDesde&&!S.fHasta&&!S.fCli&&!S.fPcat&&!S.fProv;
   const H=sinFiltro&&S.finHist&&S.finHist.financiero?S.finHist.financiero.M:null;
   if(H)['porPagarProv','pendProv','porPagarPil','pendPil','costoTotal','costoIncompletos','provSinCosto','pilSinImporte','margenEst','margenPct','margenIngreso','margenCostos'].forEach(x=>{if(x in H)M[x]=H[x];});
-  cargaHistorico();
+  cargaHistorico();cargaGrafica();
   const histErr=S.finHist&&S.finHist.finError?`<div class="alertbox" style="margin-bottom:10px"><b>No se pudieron calcular los totales del histórico.</b> La gráfica por mes sí está al día. Motivo: ${esc(S.finHist.finError)}</div>`:'';
   const histNota=histErr||(k==='res'&&H?`<div class="alertbox info" style="margin-bottom:10px">Costos y margen: <b>toda la base</b> (histórico completo), no solo los viajes cargados en pantalla. Los detalles de cada total listan los viajes que están cargados.</div>`
     :(k==='res'&&S.finHistCargando?'<div class="mute" style="margin-bottom:10px">Calculando los totales del histórico…</div>':''));
@@ -162,17 +162,20 @@ VIEWS.finanzas=()=>{
       ${tile('gananciaReal','Ganancia real',M.gananciaReal,M.gananciaReal==null?'Requiere factura cobrada por completo y costos registrados':`${M.realIncluidas} agrupación(es) cobradas por completo`,M.realPendientes?M.realPendientes+' agrupación(es) aún sin cobrar por completo (no cuentan)':'')}</div>
       <div class="alertbox info" style="margin-top:14px"><b>Cómo se calcula:</b> las facturas se suman una sola vez aunque incluyan varios viajes. Un dato faltante no se toma como cero: el viaje o la agrupación se excluye y se señala. Los viáticos (Q_VIATICOS) se tratan como importe por pagar al piloto. Toca cualquier indicador para ver el detalle que lo explica.</div>`;
   }else if(k==='mes'){
-    /* Resumen por mes de TODA la base (lo calcula el servidor con todos los viajes, no solo la ventana cargada). */
-    const PM=(S.finHist&&S.finHist.porMes)||null;
+    /* Resumen por mes de TODA la base, acotado por los filtros de arriba (lo calcula el servidor con todos los
+       viajes, no solo la ventana cargada): al cambiar cliente, proyecto, proveedor o fechas, la gráfica cambia. */
+    const G=graficaActual(),PM=(G&&G.porMes)||null;
+    const cargando=claveGrafica()?!!(S.graf&&S.graf.cargando):S.finHistCargando;
+    const errG=claveGrafica()?String((S.graf&&S.graf.err)||'').slice(0,240):(S.finHistErr?String(S.finHistErr).slice(0,240):'');
     const meses=PM?Object.keys(PM).sort().slice(-12):[];
     body=PM&&meses.length
       ? `<h2 style="margin-bottom:10px">Viajes por mes · por estado</h2>
       <div class="card"><div id="chartMes">${chartMeses(PM,meses)}</div>
         ${leyendaMeses()}
         <div class="mute" style="font-size:12.5px;margin-top:8px">Cada barra es un mes (por <b>fecha plan</b> del viaje) y cada color, un estado. Un mes «todo verde» significa que todos sus viajes ya están liquidados/facturados/cobrados; si queda un tramo de otro color, hay viajes pendientes en ese mes. Pasa el cursor sobre un tramo para ver el número. Se muestran los últimos 12 meses con actividad.</div></div>
-      <div class="mute" style="margin-top:10px">Total en la base: <b>${S.finHist.viajes}</b> viajes · ${Object.entries(S.finHist.porEstado||{}).map(([e,n])=>`${esc((ESTADOS[e]||{}).l||e)}: ${n}`).join(' · ')}</div>`
-      : (S.finHistCargando?empty('Calculando el resumen por mes…','Se está consultando toda la base.')
-        : empty('Sin datos para el resumen por mes',(S.finHistErr?String(S.finHistErr).slice(0,240):(S.finHist&&S.finHist.viajes?'Se leyeron '+S.finHist.viajes+' viajes, pero ninguno tiene fecha plan.':'')))
+      <div class="mute" style="margin-top:10px">Total ${claveGrafica()?'según los filtros':'en la base'}: <b>${G.viajes}</b> viajes · ${Object.entries(G.porEstado||{}).map(([e,n])=>`${esc((ESTADOS[e]||{}).l||e)}: ${n}`).join(' · ')}</div>`
+      : (cargando?empty('Calculando el resumen por mes…',claveGrafica()?'Se está consultando la base con los filtros elegidos.':'Se está consultando toda la base.')
+        : empty(claveGrafica()?'Sin viajes con esos filtros':'Sin datos para el resumen por mes',errG||(claveGrafica()?'Prueba con otro cliente, proyecto, proveedor o periodo.':(S.finHist&&S.finHist.viajes?'Se leyeron '+S.finHist.viajes+' viajes, pero ninguno tiene fecha plan.':'')))
           +'<div style="margin-top:10px"><button class="btn sm" data-act="histReintentar">Reintentar</button></div>');
   }else if(k==='prov'){
     const rows=R.tripRows.filter(r=>r.proveedor).sort((a,b)=>a.proveedor.localeCompare(b.proveedor)||a.id.localeCompare(b.id));
