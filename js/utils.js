@@ -21,6 +21,7 @@ const ICON={
   out:'<path d="M9 4H4v16h5M16 8l4 4-4 4M20 12H9"/>',
   check:'<path d="M5 12l5 5 9-10"/>',
   alert:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+  help:'<circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1.1 1-1.1 1.8"/><path d="M12 17h.01"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
   win:'<path d="M3 4l8-1v8H3zM13 3l8-1v9h-8zM3 13h8v8l-8-1zM13 13h8v9l-8-1z"/>'

@@ -45,6 +45,9 @@ export const TABLAS = [
     ['fechaEmision', 'fecha_emision', 't'], ['emision', 'emision', 'j'], ['transferencia', 'transferencia', 'j'], ['estado', 'estado', 't'], ['creadoPorId', 'creado_por_id', 'tn'], ['creadoPor', 'creado_por', 'tn'], ['creadoEn', 'creado_en', 'ts'], ['anulada', 'anulada', 'j'], ['correcciones', 'correcciones', 'ja']]),
   S('notificaciones', 'notificaciones', ['id'], [['id', 'id', 't'], ['tipo', 'tipo', 't'], ['destinatarios', 'destinatarios', 'a'], ['usuarios', 'usuarios', 'a'], ['asunto', 'asunto', 't'], ['detalle', 'detalle', 'jo'], ['creadaPor', 'creada_por', 'tn'], ['creadaPorId', 'creada_por_id', 'tn'],
     ['creadaEn', 'creada_en', 'ts'], ['leidaPor', 'leida_por', 'a'], ['canal', 'canal', 't'], ['externo', 'externo', 'jo']]),
+  /* Ayuda: reportes de fallas. OPCIONAL: si la migración 027 aún no se aplicó, la tabla no existe y el resto de la aplicación sigue funcionando (la lista queda vacía). */
+  S('reportes_ayuda', 'reportesAyuda', ['id'], [['id', 'id', 't'], ['usuarioId', 'usuario_id', 't'], ['usuario', 'usuario', 't'], ['rol', 'rol', 't'], ['modulo', 'modulo', 't'], ['tipo', 'tipo', 't'], ['descripcion', 'descripcion', 't'],
+    ['intento', 'intento', 't'], ['estado', 'estado', 't'], ['creadoEn', 'creado_en', 'ts'], ['actualizadoEn', 'actualizado_en', 'ts'], ['actualizadoPor', 'actualizado_por', 'tn'], ['historial', 'historial', 'ja']], { opcional: true }),
   S('auditoria', 'audit', ['id'], [['id', 'id', 't'], ['entidad', 'entidad', 't'], ['viajeId', 'viaje_id', 't'], ['accion', 'accion', 't'], ['campo', 'campo', 't'], ['anterior', 'anterior', 't'], ['nuevo', 'nuevo', 't'], ['porId', 'por_id', 't'], ['por', 'por', 't'], ['rol', 'rol', 't'],
     ['en', 'en', 'ts'], ['motivo', 'motivo', 't'], ['ref', 'ref', 't'], ['prev', 'prev', 't'], ['hash', 'hash', 't']], { soloAgregar: true })
 ];
@@ -92,12 +95,18 @@ async function leerTabla(q, tabla, cols, extra, orden) {
 }
 const claveDe = (spec, r) => spec.key.map(k => r[k]).join('\u0001');
 
+async function existeTabla(q, tabla) {
+  const r = await q('select to_regclass($1) is not null as ok', ['master.' + tabla]);
+  return !!(r.rows[0] && r.rows[0].ok);
+}
+
 export async function loadState(q, opts = {}) {
-  const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], ordenesPago: [], rutas: [], tarifas: [], mem: [], notificaciones: [], config: {}, seq: {} };
+  const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], ordenesPago: [], rutas: [], tarifas: [], mem: [], notificaciones: [], reportesAyuda: [], config: {}, seq: {} };
   for (const spec of TABLAS) {
     /* opts.solo: carga solo esas tablas (para cálculos de conjunto que no necesitan todo el estado, como
        los totales del histórico financiero). */
     if (opts.solo && !opts.solo.includes(spec.tabla)) continue;
+    if (spec.opcional && !(await existeTabla(q, spec.tabla))) { db[spec.lista] = []; continue; }
     const orden = spec.key.map(k => spec.cols.find(c => c[0] === k)[1]).join(', ');
     let rows;
     /* La auditoría es de solo agregar y crece sin límite. Para operaciones que escriben solo se necesita el último
@@ -192,6 +201,7 @@ export async function saveState(q, antes, db, rechazo) {
       /* Si el motor rechazó la operación, no debe haber tocado datos de negocio: solo la auditoría (el registro del
          intento) y las secuencias pueden cambiar. El fallo se detecta aquí, reusando el mismo recorrido del diff. */
       if (rechazo && spec.tabla !== 'auditoria') throw new Error('Operación rechazada con cambios parciales: se descarta para no guardar datos a medias.');
+      if (spec.opcional && !(await existeTabla(q, spec.tabla))) throw new Error('Falta crear la tabla master.' + spec.tabla + ': aplica la migración SQL correspondiente (027_reportes_ayuda.sql) antes de usar esta función.');
       await upsert(q, spec.tabla, spec.cols, claves, f.principal, tp);
       for (const part of spec.partes || []) {
         const fp = f.partes[part.tabla], pp = p && p.partes[part.tabla];

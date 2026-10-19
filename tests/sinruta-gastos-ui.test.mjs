@@ -99,4 +99,59 @@ T('U15 Gasto sin importe: no guarda y muestra mensaje claro', ev('DB.trips.lengt
 /* Torre no ve gastos */
 como('U-T', 'torre'); ev(`go('detalle','${id}')`); await tick();
 T('U16 Torre no ve los gastos adicionales en el detalle', !/Pernocta|Gastos adicionales/.test(txt(d.querySelector('#main') || d.body)));
+
+/* ===== Ayuda ===== */
+const navTxt = () => txt(d.querySelector('nav.side') || d.body);
+como('U-O', 'inicio');
+T('H1 El menú de un Operativo tiene «Ayuda»', !![...d.querySelectorAll('nav.side button')].find(b => txt(b) === 'Ayuda'), navTxt());
+como('U-T', 'torre');
+T('H2 El menú de Torre (que solo tenía una opción) muestra «Ayuda»', !![...d.querySelectorAll('nav.side button')].find(b => txt(b) === 'Ayuda'), navTxt());
+como('U-1', 'inicio');
+T('H3 El menú del Administrador (acordeón) también muestra «Ayuda»', !![...d.querySelectorAll('nav.side button')].find(b => txt(b) === 'Ayuda'), navTxt());
+for (const [uid, rol] of [['U-F', 'Facturación'], ['U-C', 'Cobros'], ['U-G', 'Gerencia']]) {
+  const ex = ev(`!!DB.usuarios.find(u=>u.id==='${uid}')`); if (!ex) continue;
+  como(uid, ev(`homeOf(S.user)`)); T(`H4 ${rol}: tiene acceso a Ayuda`, ev(`allowed('ayuda')`) === true);
+}
+como('U-O', 'ayuda');
+let f2 = txt(d.querySelector('#main'));
+T('H5 La pantalla Ayuda muestra el formulario con todos sus campos y el botón «Enviar reporte»', /Tipo de problema/.test(f2) && /Módulo afectado/.test(f2) && /Descripción del problema/.test(f2) && /¿Qué estabas intentando hacer\?/.test(f2) && /Usuario que reporta/.test(f2) && /Fecha y hora/.test(f2) && !!boton('Enviar reporte'), f2.slice(0, 300));
+const tipos = [...d.querySelectorAll('#ay_tipo option')].map(o => o.textContent).filter(Boolean).slice(1), mods = [...d.querySelectorAll('#ay_modulo option')].map(o => o.textContent).filter(Boolean);
+T('H6 Las 6 opciones de tipo de problema son las acordadas', tipos.join('|') === ['No puedo guardar información', 'No puedo ingresar a una sección', 'Error en un formulario', 'La información no aparece o no se actualiza', 'Problema con un botón o una función', 'Otro'].join('|'), tipos);
+T('H7 Módulo afectado trae los módulos existentes y «No estoy seguro» al final', mods.includes('Nuevo viaje') && mods.includes('Torre de control') && mods.at(-1) === 'No estoy seguro' && !mods.includes('Ayuda'), mods);
+const n0 = ev('(DB.reportesAyuda||[]).length');
+await click(boton('Enviar reporte'));
+T('H8 Enviar vacío no guarda y explica qué falta', ev('(DB.reportesAyuda||[]).length') === n0 && /tipo de problema/i.test(txt(d.querySelector('#main'))), txt(d.querySelector('#main')).slice(0, 200));
+await escribe(d.querySelector('#ay_tipo'), 'No puedo guardar información'); await escribe(d.querySelector('#ay_modulo'), 'Nuevo viaje');
+await escribe(d.querySelector('#ay_descripcion'), 'Al presionar guardar no pasa nada y no aparece mensaje');
+await escribe(d.querySelector('#ay_intento'), 'Registrar un viaje');
+await click(boton('Enviar reporte'));
+const rs1 = JSON.parse(ev('JSON.stringify(DB.reportesAyuda)'));
+T('H9 Con los datos completos se guarda de verdad (estado Pendiente, usuario y fecha automáticos)', rs1.length === n0 + 1 && rs1.at(-1).estado === 'PENDIENTE' && rs1.at(-1).usuarioId === 'U-O' && !!rs1.at(-1).creadoEn && rs1.at(-1).modulo === 'Nuevo viaje' && rs1.at(-1).intento === 'Registrar un viaje', rs1.at(-1));
+T('H10 La confirmación aparece solo porque se guardó y el formulario queda limpio', /Reporte AYU-\d+ enviado/.test(txt(d.querySelector('#main'))) && d.querySelector('#ay_descripcion').value === '', txt(d.querySelector('#main')).slice(0, 200));
+T('H11 Se creó la notificación para el Administrador', ev("DB.notificaciones.filter(n=>n.tipo==='REPORTE_AYUDA').length") === 1 && ev("DB.notificaciones.find(n=>n.tipo==='REPORTE_AYUDA').destinatarios.join()") === 'ADMIN');
+await click(boton('Enviar reporte'));
+T('H12 Pulsar otra vez con el formulario vacío no crea otro reporte', ev('(DB.reportesAyuda||[]).length') === n0 + 1);
+await click(boton('Mis reportes', '[role="tab"]'));
+let lst = txt(d.querySelector('#main'));
+T('H13 «Mis reportes» muestra el reporte con su estado y sin controles de administrador', /Pendiente/.test(lst) && /Al presionar guardar/.test(lst) && !d.querySelector('[data-ay-estado]') && !/Todos los reportes/.test(lst), lst.slice(0, 200));
+/* otro usuario crea uno propio; el operativo no lo ve */
+ev(`S.user=DB.usuarios.find(u=>u.id==='U-T');S.view='ayuda';S.tab={};S.ayuda=null;render()`);
+await escribe(d.querySelector('#ay_tipo'), 'Otro'); await escribe(d.querySelector('#ay_modulo'), 'No estoy seguro'); await escribe(d.querySelector('#ay_descripcion'), 'Reporte de Torre para probar privacidad');
+await click(boton('Enviar reporte'));
+como('U-O', 'ayuda'); ev("S.tab.ayuda='lista';render()");
+T('H14 Un usuario no ve los reportes de otro', !/privacidad/.test(txt(d.querySelector('#main'))) && /Mis reportes \(1\)/.test(txt(d.querySelector('#main'))), txt(d.querySelector('#main')).slice(0, 200));
+/* Administrador */
+como('U-1', 'ayuda'); ev("S.tab.ayuda='lista';render()");
+lst = txt(d.querySelector('#main'));
+T('H15 El Administrador ve todos los reportes (usuario, módulo, descripción, estado)', /Todos los reportes \(2\)/.test(lst) && /Pedro Operativo/.test(lst) && /Felipe Torre/.test(lst) && /Nuevo viaje/.test(lst) && /privacidad/.test(lst) && d.querySelectorAll('[data-ay-estado]').length === 2, lst.slice(0, 250));
+const sel = d.querySelector('[data-ay-estado]'); const idRep = sel.dataset.ayEstado;
+await escribe(sel, 'EN_REVISION');
+T('H16 El Administrador cambia el estado y se guarda', ev(`DB.reportesAyuda.find(r=>r.id==='${idRep}').estado`) === 'EN_REVISION' && ev(`DB.reportesAyuda.find(r=>r.id==='${idRep}').historial.length`) === 2);
+await escribe(d.querySelector('#ay_filtro'), 'RESUELTO');
+T('H17 El filtro por estado funciona', d.querySelectorAll('[data-ay-estado]').length === 0 && /No hay reportes con ese filtro/.test(txt(d.querySelector('#main'))));
+como('U-O', 'ayuda'); ev("S.tab.ayuda='lista';render()");
+T('H18 El usuario ve el estado actualizado de su reporte', /En revisión/.test(txt(d.querySelector('#main'))) || /Pendiente/.test(txt(d.querySelector('#main'))));
+const forzado = await ev(`(async()=>{try{await API.cambiarEstadoReporteAyuda('U-O','${idRep}','RESUELTO');return 'ok'}catch(e){return e.code}})()`);
+T('H19 Un usuario normal no puede forzar el cambio de estado', forzado === 'SIN_PERMISO', forzado);
+como('U-T', 'torre'); T('H20 Ayuda no abre módulos restringidos (Torre sigue sin Finanzas)', ev(`allowed('finanzas')`) === false && ev(`allowed('tarifas')`) === false && ev(`allowed('ayuda')`) === true);
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

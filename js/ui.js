@@ -526,7 +526,7 @@ VIEWS.catalogos=()=>{
 
 /* ---- Notificaciones (solo dentro de la aplicación) ---- */
 function notifData(){try{return API.notificaciones(S.user.id);}catch(e){return [];}}
-const NOT_L={registradoPor:'Registrado por',fechaRegistro:'Fecha y hora del registro',proyecto:'Proyecto',cliente:'Cliente',ruta:'Ruta propuesta',origen:'Origen',destino:'Destino',solicitadoPor:'Registrada por',fecha:'Fecha de solicitud',viaje:'Viaje',codigo:'Código',motivo:'Motivo'};
+const NOT_L={registradoPor:'Registrado por',fechaRegistro:'Fecha y hora del registro',proyecto:'Proyecto',cliente:'Cliente',ruta:'Ruta propuesta',origen:'Origen',destino:'Destino',solicitadoPor:'Registrada por',fecha:'Fecha de solicitud',viaje:'Viaje',codigo:'Código',motivo:'Motivo',reporte:'Reporte',reportadoPor:'Reportado por',modulo:'Módulo',problema:'Tipo de problema',descripcion:'Descripción'};
 function notifHTML(){
   const ns=notifData();
   if(!ns.length)return '<div class="mute">No tienes notificaciones.</div>';
@@ -660,7 +660,8 @@ function admNavHTML(items,act){
   const grupo=({m,i,its})=>{const ab=S.navOpen===i,act_=its.some(on);
     return `<div class="grp${ab?' open':''}${act_?' has-cur':''}" data-mod="${i}"><button class="grp-t" id="gm_${i}" data-act="navMod" data-i="${i}" aria-expanded="${ab}" aria-controls="gp_${i}"><span>${esc(m.t)}</span>${CHEV}</button><div class="grp-p" id="gp_${i}" role="group" aria-labelledby="gm_${i}" ${ab?'':'hidden'}>${its.map(btn).join('')}</div></div>`;};
   const ini=ok([{v:'inicio'}]).map(btn).join('');
-  return `<nav class="side side-acc" aria-label="Navegación principal">${ini}${mods.map(grupo).join('')}</nav>`;
+  const fin=ok([{v:'ayuda'}]).map(btn).join('');
+  return `<nav class="side side-acc" aria-label="Navegación principal">${ini}${mods.map(grupo).join('')}${fin}</nav>`;
 }
 function navHTML(){
   const items=navItems();

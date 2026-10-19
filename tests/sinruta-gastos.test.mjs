@@ -8,10 +8,9 @@ const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), '
 
 /* Migraciones en orden. El 005 es un ejemplo (se ejecuta a mano) y no entra aquí. */
 const MIGRACIONES = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
-  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql', '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql', '025_indices_viajes.sql'];
+  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql', '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql', '025_indices_viajes.sql', '026_viajes_sin_ruta.sql', '027_reportes_ayuda.sql'];
 
 const db = new PGlite();
-const SQL_PENDIENTE_AUTORIZACION = 'alter table master.viajes alter column ruta_id drop not null;';
 await db.exec('set search_path = master, public');   /* las tablas viven en el esquema master (integración AP_VIAJES) */
 let ok = 0, mal = 0; const filas = [];
 const T = (n, c, x) => { c ? ok++ : mal++; filas.push((c ? 'OK   ' : 'FAIL ') + n + (!c && x !== undefined ? '  ← ' + (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, 300) : '')); };
@@ -43,9 +42,6 @@ try {
   T('Los scripts base (001–004) son re-ejecutables (idempotentes)', true);
   await db2.close();
 } catch (e) { T('Los scripts base (001–004) son re-ejecutables (idempotentes)', false, e.message); }
-
-/* Cambio mínimo que SIN RUTA necesita y que aún NO está autorizado ni aplicado en la base real. */
-await db.exec(SQL_PENDIENTE_AUTORIZACION);
 
 /* ---- datos base: usuarios (Auth + perfil), clientes, accesos y catálogos ---- */
 const U = {}; const mk = async (k, usuario, nombre, rol, proyectos = []) => { U[k] = uuid(); await db.query('insert into auth.users(id,email) values ($1,$2)', [U[k], usuario + '@intransit.test']);
@@ -134,7 +130,6 @@ T('S15 Quien no puede crear viajes sigue sin poder (Torre)', !s7.ok, s7);
 const G = [{ concepto: 'Pernocta', importe: 150.5 }, { concepto: 'Peaje', importe: '45' }, { concepto: 'Parqueo', importe: 20.255 }];
 const g1 = await api('ped', 'crearViaje', base({ rutaId: r1.result.id, shipment: 'G-1', gastosAdicionales: G, qViaticos: 100 }));
 T('G1 Se crea un viaje con varios gastos adicionales', g1.ok, g1);
-console.log('G1RES', JSON.stringify(g1).slice(0,400));
 const gid = g1.result?.id; const tg = await trip('adm', gid);
 T('G2 Se guardan los tres gastos ligados a este viaje (importes redondeados)', Array.isArray(tg.gastosAdicionales) && tg.gastosAdicionales.length === 3 && tg.gastosAdicionales[0].concepto === 'Pernocta' && tg.gastosAdicionales[0].importe === 150.5 && tg.gastosAdicionales[1].importe === 45 && tg.gastosAdicionales[2].importe === 20.26, tg.gastosAdicionales);
 T('G3 Viáticos (qViaticos) no se alteran', tg.qViaticos === 100, tg.qViaticos);
@@ -172,5 +167,56 @@ const col = await q1(`select column_name from information_schema.columns where t
 T('C1 La columna de base de datos no cambió (no_carga)', col.some(c => c.column_name === 'no_carga'), col);
 const bn = await api('ped', 'crearViaje', base({ rutaId: r1.result.id, shipment: 'CN', noCarga: '' }));
 T('C2 Los mensajes de validación mencionan «Cantidad de carga»', bn.ok || /Cantidad de carga/.test(bn.message || '') || !/No\. de carga/.test(bn.message || ''), bn.message);
+
+
+/* ===== 4. Ayuda ===== */
+const rep = (extra = {}) => ({ tipo: 'Error en un formulario', modulo: 'Nuevo viaje', descripcion: 'Al guardar un viaje aparece un error y se borra lo escrito', intento: 'Guardar un viaje', ...extra });
+const a1 = await api('ped', 'crearReporteAyuda', rep());
+T('Y1 Un operativo crea un reporte de ayuda', a1.ok && /^AYU-/.test(a1.result?.id || ''), a1);
+const fila = (await q1(`select * from master.reportes_ayuda where id=$1`, [a1.result?.id]))[0] || {};
+T('Y2 Queda guardado en la base con usuario, módulo, tipo, descripción, intento, estado Pendiente y fecha', fila.usuario_id === U.ped && fila.usuario === 'Pedro Chaperon' && fila.modulo === 'Nuevo viaje' && fila.tipo === 'Error en un formulario' && fila.intento === 'Guardar un viaje' && fila.estado === 'PENDIENTE' && !!fila.creado_en, fila);
+for (const k of ['fel', 'mar', 'ale', 'gco', 'gtr', 'cta', 'adm']) {
+  const r = await api(k, 'crearReporteAyuda', rep({ descripcion: 'Reporte de prueba del perfil ' + k + ' con detalle' }));
+  T(`Y3 El perfil ${k} también puede reportar`, r.ok, r);
+}
+const e1 = await api('ped', 'crearReporteAyuda', rep({ tipo: 'Inventado' })), e2 = await api('ped', 'crearReporteAyuda', rep({ modulo: 'Módulo inventado' })), e3 = await api('ped', 'crearReporteAyuda', rep({ descripcion: 'corto' })), e4 = await api('ped', 'crearReporteAyuda', rep({ descripcion: 'x'.repeat(2001) })), e5 = await api('ped', 'crearReporteAyuda', rep({ intento: 'y'.repeat(1001), descripcion: 'Otra descripción suficientemente larga' }));
+T('Y4 Valida tipo, módulo, descripción mínima/máxima e intento máximo con mensajes claros', [e1, e2, e3, e4, e5].every(r => !r.ok && r.code === 'VALIDACION') && /tipo/i.test(e1.message) && /módulo/i.test(e2.message) && /Describe/.test(e3.message), [e1.message, e2.message, e3.message]);
+const ns = await api('ped', 'crearReporteAyuda', rep({ modulo: 'No estoy seguro', descripcion: 'No sé en qué pantalla pasó pero falla', intento: '' }));
+T('Y5 «No estoy seguro» es válido y «¿Qué intentaba?» es opcional', ns.ok, ns);
+const dup = await api('ped', 'crearReporteAyuda', rep());
+T('Y6 El mismo reporte repetido de inmediato se rechaza (sin duplicar)', !dup.ok && dup.code === 'DUPLICADO' && (await q1(`select count(*)::int n from master.reportes_ayuda where usuario_id=$1 and descripcion=$2`, [U.ped, rep().descripcion]))[0].n === 1, dup);
+const nR = (await q1(`select * from master.notificaciones where tipo='REPORTE_AYUDA'`));
+T('Y7 Cada reporte genera una sola notificación para el Administrador', nR.length === 9 && (await q1(`select count(*)::int n from master.notificaciones where tipo='REPORTE_AYUDA' and asunto like $1`, ['%' + a1.result.id + '%']))[0].n === 1, nR.length);
+const vN = async k => ((await snap(k)).notificaciones || []).some(n => n.tipo === 'REPORTE_AYUDA');
+T('Y8 La ve el Administrador y no la ven los demás perfiles', (await vN('adm')) && !(await vN('ped')) && !(await vN('gco')) && !(await vN('gtr')) && !(await vN('fel')));
+const mios = (await snap('ped')).reportesAyuda, todos = (await snap('adm')).reportesAyuda, deFel = (await snap('fel')).reportesAyuda;
+T('Y9 Un usuario ve solo SUS reportes; el Administrador ve todos', mios.length === 2 && mios.every(r => r.usuarioId === U.ped) && todos.length === 9 && deFel.length === 1 && deFel[0].usuarioId === U.fel, [mios.length, todos.length, deFel.length]);
+const cam = await api('ped', 'cambiarEstadoReporteAyuda', a1.result.id, 'RESUELTO'), cam2 = await api('fel', 'cambiarEstadoReporteAyuda', a1.result.id, 'EN_REVISION');
+T('Y10 Un usuario normal no puede cambiar el estado (ni de su propio reporte)', !cam.ok && cam.code === 'SIN_PERMISO' && !cam2.ok && (await q1(`select estado from master.reportes_ayuda where id=$1`, [a1.result.id]))[0].estado === 'PENDIENTE', [cam.code, cam2.code]);
+const c1 = await api('adm', 'cambiarEstadoReporteAyuda', a1.result.id, 'EN_REVISION'), c2 = await api('adm', 'cambiarEstadoReporteAyuda', a1.result.id, 'RESUELTO');
+const f2 = (await q1(`select * from master.reportes_ayuda where id=$1`, [a1.result.id]))[0];
+T('Y11 El Administrador cambia Pendiente → En revisión → Resuelto y queda el historial', c1.ok && c2.ok && f2.estado === 'RESUELTO' && f2.actualizado_por === 'Administradora' && (typeof f2.historial === 'string' ? JSON.parse(f2.historial) : f2.historial).map(h => h.estado).join() === 'PENDIENTE,EN_REVISION,RESUELTO', f2.historial);
+const ci = await api('adm', 'cambiarEstadoReporteAyuda', a1.result.id, 'LOQUESEA'), cx = await api('adm', 'cambiarEstadoReporteAyuda', 'AYU-9999', 'RESUELTO');
+T('Y12 Estado inválido o reporte inexistente se rechazan', !ci.ok && !cx.ok, [ci.code, cx.code]);
+T('Y13 El usuario ve el nuevo estado en su lista', (await snap('ped')).reportesAyuda.find(r => r.id === a1.result.id).estado === 'RESUELTO');
+/* Lectura directa (API REST con la sesión de cada usuario): políticas RLS de la migración 027 */
+const rls = async k => comoUsuario(k, async tx => (await tx.query(`select id, usuario_id from master.reportes_ayuda`)).rows);
+const rPed = await rls('ped'), rFel = await rls('fel'), rAdm = await rls('adm');
+T('Y14 RLS: cada usuario lee solo sus filas y el Administrador todas', rPed.length === 2 && rPed.every(r => r.usuario_id === U.ped) && rFel.length === 1 && rAdm.length === 9, [rPed.length, rFel.length, rAdm.length]);
+const eAnon = await intenta(() => comoUsuario(null, tx => tx.query(`select * from master.reportes_ayuda`)));
+T('Y15 RLS: sin sesión no se puede leer', !!eAnon, eAnon);
+const eIns = await intenta(() => comoUsuario('ped', tx => tx.query(`insert into master.reportes_ayuda(id,usuario_id,modulo,tipo,descripcion) values ('AYU-X',$1,'x','x','x')`, [U.ped])));
+const eUpd = await intenta(() => comoUsuario('adm', tx => tx.query(`update master.reportes_ayuda set estado='RESUELTO'`)));
+const eDel = await intenta(() => comoUsuario('adm', tx => tx.query(`delete from master.reportes_ayuda`)));
+T('Y16 RLS: nadie puede insertar, modificar ni borrar por la API REST', !!eIns && !!eUpd && !!eDel, [eIns, eUpd, eDel]);
+T('Y17 La auditoría registra creación y cambios de estado y su cadena sigue íntegra', (await snap('adm')).audit.some(a => a.entidad === 'AYUDA' && a.accion === 'Estado de reporte de ayuda modificado') && (await api('adm', 'verificarAuditoria')).ok);
+/* Ayuda no abre módulos restringidos: Torre sigue sin importes ni acceso a finanzas */
+T('Y18 Ayuda no da acceso a otros módulos (Torre sigue sin finanzas ni tarifas)', (await api('fel', 'tarifas')).ok === false && (await api('fel', 'gastos', {})).ok === false);
+/* Si la migración 027 todavía no se aplicó, la aplicación no se cae */
+await db.exec('drop table master.reportes_ayuda');
+const sinTabla = await api('adm', 'snapshot');
+T('Y19 Sin la tabla (migración 027 pendiente) el resto de la aplicación sigue funcionando', sinTabla.ok && Array.isArray(sinTabla.snapshot.reportesAyuda) && sinTabla.snapshot.reportesAyuda.length === 0 && sinTabla.snapshot.trips.length > 0, sinTabla.message);
+const sinTabla2 = await api('ped', 'crearReporteAyuda', rep({ descripcion: 'Intento sin tabla creada todavía' }));
+T('Y20 Sin la tabla, crear un reporte falla sin guardar nada y sin romper otras funciones', !sinTabla2.ok && (await api('ped', 'crearViaje', base({ rutaId: r1.result.id, shipment: 'POST' }))).ok, sinTabla2.detalle || sinTabla2.message);
 
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

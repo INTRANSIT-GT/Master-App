@@ -147,6 +147,8 @@ const ROLES={
   TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Editar horas y marcar Completado para viajes en ruta'},
   PROYECTOS:{label:'Proyectos',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','tarifas','rutas','opl','finanzas','catalogos','auditoria','modelo'],alcance:'Revisar todos los módulos y datos. Las acciones las habilita la administradora según se necesiten.'}
 };
+/* Ayuda es para todos los perfiles: no es un módulo restringido ni requiere un permiso de la matriz. */
+Object.values(ROLES).forEach(r=>{if(!r.nav.includes('ayuda'))r.nav.push('ayuda');});
 const PERM_DEFAULT={
   ADMIN:PERM_KEYS.slice(),
   GERENTE_TRANSPORTE:['viajes_ver','viajes_ver_todos','viajes_crear','viajes_editar_datos','historial_ver','liq_ver','rutas_ver','rutas_validar','rutas_aprobar_transporte','viajes_aprobar_duplicado','unidades_asignar','tarifas_opl_ver','tarifas_opl_crear','viajes_editar_estado','tarifas_ver','finanzas_ver','liq_aprobar','liq_devolver'],
@@ -184,7 +186,12 @@ const PROHIBIDO={
 /* Permisos que no se pueden quitar (evita bloquearse a sí misma) */
 const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']};
 const VIEW_PERM={tarifas:'tarifas_ver',proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
-const NAVLBL={tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
+const NAVLBL={tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck'],ayuda:['Ayuda','help']};
+/* ---------- Ayuda: reportes de fallas (todos los perfiles pueden reportar; solo el Administrador gestiona) ---------- */
+const AYUDA_TIPOS=['No puedo guardar información','No puedo ingresar a una sección','Error en un formulario','La información no aparece o no se actualiza','Problema con un botón o una función','Otro'];
+const AYUDA_ESTADOS={PENDIENTE:'Pendiente',EN_REVISION:'En revisión',RESUELTO:'Resuelto'};
+const AYUDA_NO_SE='No estoy seguro';
+const AYUDA_MODULOS=[...new Set(Object.keys(NAVLBL).filter(k=>k!=='ayuda').map(k=>NAVLBL[k][0]))].concat(AYUDA_NO_SE);
 
 const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos','gastosAdicionales'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
@@ -197,7 +204,7 @@ Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo 
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos','Gastos adicionales'];
 
 /* ---------- Base de datos ---------- */
-const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1}});
+const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1}});
 function syncRefs(){
   PROYECTOS=DB.clientes.map(c=>({id:c.id,nombre:c.nombre,cliente:c.cliente,activo:c.activo!==false,
     encargado:DB.usuarios.filter(u=>u.rol==='OPERATIVO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
@@ -1395,6 +1402,43 @@ const API={
   notificaciones(uid){
     const A=actor(uid);
     return DB.notificaciones.filter(n=>A.rol==='ADMIN'||n.destinatarios.includes(A.rol)||(n.usuarios||[]).includes(A.id)).map(n=>Object.assign({},n,{leida:n.leidaPor.includes(A.id)})).reverse();
+  },
+  /* ----- Ayuda: reportes de fallas ----- */
+  crearReporteAyuda(uid,d){return exec(uid,'crearReporteAyuda','',A=>{
+    d=d||{};DB.reportesAyuda=DB.reportesAyuda||[];
+    const tipo=String(d.tipo||'').trim(),modulo=String(d.modulo||'').trim(),desc=String(d.descripcion||'').trim(),intento=String(d.intento||'').trim();
+    if(!AYUDA_TIPOS.includes(tipo))deny('Selecciona el tipo de problema.','VALIDACION');
+    if(!AYUDA_MODULOS.includes(modulo))deny('Selecciona el módulo afectado (o «No estoy seguro»).','VALIDACION');
+    if(desc.length<10)deny('Describe el problema con un poco más de detalle (mínimo 10 caracteres).','VALIDACION');
+    if(desc.length>2000)deny('La descripción del problema es demasiado larga (máximo 2000 caracteres).','VALIDACION');
+    if(intento.length>1000)deny('«¿Qué estabas intentando hacer?» es demasiado largo (máximo 1000 caracteres).','VALIDACION');
+    const ya=DB.reportesAyuda.find(r=>r.usuarioId===A.id&&r.tipo===tipo&&r.modulo===modulo&&r.descripcion===desc&&Date.now()-new Date(r.creadoEn).getTime()<120000);
+    if(ya)deny(`Ya enviaste este mismo reporte hace un momento (${ya.id}).`,'DUPLICADO');
+    DB.seq.ayu=DB.seq.ayu||1;
+    const en=nowIso();
+    const r={id:'AYU-'+pad4(DB.seq.ayu++),usuarioId:A.id,usuario:A.nombre,rol:A.rol,modulo,tipo,descripcion:desc,intento,estado:'PENDIENTE',creadoEn:en,actualizadoEn:'',actualizadoPor:'',historial:[{estado:'PENDIENTE',por:A.nombre,en}]};
+    DB.reportesAyuda.push(r);
+    auditAdd({entidad:'AYUDA',accion:'Reporte de ayuda creado',campo:'Estado',nuevo:AYUDA_ESTADOS.PENDIENTE,por:A,ref:`${r.id} · ${modulo} · ${tipo}`});
+    notificar(A,{tipo:'REPORTE_AYUDA',destinatarios:['ADMIN'],asunto:`Reporte de ayuda ${r.id}: ${tipo}`,detalle:{reporte:r.id,reportadoPor:A.nombre,modulo,problema:tipo,descripcion:desc.slice(0,300),fechaRegistro:en}});
+    return r;
+  });},
+  cambiarEstadoReporteAyuda(uid,id,estado){return exec(uid,'cambiarEstadoReporteAyuda','',A=>{
+    if(A.rol!=='ADMIN')throw new ApiError('SIN_PERMISO','Solo el Administrador puede cambiar el estado de los reportes de ayuda.');
+    DB.reportesAyuda=DB.reportesAyuda||[];
+    const r=DB.reportesAyuda.find(x=>x.id===id);if(!r)deny('El reporte no existe.','NO_EXISTE');
+    if(!AYUDA_ESTADOS[estado])deny('Estado no válido. Usa Pendiente, En revisión o Resuelto.','VALIDACION');
+    if(r.estado===estado)return r;
+    const antes=r.estado,en=nowIso();
+    r.estado=estado;r.actualizadoEn=en;r.actualizadoPor=A.nombre;
+    r.historial=[...(r.historial||[]),{estado,por:A.nombre,en}];
+    auditAdd({entidad:'AYUDA',accion:'Estado de reporte de ayuda modificado',campo:'Estado',anterior:AYUDA_ESTADOS[antes],nuevo:AYUDA_ESTADOS[estado],por:A,ref:`${r.id} · ${r.modulo}`});
+    return r;
+  });},
+  /* Cada usuario ve solo sus reportes; el Administrador ve todos. */
+  reportesAyuda(uid){
+    const A=actor(uid);
+    const L=(DB.reportesAyuda||[]).filter(r=>A.rol==='ADMIN'||r.usuarioId===A.id);
+    return JSON.parse(JSON.stringify(L)).sort((a,b)=>a.creadoEn<b.creadoEn?1:-1);
   },
   marcarNotificacion(uid,id){return exec(uid,'marcarNotificacion','',A=>{
     const n=DB.notificaciones.find(x=>x.id===id);if(!n)deny('La notificación no existe.','NO_EXISTE');
