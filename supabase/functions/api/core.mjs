@@ -191,7 +191,16 @@ const NAVLBL={tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos
 const AYUDA_TIPOS=['No puedo guardar información','No puedo ingresar a una sección','Error en un formulario','La información no aparece o no se actualiza','Problema con un botón o una función','Otro'];
 const AYUDA_ESTADOS={PENDIENTE:'Pendiente',EN_REVISION:'En revisión',RESUELTO:'Resuelto'};
 const AYUDA_NO_SE='No estoy seguro';
-const AYUDA_MODULOS=[...new Set(Object.keys(NAVLBL).filter(k=>k!=='ayuda').map(k=>NAVLBL[k][0]))].concat(AYUDA_NO_SE);
+/* Quienes ATIENDEN los reportes (ven todos y cambian su estado) y reciben el aviso: el Administrador y el perfil «Proyectos»
+   (identificador interno PROYECTOS, el mismo de perfiles.rol). Solo rige en Ayuda: no concede ningún otro permiso. */
+const AYUDA_GESTORES=['ADMIN','PROYECTOS'];
+/* «Módulo afectado»: solo los módulos que el perfil tiene autorizados, con la MISMA regla que el menú (ROLES[rol].nav + VIEW_PERM +
+   permisos de la matriz) y los nombres visibles de NAVLBL. Es una ayuda para reportar; no sustituye los controles de seguridad. */
+const ayudaModulosDe=A=>{
+  const nav=(A&&ROLES[A.rol]&&ROLES[A.rol].nav)||[];
+  const L=nav.filter(v=>v!=='ayuda'&&NAVLBL[v]&&(!VIEW_PERM[v]||hasPerm(A,VIEW_PERM[v]))).map(v=>NAVLBL[v][0]);
+  return [...new Set(L)].concat(AYUDA_NO_SE);
+};
 
 const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos','gastosAdicionales'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
@@ -1408,7 +1417,7 @@ const API={
     d=d||{};DB.reportesAyuda=DB.reportesAyuda||[];
     const tipo=String(d.tipo||'').trim(),modulo=String(d.modulo||'').trim(),desc=String(d.descripcion||'').trim(),intento=String(d.intento||'').trim();
     if(!AYUDA_TIPOS.includes(tipo))deny('Selecciona el tipo de problema.','VALIDACION');
-    if(!AYUDA_MODULOS.includes(modulo))deny('Selecciona el módulo afectado (o «No estoy seguro»).','VALIDACION');
+    if(!ayudaModulosDe(A).includes(modulo))deny('Selecciona el módulo afectado: una de las opciones de la lista (o «No estoy seguro»).','VALIDACION');
     if(desc.length<10)deny('Describe el problema con un poco más de detalle (mínimo 10 caracteres).','VALIDACION');
     if(desc.length>2000)deny('La descripción del problema es demasiado larga (máximo 2000 caracteres).','VALIDACION');
     if(intento.length>1000)deny('«¿Qué estabas intentando hacer?» es demasiado largo (máximo 1000 caracteres).','VALIDACION');
@@ -1419,11 +1428,11 @@ const API={
     const r={id:'AYU-'+pad4(DB.seq.ayu++),usuarioId:A.id,usuario:A.nombre,rol:A.rol,modulo,tipo,descripcion:desc,intento,estado:'PENDIENTE',creadoEn:en,actualizadoEn:'',actualizadoPor:'',historial:[{estado:'PENDIENTE',por:A.nombre,en}]};
     DB.reportesAyuda.push(r);
     auditAdd({entidad:'AYUDA',accion:'Reporte de ayuda creado',campo:'Estado',nuevo:AYUDA_ESTADOS.PENDIENTE,por:A,ref:`${r.id} · ${modulo} · ${tipo}`});
-    notificar(A,{tipo:'REPORTE_AYUDA',destinatarios:['ADMIN'],asunto:`Reporte de ayuda ${r.id}: ${tipo}`,detalle:{reporte:r.id,reportadoPor:A.nombre,modulo,problema:tipo,descripcion:desc.slice(0,300),fechaRegistro:en}});
+    notificar(A,{tipo:'REPORTE_AYUDA',destinatarios:AYUDA_GESTORES.slice(),usuarios:[],asunto:`Reporte de ayuda ${r.id}: ${tipo}`,detalle:{reporte:r.id,reportadoPor:A.nombre,modulo,problema:tipo,descripcion:desc.slice(0,300),fechaRegistro:en}});
     return r;
   });},
   cambiarEstadoReporteAyuda(uid,id,estado){return exec(uid,'cambiarEstadoReporteAyuda','',A=>{
-    if(A.rol!=='ADMIN')throw new ApiError('SIN_PERMISO','Solo el Administrador puede cambiar el estado de los reportes de ayuda.');
+    if(!AYUDA_GESTORES.includes(A.rol))throw new ApiError('SIN_PERMISO','Solo el Administrador y el perfil Proyectos pueden cambiar el estado de los reportes de ayuda.');
     DB.reportesAyuda=DB.reportesAyuda||[];
     const r=DB.reportesAyuda.find(x=>x.id===id);if(!r)deny('El reporte no existe.','NO_EXISTE');
     if(!AYUDA_ESTADOS[estado])deny('Estado no válido. Usa Pendiente, En revisión o Resuelto.','VALIDACION');
@@ -1434,10 +1443,10 @@ const API={
     auditAdd({entidad:'AYUDA',accion:'Estado de reporte de ayuda modificado',campo:'Estado',anterior:AYUDA_ESTADOS[antes],nuevo:AYUDA_ESTADOS[estado],por:A,ref:`${r.id} · ${r.modulo}`});
     return r;
   });},
-  /* Cada usuario ve solo sus reportes; el Administrador ve todos. */
+  /* Cada usuario ve solo sus reportes; el Administrador y Proyectos (quienes los atienden) ven todos. */
   reportesAyuda(uid){
     const A=actor(uid);
-    const L=(DB.reportesAyuda||[]).filter(r=>A.rol==='ADMIN'||r.usuarioId===A.id);
+    const L=(DB.reportesAyuda||[]).filter(r=>AYUDA_GESTORES.includes(A.rol)||r.usuarioId===A.id);
     return JSON.parse(JSON.stringify(L)).sort((a,b)=>a.creadoEn<b.creadoEn?1:-1);
   },
   marcarNotificacion(uid,id){return exec(uid,'marcarNotificacion','',A=>{

@@ -1,6 +1,6 @@
 /* ayuda.js · Sección «Ayuda» (todos los perfiles).
    Cualquier usuario puede reportar una falla (módulo, tipo, descripción y qué intentaba hacer) y consultar SUS reportes.
-   Solo el Administrador ve todos los reportes y cambia su estado (Pendiente · En revisión · Resuelto).
+   El Administrador y el perfil Proyectos ven todos los reportes y cambian su estado (Pendiente · En revisión · Resuelto).
    No requiere ningún permiso de la matriz y no abre ningún módulo restringido: solo guarda y lee reportes. */
 const AYUDA_TONO={PENDIENTE:'alert',EN_REVISION:'progress',RESUELTO:'done'};
 const ayudaSt=()=>{
@@ -9,12 +9,14 @@ const ayudaSt=()=>{
 };
 const ayudaEstadoChip=e=>chip(AYUDA_TONO[e]||'neutral',AYUDA_ESTADOS[e]||e);
 function ayudaFormHTML(a){
+  const mods=ayudaModulosDe(S.user);              /* solo los módulos autorizados para el perfil actual (misma regla que el menú) */
+  if(a.modulo&&!mods.includes(a.modulo))a.modulo='';
   const opt=(lista,v,ph)=>`<option value="">${ph}</option>`+lista.map(x=>`<option value="${esc(x)}" ${x===v?'selected':''}>${esc(x)}</option>`).join('');
   return `<div class="card fsec" style="max-width:760px"><h3>Reportar un problema</h3>
     ${a.ok?`<div class="alertbox okb" role="status" style="margin-bottom:12px"><b>${esc(a.ok)}</b></div>`:''}
     ${a.err?`<div class="alertbox" role="alert" style="margin-bottom:12px"><b>${esc(a.err)}</b></div>`:''}
     <div class="fgroup"><label for="ay_tipo">Tipo de problema <span class="mute">*</span></label><select id="ay_tipo" data-ay="tipo">${opt(AYUDA_TIPOS,a.tipo,'Selecciona el tipo de problema')}</select></div>
-    <div class="fgroup"><label for="ay_modulo">Módulo afectado <span class="mute">*</span></label><select id="ay_modulo" data-ay="modulo">${opt(AYUDA_MODULOS,a.modulo,'Selecciona el módulo')}</select></div>
+    <div class="fgroup"><label for="ay_modulo">Módulo afectado <span class="mute">*</span></label><select id="ay_modulo" data-ay="modulo">${opt(mods,a.modulo,'Selecciona el módulo')}</select></div>
     <div class="fgroup"><label for="ay_descripcion">Descripción del problema <span class="mute">*</span></label><textarea id="ay_descripcion" data-ay="descripcion" rows="5" maxlength="2000" placeholder="Cuéntanos qué pasó y qué mensaje viste, si hubo alguno.">${esc(a.descripcion)}</textarea></div>
     <div class="fgroup"><label for="ay_intento">¿Qué estabas intentando hacer? <span class="mute">(opcional)</span></label><textarea id="ay_intento" data-ay="intento" rows="3" maxlength="1000" placeholder="Por ejemplo: guardar un viaje nuevo.">${esc(a.intento)}</textarea></div>
     <dl class="kv" style="grid-template-columns:160px 1fr;font-size:13px;margin:10px 0"><dt>Usuario que reporta</dt><dd>${esc(S.user.nombre)}</dd><dt>Fecha y hora</dt><dd>Se registran automáticamente al enviar</dd></dl>
@@ -42,7 +44,7 @@ function ayudaListaHTML(a,adm){
   return filtro+`<div class="tablewrap scrollx"><table><thead><tr><th>Reporte</th>${adm?'<th>Usuario</th>':''}<th>Módulo</th><th>Problema</th><th>Estado</th></tr></thead><tbody>${L.map(fila).join('')}</tbody></table></div>`;
 }
 VIEWS.ayuda=()=>{
-  const a=ayudaSt(),adm=S.user.rol==='ADMIN';
+  const a=ayudaSt(),adm=AYUDA_GESTORES.includes(S.user.rol);
   let n=0;try{n=API.reportesAyuda(S.user.id).length;}catch(e){}
   const k=S.tab.ayuda==='lista'?'lista':'nuevo';
   return `<div class="inner" style="max-width:1100px">${pageHead('Ayuda',adm?'Reportes de fallas enviados por los usuarios':'Reporta una falla o problema de la aplicación y consulta el estado de tus reportes')}
@@ -55,7 +57,7 @@ ACT.ayudaEnviar=async()=>{
   a.err='';a.ok='';a.enviando=true;render();
   try{
     const r=await API.crearReporteAyuda(S.user.id,{tipo:a.tipo,modulo:a.modulo,descripcion:a.descripcion,intento:a.intento});
-    Object.assign(a,{tipo:'',modulo:'',descripcion:'',intento:'',err:'',ok:`Reporte ${r.id} enviado. El Administrador fue notificado; puedes ver su estado en «${S.user.rol==='ADMIN'?'Todos los reportes':'Mis reportes'}».`});
+    Object.assign(a,{tipo:'',modulo:'',descripcion:'',intento:'',err:'',ok:`Reporte ${r.id} enviado. Se notificó a Administrador y Proyectos; puedes ver su estado en «${AYUDA_GESTORES.includes(S.user.rol)?'Todos los reportes':'Mis reportes'}».`});
     toast(`Reporte ${r.id} enviado.`);
   }catch(e){
     a.err=(e instanceof ApiError)?e.message:'No se pudo enviar el reporte: '+(e&&e.message?e.message:'error desconocido')+'. No se guardó nada; inténtalo de nuevo.';

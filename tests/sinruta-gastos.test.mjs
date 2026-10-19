@@ -8,7 +8,7 @@ const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), '
 
 /* Migraciones en orden. El 005 es un ejemplo (se ejecuta a mano) y no entra aquí. */
 const MIGRACIONES = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
-  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql', '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql', '025_indices_viajes.sql', '026_viajes_sin_ruta.sql', '027_reportes_ayuda.sql'];
+  '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql', '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql', '025_indices_viajes.sql', '026_viajes_sin_ruta.sql', '027_reportes_ayuda.sql', '028_ayuda_proyectos.sql'];
 
 const db = new PGlite();
 await db.exec('set search_path = master, public');   /* las tablas viven en el esquema master (integración AP_VIAJES) */
@@ -58,6 +58,9 @@ await mk('gco', 'gcomercial', 'Gerencia Comercial', 'GERENTE_COMERCIAL');
 await mk('gtr', 'gtransporte', 'Gerencia Transporte', 'GERENTE_TRANSPORTE');
 await mk('fel', 'felipe', 'Felipe Torre', 'TORRE');
 await mk('cta', 'conta', 'Contabilidad', 'COBROS');
+await mk('adm2', 'admin2', 'Segundo Administrador', 'ADMIN');
+await mk('pr1', 'proyectos1', 'Proyectos Uno', 'PROYECTOS');
+await mk('pr2', 'proyectos2', 'Proyectos Dos', 'PROYECTOS');
 await db.query(`insert into master.acceso_cliente(user_id,cliente_id) values ($1,'COLGATE'),($2,'CMI'),($3,'COLGATE')`, [U.ped, U.bry, U.imp]);
 await db.exec(`insert into master.flota(unidad,placa,tango,capacidad,tipo) values ('T-1','C-001AAA','TNG-1','10 Ton','10TON'),('T-2','C-002BBB','TNG-2','10 Ton','10TON'),('T-3','C-003CCC','TNG-3','10 Ton','10TON');
   insert into master.pilotos(id,nombre,unidad,cliente_id) values ('P-1','Piloto Uno','T-1','COLGATE'),('P-2','Piloto Dos','T-2','CMI'),('P-3','Piloto Tres','T-3','COLGATE');
@@ -175,8 +178,9 @@ const a1 = await api('ped', 'crearReporteAyuda', rep());
 T('Y1 Un operativo crea un reporte de ayuda', a1.ok && /^AYU-/.test(a1.result?.id || ''), a1);
 const fila = (await q1(`select * from master.reportes_ayuda where id=$1`, [a1.result?.id]))[0] || {};
 T('Y2 Queda guardado en la base con usuario, módulo, tipo, descripción, intento, estado Pendiente y fecha', fila.usuario_id === U.ped && fila.usuario === 'Pedro Chaperon' && fila.modulo === 'Nuevo viaje' && fila.tipo === 'Error en un formulario' && fila.intento === 'Guardar un viaje' && fila.estado === 'PENDIENTE' && !!fila.creado_en, fila);
+const MOD_DE = { fel: 'Torre de control', mar: 'Liquidaciones', ale: 'Rutas', gco: 'Rutas', gtr: 'Nuevo viaje', cta: 'Facturación', adm: 'Finanzas' };
 for (const k of ['fel', 'mar', 'ale', 'gco', 'gtr', 'cta', 'adm']) {
-  const r = await api(k, 'crearReporteAyuda', rep({ descripcion: 'Reporte de prueba del perfil ' + k + ' con detalle' }));
+  const r = await api(k, 'crearReporteAyuda', rep({ modulo: MOD_DE[k], descripcion: 'Reporte de prueba del perfil ' + k + ' con detalle' }));
   T(`Y3 El perfil ${k} también puede reportar`, r.ok, r);
 }
 const e1 = await api('ped', 'crearReporteAyuda', rep({ tipo: 'Inventado' })), e2 = await api('ped', 'crearReporteAyuda', rep({ modulo: 'Módulo inventado' })), e3 = await api('ped', 'crearReporteAyuda', rep({ descripcion: 'corto' })), e4 = await api('ped', 'crearReporteAyuda', rep({ descripcion: 'x'.repeat(2001) })), e5 = await api('ped', 'crearReporteAyuda', rep({ intento: 'y'.repeat(1001), descripcion: 'Otra descripción suficientemente larga' }));
@@ -186,11 +190,11 @@ T('Y5 «No estoy seguro» es válido y «¿Qué intentaba?» es opcional', ns.ok
 const dup = await api('ped', 'crearReporteAyuda', rep());
 T('Y6 El mismo reporte repetido de inmediato se rechaza (sin duplicar)', !dup.ok && dup.code === 'DUPLICADO' && (await q1(`select count(*)::int n from master.reportes_ayuda where usuario_id=$1 and descripcion=$2`, [U.ped, rep().descripcion]))[0].n === 1, dup);
 const nR = (await q1(`select * from master.notificaciones where tipo='REPORTE_AYUDA'`));
-T('Y7 Cada reporte genera una sola notificación para el Administrador', nR.length === 9 && (await q1(`select count(*)::int n from master.notificaciones where tipo='REPORTE_AYUDA' and asunto like $1`, ['%' + a1.result.id + '%']))[0].n === 1, nR.length);
+T('Y7 Cada reporte genera una sola notificación (para Administrador y Proyectos)', nR.length === 9 && (await q1(`select count(*)::int n from master.notificaciones where tipo='REPORTE_AYUDA' and asunto like $1`, ['%' + a1.result.id + '%']))[0].n === 1, nR.length);
 const vN = async k => ((await snap(k)).notificaciones || []).some(n => n.tipo === 'REPORTE_AYUDA');
-T('Y8 La ve el Administrador y no la ven los demás perfiles', (await vN('adm')) && !(await vN('ped')) && !(await vN('gco')) && !(await vN('gtr')) && !(await vN('fel')));
-const mios = (await snap('ped')).reportesAyuda, todos = (await snap('adm')).reportesAyuda, deFel = (await snap('fel')).reportesAyuda;
-T('Y9 Un usuario ve solo SUS reportes; el Administrador ve todos', mios.length === 2 && mios.every(r => r.usuarioId === U.ped) && todos.length === 9 && deFel.length === 1 && deFel[0].usuarioId === U.fel, [mios.length, todos.length, deFel.length]);
+T('Y8 La ven TODOS los Administradores y TODOS los usuarios Proyectos; ningún otro perfil', (await vN('adm')) && (await vN('adm2')) && (await vN('pr1')) && (await vN('pr2')) && !(await vN('ped')) && !(await vN('gco')) && !(await vN('gtr')) && !(await vN('fel')) && !(await vN('mar')) && !(await vN('ale')) && !(await vN('cta')) && !(await vN('imp')) && !(await vN('bry')));
+const mios = (await snap('ped')).reportesAyuda, todos = (await snap('adm')).reportesAyuda, deFel = (await snap('fel')).reportesAyuda, dePr = (await snap('pr1')).reportesAyuda;
+T('Y9 Un usuario ve solo SUS reportes; Administrador y Proyectos (quienes atienden) ven todos', mios.length === 2 && mios.every(r => r.usuarioId === U.ped) && todos.length === 9 && dePr.length === 9 && deFel.length === 1 && deFel[0].usuarioId === U.fel, [mios.length, todos.length, dePr.length, deFel.length]);
 const cam = await api('ped', 'cambiarEstadoReporteAyuda', a1.result.id, 'RESUELTO'), cam2 = await api('fel', 'cambiarEstadoReporteAyuda', a1.result.id, 'EN_REVISION');
 T('Y10 Un usuario normal no puede cambiar el estado (ni de su propio reporte)', !cam.ok && cam.code === 'SIN_PERMISO' && !cam2.ok && (await q1(`select estado from master.reportes_ayuda where id=$1`, [a1.result.id]))[0].estado === 'PENDIENTE', [cam.code, cam2.code]);
 const c1 = await api('adm', 'cambiarEstadoReporteAyuda', a1.result.id, 'EN_REVISION'), c2 = await api('adm', 'cambiarEstadoReporteAyuda', a1.result.id, 'RESUELTO');
@@ -203,6 +207,8 @@ T('Y13 El usuario ve el nuevo estado en su lista', (await snap('ped')).reportesA
 const rls = async k => comoUsuario(k, async tx => (await tx.query(`select id, usuario_id from master.reportes_ayuda`)).rows);
 const rPed = await rls('ped'), rFel = await rls('fel'), rAdm = await rls('adm');
 T('Y14 RLS: cada usuario lee solo sus filas y el Administrador todas', rPed.length === 2 && rPed.every(r => r.usuario_id === U.ped) && rFel.length === 1 && rAdm.length === 9, [rPed.length, rFel.length, rAdm.length]);
+const rPr = await rls('pr1'), rGco = await rls('gco');
+T('Y14b RLS (028): Proyectos lee todos los reportes; Gerencia (u otro perfil ajeno) solo los suyos', rPr.length === 9 && rGco.length === 1 && rGco[0].usuario_id === U.gco, [rPr.length, rGco.length]);
 const eAnon = await intenta(() => comoUsuario(null, tx => tx.query(`select * from master.reportes_ayuda`)));
 T('Y15 RLS: sin sesión no se puede leer', !!eAnon, eAnon);
 const eIns = await intenta(() => comoUsuario('ped', tx => tx.query(`insert into master.reportes_ayuda(id,usuario_id,modulo,tipo,descripcion) values ('AYU-X',$1,'x','x','x')`, [U.ped])));
@@ -212,6 +218,46 @@ T('Y16 RLS: nadie puede insertar, modificar ni borrar por la API REST', !!eIns &
 T('Y17 La auditoría registra creación y cambios de estado y su cadena sigue íntegra', (await snap('adm')).audit.some(a => a.entidad === 'AYUDA' && a.accion === 'Estado de reporte de ayuda modificado') && (await api('adm', 'verificarAuditoria')).ok);
 /* Ayuda no abre módulos restringidos: Torre sigue sin importes ni acceso a finanzas */
 T('Y18 Ayuda no da acceso a otros módulos (Torre sigue sin finanzas ni tarifas)', (await api('fel', 'tarifas')).ok === false && (await api('fel', 'gastos', {})).ok === false);
+/* --- Módulo afectado: solo módulos autorizados (validado también en el servidor) --- */
+const mod = async (k, m) => api(k, 'crearReporteAyuda', rep({ modulo: m, descripcion: 'Prueba de módulo ' + m + ' del perfil ' + k }));
+const mT1 = await mod('fel', 'Torre de control'), mT2 = await mod('fel', 'Finanzas'), mT3 = await mod('fel', 'Nuevo viaje'), mT4 = await mod('fel', 'Usuarios y permisos');
+T('Y21 Torre puede elegir «Torre de control» pero no Finanzas, Nuevo viaje ni Usuarios y permisos', mT1.ok && !mT2.ok && !mT3.ok && !mT4.ok && mT2.code === 'VALIDACION', [mT1.message, mT2.message, mT3.message]);
+const mO1 = await mod('ped', 'Liquidaciones'), mO2 = await mod('ped', 'Finanzas'), mO3 = await mod('ped', 'Tarifas'), mO4 = await mod('ped', 'Todos los viajes');
+T('Y22 Un Operativo elige Liquidaciones pero no Finanzas, Tarifas ni Todos los viajes', mO1.ok && !mO2.ok && !mO3.ok && !mO4.ok, [mO2.message, mO3.message]);
+const mV1 = await mod('mar', 'Viajes'), mV2 = await mod('mar', 'Nuevo viaje'), mV3 = await mod('mar', 'Rutas');
+T('Y23 Un Validador elige Viajes pero no Nuevo viaje ni Rutas', mV1.ok && !mV2.ok && !mV3.ok);
+const mA1 = await mod('adm', 'Usuarios y permisos'), mA2 = await mod('adm', 'Auditoría');
+T('Y24 El Administrador puede elegir módulos de administración', mA1.ok && mA2.ok);
+const mP1 = await mod('pr1', 'Todos los viajes'), mP2 = await mod('pr1', 'Usuarios y permisos'), mP3 = await mod('pr1', 'Finanzas');
+T('Y25 Proyectos elige los módulos que tiene en su menú, no los que no tiene', mP1.ok && !mP2.ok && mP2.code === 'VALIDACION', [mP1.message, mP2.message, mP3.ok]);
+const mN = await mod('fel', 'No estoy seguro');
+T('Y26 «No estoy seguro» siempre está disponible', mN.ok);
+const mCh = await mod('ped', 'Ayuda');
+T('Y27 «Ayuda» no es un módulo seleccionable (no hay reportes sobre el propio formulario)', !mCh.ok);
+/* --- Destinatarios: los fija el servidor, no el navegador --- */
+const hack = await api('ped', 'crearReporteAyuda', rep({ descripcion: 'Intento de añadir destinatarios no autorizados', destinatarios: ['TORRE', 'GERENTE_COMERCIAL'], usuarios: [U.fel, U.gco], tipo: 'Otro' }));
+const nh = (await q1(`select * from master.notificaciones where tipo='REPORTE_AYUDA' and asunto like $1`, ['%' + hack.result?.id + '%']))[0] || {};
+T('Y28 Un navegador manipulado no puede añadir destinatarios: la notificación va solo a ADMIN y PROYECTOS', hack.ok && nh.destinatarios.slice().sort().join() === 'ADMIN,PROYECTOS' && (nh.usuarios || []).length === 0, [nh.destinatarios, nh.usuarios]);
+T('Y29 Ni Torre ni Gerencia Comercial reciben ese aviso', !((await snap('fel')).notificaciones || []).some(n => n.id === nh.id) && !((await snap('gco')).notificaciones || []).some(n => n.id === nh.id));
+T('Y30 Una sola notificación por reporte (aunque haya varios Administradores y Proyectos)', (await q1(`select count(*)::int n from master.notificaciones where tipo='REPORTE_AYUDA' and asunto like $1`, ['%' + hack.result.id + '%']))[0].n === 1);
+const ntf = (await snap('pr2')).notificaciones.filter(n => n.id === nh.id);
+T('Y31 Cada usuario de Proyectos ve esa única notificación una sola vez', ntf.length === 1);
+/* Quien reporta también es Proyectos o Administrador: sigue siendo un solo aviso, sin duplicados */
+const rp = await api('pr1', 'crearReporteAyuda', rep({ modulo: 'Todos los viajes', descripcion: 'Reporte creado por un usuario de Proyectos mismo' }));
+const nrp = (await snap('pr1')).notificaciones.filter(n => n.tipo === 'REPORTE_AYUDA' && n.asunto.includes(rp.result.id));
+T('Y32 Si quien reporta es Proyectos, no se duplica la notificación', rp.ok && nrp.length === 1);
+/* --- Atención de reportes por Proyectos --- */
+const pc1 = await api('pr1', 'cambiarEstadoReporteAyuda', a1.result.id, 'EN_REVISION'), pc2 = await api('pr2', 'cambiarEstadoReporteAyuda', a1.result.id, 'RESUELTO');
+const fh = (await q1(`select * from master.reportes_ayuda where id=$1`, [a1.result.id]))[0];
+const hs = (typeof fh.historial === 'string' ? JSON.parse(fh.historial) : fh.historial);
+T('Y33 Proyectos puede atender: cambia el estado y queda el historial con quién lo hizo', pc1.ok && pc2.ok && fh.estado === 'RESUELTO' && hs.at(-1).por === 'Proyectos Dos' && hs.at(-2).por === 'Proyectos Uno', hs);
+const noG = await Promise.all(['gco', 'gtr', 'mar', 'fel', 'ale', 'cta'].map(k => api(k, 'cambiarEstadoReporteAyuda', a1.result.id, 'PENDIENTE')));
+T('Y34 Ningún otro perfil (Gerencia, Validador, Torre…) puede cambiar el estado', noG.every(r => !r.ok && r.code === 'SIN_PERMISO'), noG.map(r => r.code));
+/* Proyectos no gana nada fuera de Ayuda */
+const prPerm = (await q1(`select permiso from master.permisos where rol='PROYECTOS' and habilitado order by permiso`)).map(r => r.permiso).join();
+T('Y35 Los permisos del perfil Proyectos en la matriz no cambiaron (no se agregó ninguno)', !/ayuda/i.test(prPerm) && prPerm.length > 0, prPerm);
+const prCrea = await api('pr1', 'crearViaje', base({ rutaId: r1.result.id, shipment: 'PRX' }));
+T('Y36 Proyectos sigue sin poder crear viajes (la atención de reportes no amplía otros permisos)', !prCrea.ok);
 /* Si la migración 027 todavía no se aplicó, la aplicación no se cae */
 await db.exec('drop table master.reportes_ayuda');
 const sinTabla = await api('adm', 'snapshot');
