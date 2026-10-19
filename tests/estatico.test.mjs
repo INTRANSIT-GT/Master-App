@@ -40,4 +40,7 @@ T('16 El menú del teléfono respeta el área segura: la primera opción no qued
 const handler = leer('supabase/functions/api/handler.mjs');
 T('17 Las lecturas no esperan el lock de escritura (era la espera de hasta 12 s de Supabase)', /if \(!OPS_LECTURA\.includes\(op\)\) await q\('select pg_advisory_xact_lock\(727001\)'\)/.test(handler) && !/pg_advisory_xact_lock\$\{/.test(handler));
 T('18 El conteo y el resumen por mes usan una sola consulta de conjunto (no evalúan la función de RLS fila por fila)', !/count\(\*\)[\s\S]{0,120}app\.ve_viaje/.test(handler) && /function filtroVisible\(A, db, E\)/.test(handler) && /from master\.viajes v where \$\{f\.sql\}/.test(handler) && /substring\(coalesce\(v\.fecha_plan/.test(handler));
+/* La lista de asignados (clientes/proyectos de un usuario) tiene que verse: sin altura propia el navegador
+   la deja en una sola línea y los nombres quedan ilegibles. */
+T('19 Las listas de asignación tienen altura propia y opciones legibles', /select\[multiple\]\{[^}]*min-height:170px/.test(css) && /select\[multiple\] option\{[^}]*color:var\(--ink\)/.test(css));
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

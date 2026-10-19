@@ -231,4 +231,19 @@ ev(`S.form=null;S.edit={id:'${tEd}',data:toModel(DB.trips.find(t=>t.id==='${tEd}
 T('7.2 Al editar un viaje la administradora sí puede corregir el estado', !!d.querySelector('#m_estado'));
 ev("S.edit=null;render()");
 
+/* Usuarios y permisos: la columna «Clientes asignados» muestra el NOMBRE del cliente (nunca el código interno)
+   y cada fila trae el botón de activar/desactivar el perfil en lugar del de contraseña. */
+ev("S.view='usuarios';S.modal=null;render()");
+const filaUsr = u => [...d.querySelectorAll('table.resp tbody tr')].find(tr => tr.querySelector('code') && tr.textContent.includes(u));
+const filaPed = filaUsr(ev("DB.usuarios.find(u=>u.rol==='OPERATIVO').usuario"));
+const celdaCli = filaPed && filaPed.querySelector('td[data-l="Clientes"]');
+const nombreCli = ev("DB.clientes[0].cliente");
+T('U1 La columna «Clientes asignados» muestra el nombre del cliente, no el código interno', !!celdaCli && celdaCli.textContent.includes(nombreCli) && !/CIT-U|CLI-0/.test(celdaCli.textContent), celdaCli && celdaCli.textContent);
+T('U2 El botón por fila activa/desactiva el perfil (ya no pide contraseña)', !!filaPed && !!filaPed.querySelector('button[data-act="usuarioActivoAsk"]') && !filaPed.querySelector('button[data-act="claveOpen"]'), filaPed && filaPed.textContent.trim().slice(0, 80));
+if (filaPed) {
+  await click(filaPed.querySelector('button[data-act="usuarioActivoAsk"]'));
+  const okBtn = d.querySelector('.dlg .btns button[data-act="usuarioActivoOk"]');
+  T('U3 La confirmación avisa el efecto y desactiva al usuario', !!okBtn && /no podrá iniciar sesión/i.test(d.querySelector('.dlg').textContent));
+  if (okBtn) { await click(okBtn); const u = JSON.parse(ev(`JSON.stringify(DB.usuarios.find(x=>x.id==='${ev('DB.usuarios.find(u=>u.rol===\'OPERATIVO\').id')}'))`)); T('U4 El usuario queda inactivo y la fila ofrece «Activar»', u.activo === false && /ACTIVAR|Activar/.test(d.querySelector('#main').textContent)); }
+}
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

@@ -475,11 +475,17 @@ tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
   .side .grp-p[hidden]{display:none}
 }
 
+/* ---- Listas de selección múltiple (asignar clientes y proyectos) ----
+   Sin altura propia el navegador las deja en una sola línea: las opciones están, pero no se leen. */
+select[multiple]{height:auto;min-height:170px;max-height:320px;padding:6px;line-height:1.7;border-radius:10px}
+select[multiple] option{padding:5px 8px;background:var(--surface);color:var(--ink)}
+select[multiple] option:checked{background:color-mix(in srgb,#0088FF 32%,var(--surface));color:var(--ink)}
+
 /* ---- Selector de dos listas (mover asignados): Usuarios → clientes y proyectos ---- */
 .mv{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:start;margin-top:4px}
 .mv-col{min-width:0}
 .mv-t{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--mute);padding:2px 0 5px;text-transform:uppercase}
-.mv select{width:100%;height:auto;font-size:13px}
+.mv select{width:100%;font-size:13px}
 .mv-btns{display:flex;flex-direction:column;gap:6px;padding-top:22px}
 .mv-btns .btn{padding:3px 9px;line-height:1.1;font-size:15px;min-width:0}
 @container app (max-width:640px){

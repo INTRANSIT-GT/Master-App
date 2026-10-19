@@ -335,6 +335,19 @@ T('105 …pero NO puede registrar costos: el control financiero es solo de consu
 const snImpR = await api('imp', 'snapshot'); const snImp = snImpR.snapshot || {};
 const impSql = (await q1("select count(*)::int n from viajes v where v.cliente_id='COLGATE' and v.proyecto_cat='COLGATE'"))[0].n;
 T('106 El perfil limitado informa «en la base» solo sus viajes visibles', snImpR.ok && snImp.ventana && snImp.ventana.enBase === impSql, [snImp.ventana && snImp.ventana.enBase, impSql]);
+/* Activar o desactivar un perfil (la columna «Estado» de Usuarios y permisos). */
+const apagar = await api('adm', 'activarUsuario', U.bry, false);
+T('107 La administradora desactiva el perfil de un usuario', apagar.ok && apagar.result.activo === false && (await q1('select activo from perfiles where id=$1', [U.bry]))[0].activo === false, apagar);
+const entraOff = await api('bry', 'snapshot');
+T('108 Un perfil desactivado ya no puede operar (el servidor rechaza la sesión)', !entraOff.ok && entraOff.code === 'NO_AUTENTICADO', entraOff);
+const yoMismo = await api('adm', 'activarUsuario', U.adm, false);
+T('109 La administradora no puede desactivar su propio perfil (se quedaría sin acceso)', !yoMismo.ok && yoMismo.code === 'VALIDACION', yoMismo);
+const prende = await api('adm', 'activarUsuario', U.bry, true);
+T('110 Al reactivarlo vuelve a trabajar con los mismos permisos', prende.ok && prende.result.activo === true && (await api('bry', 'snapshot')).ok, prende);
+const sinPermiso = await api('gtr', 'activarUsuario', U.bry, false);
+T('111 Un perfil sin «gestionar usuarios» no puede activar ni desactivar', !sinPermiso.ok && sinPermiso.code === 'SIN_PERMISO', sinPermiso);
+T('112 El cambio queda en la auditoría', (await q1("select count(*)::int n from auditoria where entidad='USUARIO' and accion like 'Perfil %activado'"))[0].n >= 2);
+
 const rOper = await api('ped', 'resumenHistorico');
 T('102 Un perfil sin permiso de finanzas recibe la gráfica con «financiero» en null', rOper.ok && !!rOper.result.porMes && rOper.result.financiero === null && rOper.result.finError === '', rOper.result && Object.keys(rOper.result.porMes || {}).length);
 

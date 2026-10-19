@@ -1434,6 +1434,21 @@ const API={
     return {id:u.id,usuario:u.usuario,email:u.email};
   });},
 
+  /* Activar o desactivar un perfil. Desactivado: no puede entrar (el servidor rechaza la sesión) ni recibe avisos.
+     La administradora no puede desactivarse a sí misma: se quedaría sin acceso a la aplicación. */
+  activarUsuario(uid,id,activo){return exec(uid,'activarUsuario','',A=>{
+    need(A,'usuarios_gestionar','activar o desactivar perfiles');
+    const u=DB.usuarios.find(x=>x.id===String(id||''));if(!u)deny('Usuario no encontrado.','NO_EXISTE');
+    if(u.id===A.id&&!activo)deny('No puedes desactivar tu propio perfil: te quedarías sin acceso a la aplicación.','VALIDACION');
+    const antes=!!u.activo,nuevo=!!activo;
+    if(antes!==nuevo){
+      u.activo=nuevo;
+      u.modificadoPor=A.nombre;u.modificadoEn=nowIso();
+      auditAdd({entidad:'USUARIO',accion:nuevo?'Perfil activado':'Perfil desactivado',campo:'Activo',anterior:antes?'Activo':'Inactivo',nuevo:nuevo?'Activo':'Inactivo',por:A,ref:u.id});
+    }
+    return {id:u.id,usuario:u.usuario,activo:u.activo};
+  });},
+
   guardarReglasTorre(uid,d){return exec(uid,'guardarReglasTorre','',A=>{
     need(A,'clientes_gestionar','administrar las reglas de Torre de Control');
     const c=DB.clientes.find(x=>x.id===(d&&d.cliente));if(!c)deny('Cliente no válido.','VALIDACION');
