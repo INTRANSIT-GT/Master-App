@@ -51,4 +51,27 @@ const r3 = ev(`(()=>{try{API.enviarLiquidacion('U-1','${V2}',window.__FOTO);retu
 T('L9 Un viaje que aún no se entregó sigue bloqueado con aviso claro',
   /^ESTADO_INVALIDO: La liquidación no puede enviarse antes de entregar el viaje\.$/.test(r3), r3);
 
+/* ---- La validación de liquidaciones vive en VIAJES («Por validar»); Liquidaciones queda con tres pestañas ---- */
+const tabsDe = v => {
+  ev(`S.user=DB.usuarios.find(u=>u.rol==='ADMIN');S.view='${v}';S.tab={};S.modal=null;S.edit=null;S.form=null;render()`);
+  return [...d.querySelectorAll('#main .tabs button')].map(b => b.textContent.replace(/\s*\d+$/, '').trim());
+};
+const tabsViajes = tabsDe('viajes'), tabsLiq = tabsDe('liquidaciones');
+T('L10 VIAJES tiene la pestaña «Por validar» (la revisión de liquidaciones ya no vive en Liquidaciones)', tabsViajes.includes('Por validar'), tabsViajes);
+T('L11 LIQUIDACIONES se queda con Por liquidar, Rechazados y Aceptados', JSON.stringify(tabsLiq) === JSON.stringify(['Por liquidar', 'Rechazados', 'Aceptados']), tabsLiq);
+ev(`(()=>{const t=DB.trips.find(x=>x.id==='${V2}');t.estado='LIQUIDADO';S.user=DB.usuarios.find(u=>u.rol==='ADMIN');S.view='viajes';S.tab={viajes:'val'};S.q='';S.fCli='';S.fPcat='';S.fDesde='';S.fHasta='';render();})()`);
+const txtVal = d.querySelector('#main').textContent.replace(/\s+/g, ' ');
+const vbHtml = (d.querySelector('#main #vb') || {}).innerHTML || '';
+T('L12 La pestaña «Por validar» muestra la evidencia con las acciones de revisión', /Aceptar/i.test(txtVal) && /Rechazar/i.test(txtVal) && !!d.querySelector('#main #vb table'), [vbHtml.slice(0, 300), errs.slice(0, 2)]);
+
+/* ---- Aprobar un Shipment duplicado: el aviso usaba el resultado antes de existir («Cannot access 'r'») ---- */
+const dup = await (async () => {
+  ev(`(()=>{const t=DB.trips.find(x=>x.id==='${V2}');t.estado='ENTREGADO';t.shipment='CASE1';DB.trips.push(Object.assign({},t,{id:'V-DUP2',shipment:'case1'}));})()`);
+  const antes = ev("typeof ACT.shipmentDupOk");
+  await ev(`ACT.shipmentDupOk({id:'${V2}'})`);
+  await tick();
+  return { antes, ship: ev(`DB.trips.find(x=>x.id==='${V2}').shipment`), aprobado: ev(`!!DB.trips.find(x=>x.id==='${V2}').duplicadoAprobado`) };
+})();
+T('L13 Aprobar un Shipment duplicado funciona (antes terminaba en «Cannot access \'r\' before initialization»)', dup.ship === 'DUP-CASE1' && dup.aprobado === true, dup);
+T('L14 El error del aviso no vuelve a aparecer en la interfaz', !errs.some(e => /before initialization/.test(e)), errs);
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

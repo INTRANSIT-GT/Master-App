@@ -8,15 +8,34 @@ const VT=[
   {k:'plan',l:'Planificados',f:t=>t.estado==='PLANIFICADO',d:'Viajes iniciales: requieren cliente y ruta; se completan antes de salir.'},
   {k:'ruta',l:'En ruta',f:t=>t.estado==='EN_RUTA',d:'Viajes en recorrido con los datos operativos completos.'},
   {k:'liq',l:'Por liquidar',f:t=>['ENTREGADO','RECHAZADO'].includes(t.estado),d:'Entregados pendientes de evidencia, o rechazados que Operaciones debe corregir.'},
+  {k:'val',l:'Por validar',f:t=>t.estado==='LIQUIDADO',d:'Liquidaciones enviadas, pendientes de aceptación o devolución.'},
   {k:'cierre',l:'Cerrados',f:t=>['LIQUIDADO','ACEPTADO','FACTURADO','COBRADO'].includes(t.estado),d:'Viajes en validación, facturación o cobro.'}
 ];
+/* La revisión de liquidaciones (aprobar o devolver con comentario) vive en VIAJES → «Por validar».
+   En LIQUIDACIONES quedan solo las pestañas de trabajo: por liquidar, rechazados y aceptados. */
 VIEWS.viajes=()=>{
-  const ts=vis(),k=S.tab.viajes||'plan',cur=VT.find(x=>x.k===k)||VT[0],list=ts.filter(cur.f);
+  const vt=VT.filter(t=>t.k!=='val'||hp('liq_ver'));
+  const ts=vis(),k0=S.tab.viajes||'plan',k=vt.some(x=>x.k===k0)?k0:vt[0].k,cur=vt.find(x=>x.k===k)||vt[0],list=ts.filter(cur.f);
+  if(k==='val')return `<div class="inner" style="max-width:1400px">${pageHead('Viajes',`${list.length} ${list.length===1?'liquidación':'liquidaciones'} por validar`)}${tabs('viajes',vt,k,ts)}<div class="tabdesc">${cur.d}</div>
+    <div class="lfilters"><input type="text" id="q" placeholder="Buscar por viaje, cliente, piloto o fecha (dd/mm/aaaa)" value="${esc(S.q)}" aria-label="Buscar">
+    <select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>
+    <select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
+    <label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde)}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta)}"></label>
+    <button class="btn sm" data-act="limpiarFiltros">Limpiar filtros</button></div>
+    <div id="vb">${BODY.viajes()}</div></div>`;
   return `<div class="inner" style="max-width:none">${pageHead('Viajes',`${list.length} ${list.length===1?'viaje':'viajes'} en esta pestaña`,hp('viajes_crear')?`<button class="btn primary" data-act="nav" data-v="nuevo">${icon('plus',18)} Nuevo viaje</button>`:'')}
-    ${tabs('viajes',VT,k,ts)}<div class="tabdesc">${cur.d}</div>
+    ${tabs('viajes',vt,k,ts)}<div class="tabdesc">${cur.d}</div>
     ${viajesTable(list)}</div>`;
 };
 
+
+/* Cuerpo actualizable de la pestaña «Por validar» (para que el buscador filtre sin recargar la pantalla).
+   En las otras pestañas de Viajes no hay #vb, así que devolver '' no afecta a nada. */
+BODY.viajes=()=>{
+  const cur=VT.find(x=>x.k===(S.tab.viajes||'plan'));
+  if(!cur||cur.k!=='val')return '';
+  return liqTable(liqFilter(vis().filter(cur.f)),'rev');
+};
 
 const curModel=()=>S.edit?S.edit.data:S.form;
 function initForm(){
@@ -364,12 +383,10 @@ function liqTabs(){
   const T={
     sub:{k:'sub',l:'Por liquidar',f:t=>t.estado==='ENTREGADO',d:'Viajes entregados que esperan la fotografía de liquidación.'},
     corr:{k:'corr',l:'Rechazados',f:t=>t.estado==='RECHAZADO',d:'Rechazados con comentarios. Operaciones los corrige y vuelve a liquidar; se conserva cada rechazo.'},
-    rev:{k:'rev',l:'Por validar',f:t=>t.estado==='LIQUIDADO',d:'Liquidaciones enviadas, pendientes de aceptación o rechazo.'},
     apr:{k:'apr',l:'Aceptados',f:t=>LIQ_APROBADA.includes(t.estado),d:'Historial de viajes aceptados.'}
   };
-  if(hp('liq_enviar')&&!hp('liq_aprobar'))return [T.sub,T.corr,T.rev,T.apr];
-  if(hp('liq_aprobar')||hp('liq_devolver'))return hp('liq_enviar')?[T.rev,T.sub,T.corr,T.apr]:[{...T.rev,l:'Por revisar',d:'Revisa la evidencia: aprueba o devuelve con un comentario obligatorio.'},{...T.corr,l:'Pendientes de corrección',d:'Devueltas al responsable del proyecto; vuelven a "Por revisar" cuando las reenvíe.'},T.apr];
-  return [T.sub,T.rev,T.corr,T.apr];
+  /* «Por validar» se movió a VIAJES (es una pestaña del módulo de viajes). Aquí queda solo el trabajo de liquidaciones. */
+  return [T.sub,T.corr,T.apr];
 }
 const fecha2=t=>{const d=planD(t);return d?fmtDate(d)+' '+d:'';};
 function liqFilter(list){
@@ -454,7 +471,8 @@ Object.assign(ACT,{
   async devolverOpen(d){formM({title:'¿Qué debe corregirse?',text:`Viaje #${d.id}. El comentario es obligatorio y le llegará al responsable del proyecto.`,chips:['Falta firma del piloto','Liquidación incompleta','Falta comprobante'],fields:[{k:'comentario',label:'Comentario de revisión',type:'textarea',req:1,ph:'Escribe qué falta o qué está incorrecto'}],ok:'DEVOLVER PARA CORRECCIÓN',okCls:'fix',act:'devolverSend',id:d.id});},
   async devolverSend(d){const r=await run(()=>API.devolver(S.user.id,d.id,S.modal.data.comentario),`Viaje #${d.id} devuelto al responsable con tu comentario.`,true);if(r.ok)afterWrite();},
   async shipmentDupOpen(d){formM({title:`Aprobar Shipment duplicado · viaje #${d.id}`,text:'Esta es una aprobación excepcional de Gerencia de Transporte. El valor se convertirá en <b>DUP-</b> + el Shipment actual. Si ese DUP- ya existe, no se podrá aprobar ni liquidar.',ok:'APROBAR DUPLICADO',okCls:'fix',act:'shipmentDupOk',id:d.id});},
-  async shipmentDupOk(d){const r=await run(()=>API.aprobarShipmentDuplicado(S.user.id,d.id),`Shipment aprobado como ${r.shipment}.`,true);if(r.ok)afterWrite();},
+  /* El mensaje del aviso tiene que ser una función del resultado: con la plantilla directa, `r` todavía no existía. */
+  async shipmentDupOk(d){const r=await run(()=>API.aprobarShipmentDuplicado(S.user.id,d.id),x=>`Shipment aprobado como ${x.shipment}.`,true);if(r.ok)afterWrite();},
   async guardar(){
     const f=S.form;f.err='';
     if(!f.placaSel){f.err='Selecciona la placa del equipo.';render();topScroll();return;}
