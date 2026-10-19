@@ -23,7 +23,7 @@ function viajeDetalleFact(){
     ${g?'':'<div class="mute" style="margin-top:8px;font-size:13px">Este viaje todavía no se ha enviado a facturar, por eso no aparece en la tabla de abajo.</div>'}</div>`;
 }
 /* ---- Comercial ---- */
-const COMTABS=[{k:'bandeja',l:'Pendientes de gestión'},{k:'fact',l:'Facturas'},{k:'hist',l:'Facturación'},{k:'tar',l:'Tarifas'},{k:'reg',l:'Registros anteriores'}];
+const COMTABS=[{k:'bandeja',l:'Pendientes de gestión'},{k:'fact',l:'Facturas'},{k:'hist',l:'Facturación'},{k:'reg',l:'Registros anteriores'}];
 const comTrips=()=>vis().filter(t=>['ACEPTADO','FACTURADO','COBRADO'].includes(t.estado));
 const qfmt=v=>v===''||v==null?'—':'Q '+Number(v).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
 const sinReg='<span class="mute">Sin registrar</span>';
@@ -173,8 +173,10 @@ function tarifasVista(){
     </div>
     <div id="vb">${BODY.tarifas()}</div>`;
 }
+/* TARIFAS es una sección del módulo COMERCIAL (antes era una pestaña dentro de Facturación). */
+VIEWS.tarifas=()=>`<div class="inner" style="max-width:1500px">${pageHead('TARIFAS','Tarifa de cobro al cliente por ruta, capacidad y vigencia',hp('tarifas_crear')?`<button class="btn primary" data-act="tarifaOpen" data-id="">${icon('plus',18)} Nueva tarifa</button>`:'')}${tarifasVista()}</div>`;
 VIEWS.comercial=()=>{
-  const tabsV=COMTABS.filter(t=>t.k!=='tar'||hp('tarifas_ver'));
+  const tabsV=COMTABS;
   const k=tabsV.some(t=>t.k===S.tab.com)?S.tab.com:'bandeja',canAct=hp('comercial_agrupar');
   const acts=canAct||hp('facturas_emitir')||hp('comercial_corregir')||hp('comercial_anular')||hp('cobros_registrar');
   let ags=[];try{ags=API.agrupaciones(S.user.id);}catch(e){}
@@ -187,14 +189,11 @@ VIEWS.comercial=()=>{
     body=`<div class="chips"><button class="chip" aria-pressed="${fase==='VIG'}" data-act="factFase" data-v="VIG">Vigentes</button><button class="chip" aria-pressed="${fase==='PREP'}" data-act="factFase" data-v="PREP">Solo preparadas</button><button class="chip" aria-pressed="${fase==='ANU'}" data-act="factFase" data-v="ANU">Anuladas</button></div>${agrTable(lista,acts)}`;
   }else if(k==='hist'){
     body=`${histFiltros()}${esAdm()?viajeDetalleFact():''}<div id="vb">${BODY.hist()}</div>`;
-  }else if(k==='tar'){
-    body=tarifasVista();
   }else{
     let ev=[];try{ev=API.movimientosComerciales(S.user.id);}catch(e){}
     body=`<h2 style="margin-bottom:10px">Facturas anuladas</h2>${agrTable(ags.filter(g=>g.estado==='ANULADA').slice().reverse(),false)}<h2 style="margin:22px 0 10px">Movimientos comerciales</h2><div class="card">${ev.length?`<ul class="feed">${ev.slice().reverse().slice(0,60).map(x=>`<li><span class="avatar" style="width:30px;height:30px;font-size:12px">${initials(x.por)}</span><div><b>${esc(x.por)}</b> · ${esc(x.accion)}<br><span class="mute">${esc(x.ref)}${x.campo&&x.nuevo?' · '+esc(x.campo)+': '+esc(x.anterior||'(vacío)')+' → '+esc(x.nuevo):''}${x.motivo?' · “'+esc(x.motivo)+'”':''}</span></div><span class="when">${fmtDT(x.en)}</span></li>`).join('')}</ul>`:'<div class="mute">Sin movimientos.</div>'}</div>`;
   }
-  const head=k==='tar'&&hp('tarifas_crear')?`<button class="btn primary" data-act="tarifaOpen" data-id="">${icon('plus',18)} Nueva tarifa</button>`:'';
-  return `<div class="inner" style="max-width:1500px">${pageHead('COMERCIAL',canAct?'Selecciona uno o varios viajes del mismo cliente y factúralos. Agrupar es opcional.':'Consulta de gestión comercial.',head)}
+  return `<div class="inner" style="max-width:1500px">${pageHead('COMERCIAL',canAct?'Selecciona uno o varios viajes del mismo cliente y factúralos. Agrupar es opcional.':'Consulta de gestión comercial.')}
     ${tabs('com',tabsV,k,null)}<div style="height:14px"></div>${body}</div>`;
 };
 

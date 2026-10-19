@@ -106,17 +106,17 @@ const LISTAS_SISTEMA=['tipoUnidad','opl','tipoCarga','tipoViaje','origen','arras
 const LISTAS_ETIQUETA={tipoUnidad:'Tipo de unidad',opl:'OPL · Transportistas',tipoCarga:'Tipo de carga',tipoViaje:'Tipo de viaje',origen:'Orígenes',arrastre:'Equipos de arrastre (placas)'};
 function refrescarOrigenes(){ORIGENES.length=0;(CAT.origen||[]).forEach(n=>ORIGENES.push({id:n,nombre:n}));}
 const ROLES={
-  ADMIN:{label:'Administradora',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
+  ADMIN:{label:'Administradora',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','tarifas','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
   GERENTE_TRANSPORTE:{label:'Gerente de Transporte',home:'inicio',nav:['inicio','nuevo','todos','viajes','rutas','opl','liquidaciones','finanzas','catalogos'],alcance:'Ver todo y registrar viajes; asignar unidades/pilotos y autorizar/crear tarifas OPL; control financiero en modo consulta'},
   VALIDADOR:{label:'Validador',home:'liquidaciones',nav:['viajes','liquidaciones'],alcance:'Revisar/aprobar liquidaciones de clientes asignados'},
   OPERATIVO:{label:'Operativo',home:'inicio',nav:['inicio','nuevo','viajes','rutas','liquidaciones'],alcance:'Registrar, editar y liquidar viajes de clientes asignados. Ve y solicita rutas de su proyecto.'},
-  ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
-  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'rutas',nav:['proyectos','rutas','opl'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
+  ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','tarifas','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
+  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'rutas',nav:['proyectos','tarifas','rutas','opl'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
   FACTURACION:{label:'Facturación',home:'comercial',nav:['todos','comercial'],alcance:'Cargar facturas, revisar viajes por facturar'},
   COBROS:{label:'Cobros / Contabilidad',home:'comercial',nav:['comercial'],alcance:'Registrar cobros y pagos'},
   PAGO_OPL:{label:'Pago OPL',home:'opl',nav:['opl'],alcance:'Registrar OPL y tarifas a proveedores (requieren autorización)'},
   TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Editar horas y marcar Completado para viajes en ruta'},
-  PROYECTOS:{label:'Proyectos',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','rutas','opl','finanzas','catalogos','auditoria','modelo'],alcance:'Revisar todos los módulos y datos. Las acciones las habilita la administradora según se necesiten.'}
+  PROYECTOS:{label:'Proyectos',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','tarifas','rutas','opl','finanzas','catalogos','auditoria','modelo'],alcance:'Revisar todos los módulos y datos. Las acciones las habilita la administradora según se necesiten.'}
 };
 const PERM_DEFAULT={
   ADMIN:PERM_KEYS.slice(),
@@ -154,8 +154,8 @@ const PROHIBIDO={
 };
 /* Permisos que no se pueden quitar (evita bloquearse a sí misma) */
 const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']};
-const VIEW_PERM={proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
-const NAVLBL={proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
+const VIEW_PERM={tarifas:'tarifas_ver',proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
+const NAVLBL={tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck']};
 
 const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
@@ -498,10 +498,22 @@ function crearRutaPendiente(A,o){
   notificar(A,{tipo:'RUTA_PENDIENTE',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Ruta nueva pendiente de validación: ${o.nombre}`,detalle:{proyecto:o.proyecto,cliente:o.cliente,ruta:o.nombre,origen:o.origenProp||'(no indicado)',destino:o.destinoProp||'(no indicado)',solicitadoPor:A.nombre,fecha:r.solicitadaEn,viaje:o.viajeRef||''}});
   return r;
 }
+/* Código de ruta automático: la sigla del cliente (3 letras) más un correlativo (COL-001, COL-002…).
+   Antes había que inventarlo a mano al validar o registrar una ruta, y era fácil repetirlo o dejarlo raro. */
+function siguienteCodigoRuta(cliente){
+  const c=DB.clientes.find(x=>x.id===cliente)||{};
+  let pre=String(c.cliente||c.nombre||'RUTA').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3);
+  if(pre.length<3)pre=(pre+'RUT').slice(0,3);
+  let n=1;
+  DB.rutas.forEach(r=>{const m=new RegExp('^'+pre+'-(\\d{1,4})$').exec(String(r.codigo||''));if(m)n=Math.max(n,Number(m[1])+1);});
+  let cod=pre+'-'+String(n).padStart(3,'0');
+  while(DB.rutas.some(r=>r.codigo===cod&&r.estado!=='RECHAZADA')){n++;cod=pre+'-'+String(n).padStart(3,'0');}
+  return cod;
+}
 function validarRutaDatos(d){
   const cliente=d.cliente;if(!DB.clientes.find(c=>c.id===cliente))deny('Cliente no válido.','VALIDACION');
   if(!proyectosDe(cliente).includes(d.proyecto))deny('Proyecto no válido para el cliente.','VALIDACION');
-  const codigo=String(d.codigo||'').trim().toUpperCase();
+  const codigo=String(d.codigo||'').trim().toUpperCase()||siguienteCodigoRuta(cliente);   /* vacío = se asigna solo */
   if(!/^[A-Z0-9][A-Z0-9_-]{2,19}$/.test(codigo))deny('Código de ruta: 3 a 20 caracteres (letras, números, guion).','VALIDACION');
   if(DB.rutas.some(r=>r.id!==d.id&&r.codigo===codigo&&r.estado!=='RECHAZADA'))deny(`El código de ruta ${codigo} ya existe.`,'DUPLICADO');
   const nombre=String(d.nombre||'').trim();if(nombre.length<3)deny('Escribe el nombre de la ruta.','VALIDACION');

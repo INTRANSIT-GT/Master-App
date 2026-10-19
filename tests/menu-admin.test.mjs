@@ -34,7 +34,7 @@ T('M1 Aparecen los cinco módulos, en orden: VIAJES, TORRE, COMERCIAL, OPL, FLOT
 const L = t => (G.find(g => g.t === t) || { items: [] }).items.map(i => i.l);
 T('M2 VIAJES agrupa Nuevo viaje, Liquidaciones y Todos los viajes (y la pantalla existente de viajes por estado)', JSON.stringify(L('VIAJES')) === JSON.stringify(['Nuevo viaje', 'Liquidaciones', 'Todos los viajes', 'Viajes por estado']), L('VIAJES'));
 T('M3 TORRE agrupa «Viajes» y «Horarios y fechas» (ambas abren la hoja existente de Torre de control)', JSON.stringify(L('TORRE')) === JSON.stringify(['Viajes', 'Horarios y fechas']), L('TORRE'));
-T('M4 COMERCIAL agrupa Facturación, Clientes, Finanzas y Catálogos', JSON.stringify(L('COMERCIAL')) === JSON.stringify(['Facturación', 'Clientes', 'Finanzas', 'Catálogos']), L('COMERCIAL'));
+T('M4 COMERCIAL agrupa Facturación, Clientes, Tarifas, Finanzas y Catálogos', JSON.stringify(L('COMERCIAL')) === JSON.stringify(['Facturación', 'Clientes', 'Tarifas', 'Finanzas', 'Catálogos']), L('COMERCIAL'));
 T('M5 OPL agrupa Proveedores', JSON.stringify(L('OPL')) === JSON.stringify(['Proveedores']), L('OPL'));
 T('M6 FLOTAS agrupa Pilotos', JSON.stringify(L('FLOTAS')) === JSON.stringify(['Pilotos']), L('FLOTAS'));
 T('M7 Ninguna opción se repite dentro de un mismo módulo', G.every(g => new Set(g.items.map(i => i.l)).size === g.items.length));
@@ -126,4 +126,11 @@ T('M24 El Gerente de Transporte ve Inicio, Nuevo viaje, Viajes, Liquidaciones y 
 const chipGerente = ev("document.querySelector('.userchip').textContent.replace(/\\s+/g,' ')");
 T('M25 Su botón de perfil muestra solo el perfil: sin lista de clientes ni códigos internos', /Gerente de Transporte/.test(chipGerente) && !/CIT-U|CLI-0/.test(chipGerente), chipGerente);
 
+/* Tarifas dejó de ser una pestaña de Facturación: ahora es una sección propia del módulo COMERCIAL. */
+comoAdmin();
+const itemTar = botones().find(b => b.dataset.v === 'tarifas');
+if (itemTar) await click(itemTar);
+T('M26 Tarifas es una sección de COMERCIAL (pantalla propia) y ya no una pestaña de Facturación',
+  !!itemTar && ev("S.view") === 'tarifas' && /TARIFAS/.test(txt(d.querySelector('#main')).toUpperCase()) && !/tar/i.test(ev("JSON.stringify(COMTABS)")),
+  [ev("S.view"), ev("JSON.stringify(COMTABS)")]);
 console.log(filas.join('\n')); console.log(`\nRESULTADO: ${ok} correctas, ${mal} fallidas`); process.exit(mal ? 1 : 0);

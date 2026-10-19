@@ -495,16 +495,16 @@ Object.assign(ACT,{
   },
   async rutaSolicitarSave(){const m=S.modal.data;const r=await run(()=>API.solicitarRuta(S.user.id,m),x=>`Ruta solicitada (${x.id}): queda NO ASIGNADA. Se avisó a Comercial y Gerencia dentro de la aplicación.`,true);if(r.ok)afterWrite();},
   async rutaRegistrarOpen(){
-    formM({title:'Registrar ruta validada',text:'Se agrega directamente al catálogo como ASIGNADA.',
-      fields:[{k:'codigo',label:'Código de la ruta',req:1},{k:'nombre',label:'Nombre de la ruta',req:1},{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},{k:'origenId',label:'Origen',type:'select',req:1,optsFn:optsOrigenes,ph:'Selecciona el origen'},{k:'destinoId',label:'Destino',type:'select',req:1,optsFn:optsDestinos,ph:'Primero elige el cliente'}],
-      data:{codigo:'',nombre:'',cliente:'',proyecto:'',origenId:'',destinoId:''},rerender:['cliente'],ok:'REGISTRAR RUTA',act:'rutaRegistrarSave'});
+    formM({title:'Registrar ruta validada',text:'Se agrega directamente al catálogo como ASIGNADA. El <b>código se asigna solo</b> con la sigla del cliente y un correlativo (por ejemplo COL-001).',
+      fields:[{k:'nombre',label:'Nombre de la ruta',req:1},{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},{k:'origenId',label:'Origen',type:'select',req:1,optsFn:optsOrigenes,ph:'Selecciona el origen'},{k:'destinoId',label:'Destino',type:'select',req:1,optsFn:optsDestinos,ph:'Primero elige el cliente'}],
+      data:{nombre:'',cliente:'',proyecto:'',origenId:'',destinoId:''},rerender:['cliente'],ok:'REGISTRAR RUTA',act:'rutaRegistrarSave'});
   },
   async rutaRegistrarSave(){const m=S.modal.data;const r=await run(()=>API.registrarRuta(S.user.id,m),x=>`Ruta ${x.codigo} registrada.`,true);if(r.ok)afterWrite();},
   async rutaValidarOpen(d){
     const r=DB.rutas.find(x=>x.id===d.id);if(!r)return;
-    formM({title:`Validar y asignar · ${r.nombre}`,text:`${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente)} · ${esc(r.proyecto)}. Solicitada por ${esc(r.solicitadaPor)}.<br>Origen propuesto: <b>${esc(r.origenProp||'no indicado')}</b> · Destino propuesto: <b>${esc(r.destinoProp||'no indicado')}</b>. Al asignarla se completan el origen y el destino de los viajes que la usan.`,
-      fields:[{k:'codigo',label:'Código de la ruta',req:1},{k:'origenId',label:'Origen (catálogo)',type:'select',req:1,optsFn:optsOrigenes,ph:'Selecciona el origen'},{k:'destinoId',label:'Destino (catálogo del cliente)',type:'select',req:1,optsFn:()=>optsDestinos({cliente:r.cliente}),ph:'Selecciona el destino'}],
-      data:{codigo:'',origenId:'',destinoId:''},ok:'VALIDAR Y ASIGNAR',okCls:'ok',act:'rutaValidarOk',id:r.id});
+    formM({title:`Validar y asignar · ${r.nombre}`,text:`${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente)} · ${esc(r.proyecto)}. Solicitada por ${esc(r.solicitadaPor)}.<br>Origen propuesto: <b>${esc(r.origenProp||'no indicado')}</b> · Destino propuesto: <b>${esc(r.destinoProp||'no indicado')}</b>. Al asignarla se completan el origen y el destino de los viajes que la usan. El <b>código se asigna solo</b> (sigla del cliente y correlativo).`,
+      fields:[{k:'origenId',label:'Origen (catálogo)',type:'select',req:1,optsFn:optsOrigenes,ph:'Selecciona el origen'},{k:'destinoId',label:'Destino (catálogo del cliente)',type:'select',req:1,optsFn:()=>optsDestinos({cliente:r.cliente}),ph:'Selecciona el destino'}],
+      data:{origenId:'',destinoId:''},ok:'VALIDAR Y ASIGNAR',okCls:'ok',act:'rutaValidarOk',id:r.id});
   },
   async rutaValidarOk(d){const m=S.modal.data;const r=await run(()=>API.validarRuta(S.user.id,d.id,m),x=>`Ruta ${x.codigo} asignada: los viajes asociados ya tienen origen y destino.`,true);if(r.ok)afterWrite();},
   async rutaRechazarOpen(d){formM({title:'Rechazar ruta solicitada',text:'Explica por qué no se asigna. Quien la solicitó recibirá el aviso.',fields:[{k:'motivo',label:'Motivo del rechazo',type:'textarea',req:1}],ok:'RECHAZAR RUTA',okCls:'fix',act:'rutaRechazarOk',id:d.id});},

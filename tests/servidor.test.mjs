@@ -335,6 +335,14 @@ T('105 …pero NO puede registrar costos: el control financiero es solo de consu
 const snImpR = await api('imp', 'snapshot'); const snImp = snImpR.snapshot || {};
 const impSql = (await q1("select count(*)::int n from viajes v where v.cliente_id='COLGATE' and v.proyecto_cat='COLGATE'"))[0].n;
 T('106 El perfil limitado informa «en la base» solo sus viajes visibles', snImpR.ok && snImp.ventana && snImp.ventana.enBase === impSql, [snImp.ventana && snImp.ventana.enBase, impSql]);
+/* El código de la ruta lo asigna el sistema: el usuario no tiene que inventarlo al solicitar, validar ni registrar. */
+await db.exec(`insert into master.destinos(id,nombre,cliente_id) values ('D-C3','Colgate 3','COLGATE'),('D-C4','Colgate 4','COLGATE') on conflict do nothing`);
+const solR = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'CP → Bodega Central' });
+const valR = await api('gtr', 'validarRuta', solR.result.id, { origenId: 'CP', destinoId: 'D-C3' });
+T('113 Al validar una ruta sin escribir código, el sistema lo asigna (sigla del cliente + correlativo)', valR.ok && /^COL-\d{3,4}$/.test(valR.result.codigo), [valR.ok, valR.code, valR.message, valR.result && valR.result.codigo]);
+const regR = await api('adm', 'registrarRuta', { nombre: 'CP → Colgate Sur', cliente: 'COLGATE', proyecto: 'COLGATE', origenId: 'CP', destinoId: 'D-C4' });
+T('114 Al registrar una ruta del catálogo sin código, también se asigna solo y no repite el anterior', regR.ok && /^COL-\d{3,4}$/.test(regR.result.codigo) && regR.result.codigo !== valR.result.codigo, regR);
+
 /* Activar o desactivar un perfil (la columna «Estado» de Usuarios y permisos). */
 const apagar = await api('adm', 'activarUsuario', U.bry, false);
 T('107 La administradora desactiva el perfil de un usuario', apagar.ok && apagar.result.activo === false && (await q1('select activo from perfiles where id=$1', [U.bry]))[0].activo === false, apagar);
