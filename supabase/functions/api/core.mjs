@@ -917,7 +917,7 @@ const API={
     need(A,'viajes_estatus_torre','avanzar el estado del viaje');
     const t=getT(id);if(!puedeVer(A,t))deny('No tienes acceso a este viaje.');
     const cl=DB.clientes.find(x=>x.id===t.proyecto)||{};
-    if(!cl.torreEstatus)deny(`Torre de Control solo avanza el estado de los clientes autorizados (Coca-Cola y Frito Lay). ${cl.cliente||t.proyecto} es solo consulta.`,'CLIENTE_NO_AUTORIZADO');
+    if(!cl.torreEstatus)deny(`Torre de Control solo avanza el estado de los clientes autorizados. ${cl.cliente||t.proyecto} es solo consulta.`,'CLIENTE_NO_AUTORIZADO');
     const objetivo=String(nuevo||'');
     if(!['EN_RUTA','ENTREGADO'].includes(objetivo))deny('Torre de Control solo puede avanzar el viaje a En ruta o Entregado.','ESTADO_NO_AUTORIZADO');
     if(!(EDGES[t.estado]||[]).includes(objetivo))deny(`Torre de Control no puede pasar de "${ESTADOS[t.estado].l}" a "${ESTADOS[objetivo].l}".`,'TRANSICION_INVALIDA');

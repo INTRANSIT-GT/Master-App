@@ -81,7 +81,7 @@ VIEWS.modelo=()=>{
     <div class="alertbox info" style="margin-bottom:16px"><b>Regla:</b> un único registro por viaje durante todo su ciclo de vida. Las tablas VIAJES, LIQUIDACIONES, EVIDENCIAS, AGRUPACIONES_COMERCIALES y AUDITORIA se relacionan por IdViaje; nada se borra, todo cambio es un evento nuevo.</div>
     <div class="grid g2">${T.map(t=>`<div class="card"><h3>${t[0]}</h3><div class="mute" style="margin:-8px 0 10px;font-size:13px">${t[1]}</div><div class="scrollx"><table style="font-size:13px"><thead><tr><th>Campo</th><th>Tipo sugerido</th><th>Nota</th></tr></thead><tbody>${t[2].map(r=>`<tr><td><code>${r[0]}</code></td><td>${r[1]}</td><td class="mute">${r[2]}</td></tr>`).join('')}</tbody></table></div></div>`).join('')}</div>
     <section class="section"><h2>Flujo de estados</h2><div class="tablewrap scrollx"><table><thead><tr><th>Estado actual</th><th>Quién lo mueve</th><th>Siguiente</th></tr></thead><tbody>${E.map(r=>`<tr><td>${badge(r[0])}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table></div>
-    <div class="mute" style="margin-top:8px;font-size:13px">El viaje tiene un solo estado: <b>Estado</b> (Planificado → En ruta → Entregado → Liquidado → Aceptado/Rechazado → Facturado → Cobrado). Torre de Control avanza el estado de sus clientes autorizados; no edita fechas ni horas.</div></section></div>`;
+    <div class="mute" style="margin-top:8px;font-size:13px">El viaje tiene un solo estado: <b>Estado</b> (Planificado → En ruta → Entregado → Liquidado → Aceptado/Rechazado → Facturado → Cobrado). Torre de Control avanza el estado de sus clientes autorizados y puede corregir fechas y horas; no edita otros datos.</div></section></div>`;
 };
 
 
