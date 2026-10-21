@@ -13,6 +13,8 @@ const TT=[
 const clienteDe=t=>DB.clientes.find(x=>x.id===t.proyecto)||{};
 /* Torre de Control avanza el estado de sus clientes autorizados: Planificado → En ruta → Entregado */
 const TORRE_SIGUIENTE={PLANIFICADO:'EN_RUTA',EN_RUTA:'ENTREGADO'};
+/* Por qué un viaje está en «solo consulta» para Torre (solo texto: no cambia ninguna regla). */
+const torreMotivo=t=>!hp('viajes_estatus_torre')?'tu perfil no tiene el permiso de edición de Torre':(!clienteDe(t).torreEstatus?'este cliente no está autorizado para Torre':(['FACTURADO','COBRADO'].includes(t.estado)?'viaje facturado':''));
 const torreAccion=t=>!!clienteDe(t).torreEstatus&&!!TORRE_SIGUIENTE[t.estado];
 function torreList(){
   const base=vis().filter(t=>!S.tProy||t.proyecto===S.tProy),k=S.tab.torre||'curso',cur=TT.find(x=>x.k===k)||TT[0],q=S.q.trim().toLowerCase();
@@ -27,7 +29,7 @@ function torreSheet(list){
   return `<div class="xlwrap sheet"><table class="xl" style="min-width:1400px"><thead><tr><th class="stk">Viaje</th><th>Cliente</th><th>Proyecto</th><th>Piloto</th><th>Unidad · placa</th><th>Ruta</th><th>Estado</th><th>En ruta</th><th>Fecha plan</th><th>Inicio real (salida)</th><th>Fin descarga</th></tr></thead><tbody>
   ${pg.filas.map(t=>{const j=J(t),sig=TORRE_SIGUIENTE[t.estado],aut=clienteDe(t).torreEstatus,ed=puede&&aut&&!!sig;
     const ctrl=ed?`<button class="btn primary sm" data-act="torreEstado" data-torreestado="${t.id}" data-dest="${sig}">${sig==='EN_RUTA'?'Enviar a ruta':'Confirmar entrega'}</button><span class="cst" id="ss_${t.id}" aria-live="polite"></span>`
-      :`<span class="mute" style="font-size:12px">${aut?'(sin acción en este estado)':'solo consulta'}</span>`;
+      :`<span class="mute" style="font-size:12px" title="${esc(torreMotivo(t))}">${aut&&puede?'(sin acción en este estado)':'solo consulta · '+esc(torreMotivo(t)||'sin acción en este estado')}</span>`;
     return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${rutaHTML(t)}</td>
     <td class="${ed?'ed':'ro'}" style="min-width:230px"><div class="trow">${badge(t.estado)}${ctrl}</div></td>
     <td>${t.estado==='EN_RUTA'?`<span class="elapsed" style="font-size:14px" data-since="${since(t)}">${elapsed(since(t))}</span>`:'—'}</td>
@@ -45,7 +47,7 @@ function torreHorarios(list){
   return `<div class="xlwrap sheet"><table class="xl" id="tablaHorarios" style="min-width:${1100+CAMPOS_TIEMPO.length*130}px"><thead><tr><th class="stk">Viaje</th><th>Cliente</th><th>Proyecto</th><th>Placa</th><th>Fecha plan</th>${CAMPOS_TIEMPO.map(([k,l])=>`<th>${esc(l)}</th>`).join('')}<th>Estado</th><th>Acciones</th></tr></thead><tbody>
   ${pg.filas.map(t=>{const j=J(t);
     return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(j.f.placa||'—')}</td><td>${celda(t.fechaPlan)}</td>${CAMPOS_TIEMPO.map(([k])=>`<td>${celda(t[k])}</td>`).join('')}<td>${badge(t.estado)}</td>
-    <td style="white-space:nowrap">${torreEdita(t)?`<button class="btn primary sm" data-act="torreHorOpen" data-id="${t.id}">Editar horarios</button>`:`<span class="mute" style="font-size:12px">${['FACTURADO','COBRADO'].includes(t.estado)?'viaje facturado':'solo consulta'}</span>`}</td></tr>`;}).join('')}
+    <td style="white-space:nowrap">${torreEdita(t)?`<button class="btn primary sm" data-act="torreHorOpen" data-id="${t.id}">Editar horarios</button>`:`<span class="mute" style="font-size:12px" title="${esc(torreMotivo(t))}">${['FACTURADO','COBRADO'].includes(t.estado)?'viaje facturado':'solo consulta · '+esc(torreMotivo(t))}</span>`}</td></tr>`;}).join('')}
   </tbody></table></div>${paginador('torre',pg)}`;
 }
 BODY.torre=()=>`<div class="mute" style="margin-bottom:8px">${torreList().length} viajes</div>${torreHor()?torreHorarios(torreList()):torreSheet(torreList())}`;
@@ -54,7 +56,7 @@ VIEWS.torre=()=>{
   const kp=(n,l,c)=>`<div class="kpi"><span class="n">${n}</span><span class="l"><i class="dot" style="background:${c}"></i>${l}</span></div>`;
   const chips=comboHTML('tProy',S.tProy,[{id:'',nombre:'Todos los clientes'},...PROYECTOS.map(p=>({id:p.id,nombre:p.nombre}))]);
   const aut=DB.clientes.filter(c=>c.torreEstatus).map(c=>c.nombre);
-  const rules=`<div class="rulebar"><span><b>Puedes avanzar el estado de:</b> ${esc(aut.join(', ')||'ningún cliente')}.</span><span class="mute">Torre mueve el estado (En ruta / Entregado) y puede agregar o corregir fechas y horarios; no edita otros datos.</span></div>`;
+  const rules=`<div class="rulebar"><span><b>Puedes avanzar el estado de:</b> ${esc(aut.join(', ')||'ningún cliente')}.</span><span class="mute">Torre mueve el estado (En ruta / Entregado) y puede agregar o corregir fechas y horarios; no edita otros datos.</span>${!aut.length?'<span class="warnl"><b>Ningún cliente está autorizado para Torre:</b> la administradora debe activarlo en Clientes → Configuración de Torre de Control.</span>':''}</div>`;
   return `<div class="inner" style="max-width:none">${pageHead('TORRE DE CONTROL','Hoja de viajes de todos los proyectos · avanza el estado de los clientes autorizados',`<span class="clock" id="clock">${new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit',hour12:false})}</span>`)}
     <div class="grid g4" style="margin-bottom:16px">${kp(cnt(base,t=>t.estado==='PLANIFICADO'),'Planificados',ESTADOS.PLANIFICADO.c)}${kp(cnt(base,t=>t.estado==='EN_RUTA'),'En ruta',ESTADOS.EN_RUTA.c)}${kp(cnt(base,t=>hp('viajes_estatus_torre')&&torreAccion(t)),'Con acción disponible',ESTADOS.ENTREGADO.c)}${kp(cnt(base,t=>t.estado==='ENTREGADO'),'Pendientes de liquidación',ESTADOS.LIQUIDADO.c)}</div>
     ${chips}${rules}<div class="chips" role="group" aria-label="Vista de Torre" style="margin:0 0 10px"><button class="chip" data-act="torreVista" data-v="e" aria-pressed="${!torreHor()}">Viajes y estado</button><button class="chip" data-act="torreVista" data-v="h" aria-pressed="${torreHor()}">Horarios y fechas</button></div>${tabs('torre',TT,k,base)}

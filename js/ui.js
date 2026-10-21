@@ -403,7 +403,7 @@ VIEWS.detalle=()=>{
   const auto=false;
   const sinHist=hp('comercial_ver')&&!hp('historial_ver');                               /* Comercial: sin trazabilidad interna */
   const verLiq=hp('liq_ver')||hp('liq_enviar');
-  const editBtn=!auto&&canEdit(t)?`<button class="btn primary" data-act="editar" data-id="${t.id}">${icon('clock',18)} Editar viaje y horarios</button>`:'';
+  const editBtn=!auto&&canEdit(t)?`<button class="btn primary" data-act="editar" data-id="${t.id}">${icon('clock',18)} Editar viaje y horarios</button>`:(!auto&&S.user.rol==='TORRE'&&typeof torreEdita==='function'&&torreEdita(t)?`<button class="btn primary" data-act="torreHorOpen" data-id="${t.id}">${icon('clock',18)} Editar horarios</button>`:'');
   const ls=verLiq?liqsOf(t):[];
   let hist=null;try{hist=API.historial(S.user.id,t.id);}catch(e){}
   if(hist&&rev)hist=hist.filter(e=>!TIEMPO_DV_KEYS.some(k=>LBL[k]===e.campo)&&e.accion!=='Dato actualizado (automático)');
