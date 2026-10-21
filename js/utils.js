@@ -61,7 +61,7 @@ const TKEYS=CAMPOS_TIEMPO.map(x=>x[0]);
 /* Columnas de tiempo que se calculan solas */
 const DUR=[['Espera de rampa','tEsperaRampa','tRampa'],['En rampa','tRampa','tSalidaPlanta'],['Espera de carga','tIngresoPlanta','tInicioCarga'],['Tiempo de carga','tInicioCarga','tFinCarga'],['Tiempo en tránsito','tSalida','tIngresoBodega'],['Espera de descarga','tIngresoBodega','tInicioDescarga'],['Tiempo de descarga','tInicioDescarga','tFinDescarga']];
 const GRUPOKEYS={cliente:['proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto'],plan:['fechaPlan'],unidad:['pilotoId','unidadId','placaArrastre'],ruta:['rutaId'],tiempos:TKEYS,otros:['noDocRetorno','qViaticos','gastosAdicionales']};
-const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'Cantidad de carga',producto:'Producto',fechaPlan:'Fecha plan',pilotoId:'Piloto',origenId:'Origen',destinoId:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
+const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'Cantidad de carga',producto:'Producto',fechaPlan:'Fecha plan',pilotoId:'Piloto',origen:'Origen',destino:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
 CAMPOS_TIEMPO.forEach(([k,l])=>LBL[k]=l);
 /* Horarios de DESCARGA del desvío (solo cuando el viaje tiene Desvío). Se guardan en el mismo viaje (viajes.extra); no reemplazan los horarios normales. */
 const CAMPOS_TIEMPO_DESVIO=[['dvIngresoBodega','Ingreso a bodega (desvío)'],['dvInicioDescarga','Inicio de descarga (desvío)'],['dvFinDescarga','Fin de descarga (desvío)']];

@@ -61,10 +61,11 @@ function seedDB(){
   const run=(m,fn)=>{CLOCK=()=>new Date(now-m*60000).toISOString();try{return fn();}finally{CLOCK=null;}};
   let n=0,rn=0;
   const rutas={},tars={};
+  const NOMBRE_DEST=Object.fromEntries(DESTINOS.map(d=>[d.id,d.nombre]));   /* el destino se guarda por nombre */
   const PRE={COLGATE:'COL',CMI:'CMI',COCACOLA:'COC',FRITOLAY:'FRI'};
   const getRuta=(cli,pc,ori,des,c)=>{
     const k=[cli,pc,ori,des].join('|');
-    if(!rutas[k]){rn++;rutas[k]=run(c+10,()=>API.registrarRuta(U.adm,{codigo:`${PRE[cli]}-${String(rn).padStart(3,'0')}`,nombre:`${ori} → ${nombreDestino(des)}`,cliente:cli,proyecto:pc,origenId:ori,destinoId:des})).id;}
+    if(!rutas[k]){rn++;rutas[k]=run(c+10,()=>API.registrarRuta(U.adm,{codigo:`${PRE[cli]}-${String(rn).padStart(3,'0')}`,nombre:`${ori} → ${nombreDestino(des)}`,cliente:cli,proyecto:pc,origen:ori,destino:(NOMBRE_DEST[des]||des)})).id;}
     return rutas[k];
   };
   /* NOTA: los importes (tarifa, costo, pagos, cobros) y la evidencia de emisión son datos de DEMOSTRACIÓN; tu hoja VIAJES_TRANSPORTES no tiene tarifas. */

@@ -17,7 +17,8 @@
   /* «Nora»: 58 clientes asignados con IDs técnicos (el caso de tu captura) */
   const ids=[];for(let i=1;i<=55;i++)ids.push('CIT-U'+String(i).padStart(4,'0'));['CLI-001','CLI-002','CLI-003'].forEach(x=>ids.push(x));
   ids.forEach(id=>{DB.clientes.push(cl(id,id,['P-'+id]));DB.acceso.push({userId:'U-OPE2',cliente:id});});
-  const ruta=(id,cod,nom,cli,pr,o,d)=>({id,codigo:cod,nombre:nom,cliente:cli,proyecto:pr,origenId:o,destinoId:d,estado:'ACTIVA',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:'U-ADMIN',solicitadaPor:'Administradora (ejemplo)',solicitadaEn:'2026-01-01T00:00:00.000Z',validadaPor:'',validadaEn:'',rechazo:null,viajeRef:''});
+  const DEST_NOM={'D-1':'Mayorista Escuintla','D-2':'Distribuidora Los Andes','D-3':'Centro de Distribución Norte'};
+  const ruta=(id,cod,nom,cli,pr,o,d)=>({id,codigo:cod,nombre:nom,cliente:cli,proyecto:pr,origen:o,destino:(DEST_NOM[d]||d),estado:'ACTIVA',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:'U-ADMIN',solicitadaPor:'Administradora (ejemplo)',solicitadaEn:'2026-01-01T00:00:00.000Z',validadaPor:'',validadaEn:'',rechazo:null,viajeRef:''});
   DB.rutas.push(
     ruta('R-0001','COL-001','CP → Mayorista Escuintla','COLGATE','COLGATE','CP','D-1'),ruta('R-0002','COL-001','CP → Mayorista Escuintla','COLGATE','COLGATE','CP','D-1'),ruta('R-0003','COL-001','CP → Mayorista Escuintla','COLGATE','COLGATE','CP','D-1'),   /* mismo nombre repetido: se verá una sola vez */
     ruta('R-0004','COL-002','CP → Los Andes','COLGATE','COLGATE','CP','D-2'),

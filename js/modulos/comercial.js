@@ -16,7 +16,7 @@ function viajeDetalleFact(){
   const imp=g&&g.importesViaje&&g.importesViaje[t.id]!=null?g.importesViaje[t.id]:null,tar=nn(t.tarifaCliente);
   return `<div class="card" style="margin:10px 0" id="detalleViajeFact"><div class="exportbar"><h3 style="margin:0">Detalle del viaje #${esc(t.id)}</h3><div class="exportbtns"><button class="btn sm" data-act="detalle" data-id="${esc(t.id)}">Abrir ficha completa</button><button class="btn sm" data-act="fcQuitarViaje">Quitar selección</button></div></div>
     <dl class="kv" style="grid-template-columns:repeat(3,minmax(0,150px) minmax(0,1fr));gap:8px 14px">${kvr('Cliente',esc(cliNombre(t.proyecto)))}${kvr('Proyecto',vacioTxt(t.proyectoCat))}${kvr('Fecha plan',esc(fmtDate(planD(t)))+' '+esc(planT(t)))}
-      ${kvr('Ruta',R?esc(rutaEtiqueta(R)):'<span class="mute">—</span>')}${kvr('Origen',t.origenId?esc(nombreOrigen(t.origenId)):'<span class="mute">—</span>')}${kvr('Destino',t.destinoId?esc(nombreDestino(t.destinoId)):'<span class="mute">—</span>')}
+      ${kvr('Ruta',R?esc(rutaEtiqueta(R)):'<span class="mute">—</span>')}${kvr('Origen',t.origen?esc(nombreOrigen(t.origen)):'<span class="mute">—</span>')}${kvr('Destino',t.destino?esc(nombreDestino(t.destino)):'<span class="mute">—</span>')}
       ${kvr('Piloto',P.nombre?esc(P.nombre):'<span class="mute">—</span>')}${kvr('Placa · unidad',U.placa?esc(U.placa)+' · '+esc(U.unidad):'<span class="mute">—</span>')}${kvr('Estado',badge(t.estado))}
       ${kvr('Tarifa del cliente',tar==null?'<span class="mute">sin registrar</span>':qfmt(tar))}${kvr('Factura',g&&g.numeroFactura?esc(g.numeroFactura):'<span class="mute">sin factura</span>')}${kvr('Estado de facturación',g?etapaBadge(etapaAgr(g)):'<span class="mute">Aún no se envió a facturar</span>')}
       ${kvr('Grupo de viajes',g&&g.modalidad==='AGRUPADA'?esc(g.id):'<span class="mute">—</span>')}${kvr('Enviado a facturar',g&&g.envio?esc(fmtDT(g.envio.en)):'<span class="mute">—</span>')}${kvr('Importe enviado',imp==null?'<span class="mute">—</span>':qfmt(imp))}</dl>
@@ -141,7 +141,7 @@ function histFiltros(){
 }
 /* ---- Tarifas ---- */
 function tarData(){let t=[];try{t=API.tarifas(S.user.id);}catch(e){}return t;}
-function rutaTxt(id){const r=DB.rutas.find(x=>x.id===id);return r?`${r.codigo} · ${nombreOrigen(r.origenId)} → ${nombreDestino(r.destinoId)}`:id;}
+function rutaTxt(id){const r=DB.rutas.find(x=>x.id===id);return r?`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`:id;}
 BODY.tarifas=()=>{
   const q=S.tfQ.trim().toLowerCase();
   const rows=tarData().filter(t=>(!S.tfCli||t.cliente===S.tfCli)&&(!S.tfPcat||t.proyecto===S.tfPcat)&&(!S.tfCap||t.capacidad===S.tfCap)&&(!S.tfEst||(S.tfEst==='A'?t.activa:!t.activa))&&(!q||(t.cliente+' '+t.proyecto+' '+rutaTxt(t.rutaId)+' '+t.capacidad+' '+t.id).toLowerCase().includes(q)))
@@ -290,7 +290,7 @@ Object.assign(ACT,{
     }else{
       formM({title:'Nueva tarifa',text:'La tarifa aplica solo a la combinación cliente, proyecto, ruta (asignada) y capacidad que elijas.',
         fields:[{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},
-          {k:'rutaId',label:'Ruta',type:'select',req:1,optsFn:x=>(x.cliente&&x.proyecto?API.rutasParaViaje(S.user.id,x.cliente,x.proyecto):[]).map(r=>({id:r.id,nombre:`${r.codigo} · ${nombreOrigen(r.origenId)} → ${nombreDestino(r.destinoId)}`})),ph:'Selecciona la ruta (solo rutas asignadas)'},
+          {k:'rutaId',label:'Ruta',type:'select',req:1,optsFn:x=>(x.cliente&&x.proyecto?API.rutasParaViaje(S.user.id,x.cliente,x.proyecto):[]).map(r=>({id:r.id,nombre:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`})),ph:'Selecciona la ruta (solo rutas asignadas)'},
           {k:'capacidad',label:'Capacidad',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad'},
           {k:'importe',label:'Importe cliente (Q)',type:'number',req:1},{k:'qDieselPactado',label:'Q diésel pactado cliente (opcional · activa el ajuste por combustible)',type:'number'},{k:'combustiblePct',label:'% de combustible cliente (opcional · 0 a 100)',type:'number'},{k:'importeOpl',label:'Importe proveedor / OPL (Q, opcional)',type:'number'},{k:'dieselPactadoOpl',label:'Q diésel pactado proveedor (opcional)',type:'number'},{k:'combustiblePctOpl',label:'% de combustible proveedor (opcional · 0 a 100)',type:'number'},{k:'vigenteDesde',label:'Vigente desde',type:'date',req:1},{k:'vigenteHasta',label:'Vigente hasta (opcional)',type:'date'}],
         data:{cliente:optsClientes().length===1?optsClientes()[0].id:'',proyecto:'',rutaId:'',capacidad:'',importe:'',qDieselPactado:'',combustiblePct:'',importeOpl:'',dieselPactadoOpl:'',combustiblePctOpl:'',vigenteDesde:todayStr(),vigenteHasta:''},rerender:['cliente','proyecto'],ok:'GUARDAR TARIFA',act:'tarifaSave',id:''});

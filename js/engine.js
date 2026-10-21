@@ -98,27 +98,24 @@ const PERMS=[
   ['rutas_aprobar_comercial','Aprobar ruta y tarifa por Gerencia Comercial','Rutas'],
   ['rutas_aprobar_transporte','Aprobar ruta por Gerencia de Transporte','Rutas'],
   ['unidades_asignar','Asignar unidades y pilotos a vehículos','Transporte'],
-  ['catalogos_editar','Editar las listas del sistema (tipo de unidad, OPL, orígenes, tipos)','Consulta']
+  ['catalogos_editar','Editar las listas del sistema (tipo de unidad, OPL, tipos)','Consulta']
 ];
 const PERM_KEYS=PERMS.map(p=>p[0]);
 /* Listas del sistema: viven en master.catalogos (Supabase) y se editan desde la pantalla Catálogos. */
 const LISTAS_SISTEMA=['tipoUnidad','opl','tipoCarga','tipoViaje','arrastre'];
 const LISTAS_ETIQUETA={tipoUnidad:'Tipo de unidad',opl:'OPL · Transportistas',tipoCarga:'Tipo de carga',tipoViaje:'Tipo de viaje',arrastre:'Equipos de arrastre (placas)'};
-/* Los lugares (orígenes y destinos) viven en master.lugares y llegan en el snapshot.
-   Si el snapshot aún no los trae (demostración), se cae a los catálogos viejos. */
-function refrescarOrigenes(){
+/* Orígenes y destinos: se escriben en la ruta y quedan ligados a su cliente por la propia ruta.
+   No hay catálogo; aquí solo se juntan los que ya se usaron para ofrecerlos como sugerencia. */
+function refrescarSugerencias(){
   ORIGENES.length=0;DESTINOS.length=0;
-  const L=(DB&&DB.lugares)||[];
-  if(L.length){
-    L.forEach(l=>{if(l.activo===false)return;
-      const o={id:l.id,nombre:l.nombre,proyecto:l.cliente,tipo:l.tipo};
-      (l.tipo==='ORIGEN'?ORIGENES:DESTINOS).push(o);});
-    const ord=(a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es');
-    ORIGENES.sort(ord);DESTINOS.sort(ord);
-  }else{
-    (CAT.origen||[]).forEach(n=>ORIGENES.push({id:n,nombre:n,proyecto:null}));
-    (CAT.destinos||[]).forEach(d=>DESTINOS.push({id:d.id,nombre:d.nombre,proyecto:d.proyecto}));
-  }
+  const vo=new Set(),vd=new Set();
+  const add=(arr,set,cliente,nombre)=>{const n=String(nombre||'').trim();if(!n)return;
+    const k=String(cliente||'')+'\u0001'+n.toLowerCase();if(set.has(k))return;set.add(k);
+    arr.push({id:n,nombre:n,proyecto:cliente});};
+  (DB.rutas||[]).forEach(r=>{add(ORIGENES,vo,r.cliente,r.origen);add(DESTINOS,vd,r.cliente,r.destino);});
+  (DB.trips||[]).forEach(t=>{add(ORIGENES,vo,t.proyecto,t.origen);add(DESTINOS,vd,t.proyecto,t.destino);});
+  const ord=(a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es');
+  ORIGENES.sort(ord);DESTINOS.sort(ord);
 }
 const ROLES={
   ADMIN:{label:'ADMIN',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','tarifas','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
@@ -196,11 +193,11 @@ const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
    LIQUIDADO (liquidación enviada), RECHAZADO (liquidación devuelta), ACEPTADO (liquidación aprobada),
    FACTURADO y COBRADO (Comercial). Nunca se puede saltar un paso: la transición debe existir en EDGES. */
 const ESTADOS_MANUALES=['EN_RUTA','ENTREGADO'];
-Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origenId:'Origen',destinoId:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos',gastosAdicionales:'Gastos adicionales',noCarga:'Cantidad de carga'});
+Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origen:'Origen',destino:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos',gastosAdicionales:'Gastos adicionales',noCarga:'Cantidad de carga'});
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos','Gastos adicionales'];
 
 /* ---------- Base de datos ---------- */
-const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},lugares:[],seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1,lug:1}});
+const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1}});
 function syncRefs(){
   PROYECTOS=DB.clientes.map(c=>({id:c.id,nombre:c.nombre,cliente:c.cliente,activo:c.activo!==false,
     encargado:DB.usuarios.filter(u=>u.rol==='OPERATIVO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
@@ -212,7 +209,7 @@ function syncRefs(){
   /* Las listas del sistema se aplican desde la base: si no hay nada cargado se conserva lo que ya había. */
   const LS=(DB&&DB.catalogosListas)||{};
   LISTAS_SISTEMA.forEach(k=>{if(Array.isArray(LS[k])&&LS[k].length)CAT[k]=LS[k].slice();});
-  refrescarOrigenes();
+  refrescarSugerencias();
 }
 /*#BROWSER*/
 const LS='intransit_cv_proto_v5',LSP='intransit_cv_pref_v1';
@@ -337,8 +334,7 @@ function fmtVal(k,v){
   if(v===''||v==null)return '(vacío)';
   if(k==='estado')return (ESTADOS[v]||{}).l||v;
   if(k==='pilotoId')return (PILOTOS.find(p=>p.id===v)||{}).nombre||v;
-  if(k==='origenId')return (ORIGENES.find(o=>o.id===v)||{}).nombre||v;
-  if(k==='destinoId')return (DESTINOS.find(o=>o.id===v)||{}).nombre||v;
+  if(k==='origen'||k==='destino'||k==='desvioDestino')return String(v);
   if(TIEMPO_DV_KEYS.includes(k))return fmtL(v);
   if(k==='gastosAdicionales')return Array.isArray(v)&&v.length?v.map(x=>`${x.concepto}: Q ${x.importe}`).join(' · '):'(vacío)';
   return String(v);
@@ -384,14 +380,9 @@ function valKey(cliente,k,v){
     case 'shipment':case 'noViaje':case 'producto':case 'noDocRetorno':case 'placaArrastre':if(String(v).length>60)return `${LBL[k]}: máximo 60 caracteres.`;break;
     case 'unidadId':{if(!FLOTA.some(f=>f.unidad===v))return 'La unidad no está en la flota.';if(!PILOTOS.some(p=>p.proyecto===cliente&&p.unidad===v))return 'Esa unidad no está asignada a este cliente.';break;}
     case 'pilotoId':{const P=PILOTOS.find(p=>p.id===v);if(!P)return 'Piloto no válido.';if(P.proyecto!==cliente)return 'El piloto no pertenece a este cliente.';break;}
-    case 'origenId':{
-      if((DB.lugares||[]).length){const L=DB.lugares.find(o=>o.id===v);if(!L||L.tipo!=='ORIGEN')return 'Origen no válido.';if(L.cliente!==cliente)return 'El origen no pertenece a este cliente.';}
-      else if(!ORIGENES.some(o=>o.id===v))return 'Origen no válido.';
-      break;}
-    case 'destinoId':{
-      if((DB.lugares||[]).length){const L=DB.lugares.find(o=>o.id===v);if(!L||L.tipo!=='DESTINO')return 'Destino no válido.';if(L.cliente!==cliente)return 'El destino no pertenece a este cliente.';}
-      else{const D=DESTINOS.find(o=>o.id===v);if(!D)return 'Destino no válido.';if(D.proyecto!==cliente)return 'El destino no pertenece a este cliente.';}
-      break;}
+    case 'origen':case 'destino':case 'desvioDestino':
+      if(String(v).length>120)return `${LBL[k]||'Lugar'}: máximo 120 caracteres.`;
+      break;
     default:if(TIEMPO_DV_KEYS.includes(k)){if(k==='fechaPlan'&&vacio)return 'La fecha plan es obligatoria.';if(!vacio&&!RX_DT.test(v))return `${LBL[k]}: fecha y hora no válidas.`;}
   }
   return '';
@@ -526,8 +517,9 @@ const pagadoFmt=n=>n;
 /* ---------- Ayudas de rutas, tarifas y avisos ---------- */
 const capDe=t=>(FLOTA.find(f=>f.unidad===t.unidadId)||{}).capacidad||'';
 const capsCat=()=>[...new Set(FLOTA.map(f=>f.capacidad))].sort((a,b)=>parseFloat(a)-parseFloat(b));
-const nombreOrigen=id=>(ORIGENES.find(o=>o.id===id)||{}).nombre||id||'';
-const nombreDestino=id=>(DESTINOS.find(o=>o.id===id)||{}).nombre||id||'';
+/* El origen y el destino ya son el texto que se ve: se devuelve tal cual. */
+const nombreOrigen=v=>String(v==null?'':v);
+const nombreDestino=v=>String(v==null?'':v);
 const rutaNombre=id=>{const r=DB.rutas.find(x=>x.id===id);return r?(r.codigo||r.nombre):id;};
 const proyectosAsig=(A,cliente)=>(A.rol==='ADMIN'||!(A.proyectos&&A.proyectos.length))?proyectosDe(cliente):A.proyectos.filter(p=>proyectosDe(cliente).includes(p));
 function rutaVisible(A,r){
@@ -551,7 +543,7 @@ function notificar(A,o){
   return n;
 }
 function crearRutaPendiente(A,o){
-  const r={id:'R-'+pad4(DB.seq.rut++),codigo:'',nombre:o.nombre,cliente:o.cliente,proyecto:o.proyecto,origenId:'',destinoId:'',estado:'PENDIENTE',origenProp:o.origenProp||'',destinoProp:o.destinoProp||'',fuente:o.fuente,solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:'',validadaEn:'',aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:o.viajeRef||''};
+  const r={id:'R-'+pad4(DB.seq.rut++),codigo:'',nombre:o.nombre,cliente:o.cliente,proyecto:o.proyecto,origen:'',destino:'',estado:'PENDIENTE',origenProp:o.origenProp||'',destinoProp:o.destinoProp||'',fuente:o.fuente,solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:'',validadaEn:'',aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:o.viajeRef||''};
   DB.rutas.push(r);
   auditAdd({entidad:'RUTA',accion:'Ruta nueva solicitada',campo:'Ruta',nuevo:o.nombre,por:A,ref:`${r.id} · ${o.cliente} · ${o.proyecto}`});
   notificar(A,{tipo:'RUTA_PENDIENTE',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Ruta nueva pendiente de validación: ${o.nombre}`,detalle:{proyecto:o.proyecto,cliente:o.cliente,ruta:o.nombre,origen:o.origenProp||'(no indicado)',destino:o.destinoProp||'(no indicado)',solicitadoPor:A.nombre,fecha:r.solicitadaEn,viaje:o.viajeRef||''}});
@@ -569,13 +561,12 @@ function siguienteCodigoRuta(cliente){
   while(DB.rutas.some(r=>r.codigo===cod&&r.estado!=='RECHAZADA')){n++;cod=pre+'-'+String(n).padStart(3,'0');}
   return cod;
 }
-/* Un lugar por id, o por nombre (compatibilidad con formularios viejos que mandaban el nombre del origen). */
-function lugarId(cliente,tipo,v){
-  const t=String(v==null?'':v), L=(DB.lugares||[]);
-  const x=L.find(o=>o.id===t&&o.tipo===tipo);
-  if(x)return x.id;
-  const y=L.find(o=>o.cliente===cliente&&o.tipo===tipo&&String(o.nombre).toLowerCase()===t.toLowerCase());
-  return y?y.id:'';
+/* Origen y destino son texto libre: se escriben en la ruta y quedan ligados al cliente por la ruta misma. */
+function textoLugar(v,campo){
+  const t=String(v==null?'':v).trim().replace(/\s+/g,' ');
+  if(!t)deny(`Escribe el ${campo} de la ruta.`,'VALIDACION');
+  if(t.length>120)deny(`El ${campo} admite máximo 120 caracteres.`,'VALIDACION');
+  return t;
 }
 function validarRutaDatos(d){
   const cliente=d.cliente;if(!DB.clientes.find(c=>c.id===cliente))deny('Cliente no válido.','VALIDACION');
@@ -584,18 +575,10 @@ function validarRutaDatos(d){
   if(!/^[A-Z0-9][A-Z0-9_-]{2,19}$/.test(codigo))deny('Código de ruta: 3 a 20 caracteres (letras, números, guion).','VALIDACION');
   if(DB.rutas.some(r=>r.id!==d.id&&r.codigo===codigo&&r.estado!=='RECHAZADA'))deny(`El código de ruta ${codigo} ya existe.`,'DUPLICADO');
   const nombre=String(d.nombre||'').trim();if(nombre.length<3)deny('Escribe el nombre de la ruta.','VALIDACION');
-  let origenId=d.origenId,destinoId=d.destinoId;
-  if((DB.lugares||[]).length){
-    const lo=DB.lugares.find(x=>x.id===d.origenId);
-    if(!lo||lo.tipo!=='ORIGEN'||lo.cliente!==cliente){const oid=lugarId(cliente,'ORIGEN',d.origenId);if(!oid)deny('Origen no válido para este cliente.','VALIDACION');origenId=oid;}
-    const de=DB.lugares.find(x=>x.id===d.destinoId);
-    if(!de||de.tipo!=='DESTINO'||de.cliente!==cliente){const did=lugarId(cliente,'DESTINO',d.destinoId);if(!did)deny('Destino no válido para este cliente.','VALIDACION');destinoId=did;}
-  }else{
-    if(!ORIGENES.some(o=>o.id===d.origenId))deny('Origen no válido (catálogo ORIGEN).','VALIDACION');
-    const de=DESTINOS.find(x=>x.id===d.destinoId);if(!de||de.proyecto!==cliente)deny('Destino no válido para este cliente.','VALIDACION');
-  }
-  if(DB.rutas.some(r=>r.id!==d.id&&r.estado!=='RECHAZADA'&&r.cliente===cliente&&r.proyecto===d.proyecto&&r.origenId===origenId&&r.destinoId===destinoId))deny('Ya existe una ruta con ese origen y destino en el proyecto.','DUPLICADO');
-  return {codigo,nombre,cliente,proyecto:d.proyecto,origenId,destinoId};
+  const origen=textoLugar(d.origen,'origen'),destino=textoLugar(d.destino,'destino');
+  const igual=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+  if(DB.rutas.some(r=>r.id!==d.id&&r.estado!=='RECHAZADA'&&r.cliente===cliente&&r.proyecto===d.proyecto&&igual(r.origen,origen)&&igual(r.destino,destino)))deny('Ya existe una ruta con ese origen y destino en el proyecto.','DUPLICADO');
+  return {codigo,nombre,cliente,proyecto:d.proyecto,origen,destino};
 }
 function rutaOK(cliente,proyecto,rid){
   const r=DB.rutas.find(x=>x.id===rid);
@@ -806,8 +789,8 @@ const API={
     if(!cl)deny('Cliente no válido.','VALIDACION');
     if(cl.activo===false)deny('El cliente está desactivado: no admite viajes nuevos.','VALIDACION');
     if(!clientesAsig(A).includes(cliente))deny('No tienes asignado ese cliente: no puedes crear viajes para él.');
-    const keys=[...DATA_KEYS,...TIEMPO_KEYS,...DVKEYS,'rutaRef','sinRuta','desvio','desvioDestinoId'];
-    Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origenId'||k==='destinoId'?'El origen y el destino se completan solos a partir de la ruta: no se escriben a mano.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
+    const keys=[...DATA_KEYS,...TIEMPO_KEYS,...DVKEYS,'rutaRef','sinRuta','desvio','desvioDestino'];
+    Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origen'||k==='destino'?'El origen y el destino se toman de la ruta del viaje.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
     /* El viaje nace Planificado: los demás estados los produce el flujo paso a paso (en ruta, entregado,
        liquidación, aprobación, facturación, cobro). No se puede crear un viaje ya entregado o facturado. */
@@ -817,13 +800,13 @@ const API={
     const sinRuta=v.sinRuta===true||v.sinRuta==='true';delete v.sinRuta;
     if(sinRuta&&v.rutaId)deny('Un viaje SIN RUTA no puede traer una ruta seleccionada: quita la ruta o desactiva SIN RUTA.','VALIDACION');
     if(!v.rutaId&&!sinRuta)deny('Falta Ruta.','VALIDACION');
-    /* DESVÍO: el viaje conserva sus datos (ruta, horarios, etc.); solo se registra hacia qué destino se desvió. El destino sale del
-       catálogo de destinos del cliente (master.destinos.cliente_id), la misma regla que ya usan las rutas. Sin Desvío activo no interviene. */
-    const desvio=v.desvio===true||v.desvio==='true',dvId=String(v.desvioDestinoId||'').trim();delete v.desvio;delete v.desvioDestinoId;
+    /* DESVÍO: el viaje conserva sus datos (ruta, horarios, etc.); solo se registra hacia qué destino se desvió.
+       Es texto libre, igual que el destino de la ruta. Sin Desvío activo no interviene. */
+    const desvio=v.desvio===true||v.desvio==='true',dvDestino=String(v.desvioDestino||'').trim().replace(/\s+/g,' ');
+    delete v.desvio;delete v.desvioDestino;
     if(desvio){
-      if(!dvId)deny('Selecciona hacia dónde fue el desvío.','VALIDACION');
-      const Dv=DESTINOS.find(o=>o.id===dvId);
-      if(!Dv||Dv.proyecto!==cliente)deny('El destino del desvío no es válido para este cliente.','VALIDACION');
+      if(!dvDestino)deny('Escribe hacia dónde fue el desvío.','VALIDACION');
+      if(dvDestino.length>120)deny('El destino del desvío admite máximo 120 caracteres.','VALIDACION');
     }
     /* Horarios de descarga del desvío: solo con Desvío activo; solo descarga; en orden y sin reemplazar los horarios normales. */
     const dvT={};DVKEYS.forEach(k=>{const x=String(v[k]==null?'':v[k]).trim();if(x)dvT[k]=x;delete v[k];});
@@ -831,7 +814,7 @@ const API={
     Object.keys(dvT).forEach(k=>{const m=valKey(cliente,k,dvT[k]);if(m)deny(m,'VALIDACION');});
     if(dvT.dvIngresoBodega&&dvT.dvInicioDescarga&&dvT.dvInicioDescarga<dvT.dvIngresoBodega)deny('Desvío: el inicio de descarga no puede ser antes del ingreso a bodega.','VALIDACION');
     if(dvT.dvInicioDescarga&&dvT.dvFinDescarga&&dvT.dvFinDescarga<dvT.dvInicioDescarga)deny('Desvío: el fin de descarga no puede ser antes del inicio de descarga.','VALIDACION');
-    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestinoId'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
+    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestino'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
     let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
     if(sinRuta){if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para registrar un viaje SIN RUTA selecciona el proyecto.','VALIDACION');}
     else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');}
@@ -845,13 +828,13 @@ const API={
     let rutaId=v.rutaId;
     if(pend){const rr=crearRutaPendiente(A,{cliente,proyecto:v.proyectoCat,nombre:v.rutaRef,fuente:'VIAJE',viajeRef:id});rutaId=rr.id;}
     const P=PILOTOS.find(p=>p.id===v.pilotoId);
-    const t=Object.assign({id,proyecto:cliente,unidadId:P?P.unidad:'',estado:'PLANIFICADO',creadoPor:A.nombre,creadoPorId:A.id,creadoEn:nowIso(),comentarioRevision:'',rechazos:0,duplicadoAprobado:false,liqIntentos:0,liqActualId:'',liqAprobadaEn:'',agrupacionId:'',numeroFactura:'',tarifaCliente:'',tarifaId:'',costoProveedor:''},v,{rutaId,origenId:ruta?ruta.origenId:'',destinoId:ruta?ruta.destinoId:'',rutaRef:pend?v.rutaRef:''});
+    const t=Object.assign({id,proyecto:cliente,unidadId:P?P.unidad:'',estado:'PLANIFICADO',creadoPor:A.nombre,creadoPorId:A.id,creadoEn:nowIso(),comentarioRevision:'',rechazos:0,duplicadoAprobado:false,liqIntentos:0,liqActualId:'',liqAprobadaEn:'',agrupacionId:'',numeroFactura:'',tarifaCliente:'',tarifaId:'',costoProveedor:''},v,{rutaId,origen:ruta?ruta.origen:'',destino:ruta?ruta.destino:'',rutaRef:pend?v.rutaRef:''});
     if(!t.unidadId)t.unidadId=P?P.unidad:'';            /* si no se eligió placa, se usa la unidad del piloto */
     t.notaPiloto=notaPilotoDe(t);                        /* constancia si el piloto no es el asignado a la unidad */
     if(sinRuta){t.sinRuta=true;t.sinRutaPor=A.nombre;t.sinRutaEn=t.creadoEn;}
-    if(desvio){t.desvio=true;t.desvioDestinoId=dvId;t.desvioPor=A.nombre;t.desvioEn=t.creadoEn;Object.assign(t,dvT);}
+    if(desvio){t.desvio=true;t.desvioDestino=dvDestino;t.desvioPor=A.nombre;t.desvioEn=t.creadoEn;Object.assign(t,dvT);}
     DB.trips.push(t);
-    auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}${sinRuta?' · SIN RUTA':''}${desvio?' · DESVÍO → '+nombreDestino(dvId):''}`});
+    auditAdd({viajeId:id,accion:'Viaje creado',campo:'Estado',nuevo:ESTADOS[t.estado].l,por:A,ref:`${cliente}${pend?' · ruta NO ASIGNADA':''}${sinRuta?' · SIN RUTA':''}${desvio?' · DESVÍO → '+dvDestino:''}`});
     if(sinRuta&&!DB.notificaciones.some(n=>n.tipo==='VIAJE_SIN_RUTA'&&n.detalle&&n.detalle.viaje===id)){
       /* Aviso para Gerencia en el mecanismo de notificaciones que ya existe (tabla notificaciones). Una sola vez por viaje. */
       notificar(A,{tipo:'VIAJE_SIN_RUTA',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Viaje #${id} registrado SIN RUTA`,detalle:{viaje:id,cliente:cl.cliente||cl.nombre||cliente,proyecto:t.proyectoCat,registradoPor:A.nombre,fechaRegistro:t.creadoEn}});
@@ -913,9 +896,9 @@ const API={
       auditAdd({viajeId:t.id,accion:esT?'Fecha/hora modificada':(k==='estado'?'Estado corregido a mano':'Dato modificado'),campo:LBL[k]||k,anterior:k==='rutaId'?rutaNombre(ov):fmtVal(k,ov),nuevo:k==='rutaId'?rutaNombre(nv):fmtVal(k,nv),por:A,motivo:motivo||''});
       t[k]=nv;
       if(k==='pilotoId'){const P=PILOTOS.find(p=>p.id===nv);const antes=t.unidadId;if(P&&!('unidadId' in cambios)){t.unidadId=P.unidad||'';auditAdd({viajeId:t.id,accion:'Dato modificado (por cambio de piloto)',campo:'Unidad',anterior:antes,nuevo:t.unidadId,por:A,motivo:motivo||''});}}
-      if(k==='rutaId'){const r=DB.rutas.find(x=>x.id===nv);const ao=t.origenId,ad=t.destinoId;t.origenId=r.origenId;t.destinoId=r.destinoId;t.rutaRef='';
-        auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Origen y destino actualizados por cambio de ruta',campo:'Origen',anterior:ao?nombreOrigen(ao):'(pendiente)',nuevo:nombreOrigen(r.origenId),por:A,ref:r.id});
-        auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Origen y destino actualizados por cambio de ruta',campo:'Destino',anterior:ad?nombreDestino(ad):'(pendiente)',nuevo:nombreDestino(r.destinoId),por:A,ref:r.id});}
+      if(k==='rutaId'){const r=DB.rutas.find(x=>x.id===nv);const ao=t.origen,ad=t.destino;t.origen=r.origen;t.destino=r.destino;t.rutaRef='';
+        auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Origen y destino actualizados por cambio de ruta',campo:'Origen',anterior:ao?nombreOrigen(ao):'(pendiente)',nuevo:nombreOrigen(r.origen),por:A,ref:r.id});
+        auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Origen y destino actualizados por cambio de ruta',campo:'Destino',anterior:ad?nombreDestino(ad):'(pendiente)',nuevo:nombreDestino(r.destino),por:A,ref:r.id});}
     });
     if(dif.some(x=>x[0]==='estado'&&x[2]==='ENTREGADO')){
       /* Corrección manual a Entregado: se registra la fecha de entrega, igual que al entregar por el flujo */
@@ -1443,24 +1426,24 @@ const API={
   registrarRuta(uid,d){return exec(uid,'registrarRuta','',A=>{
     need(A,'rutas_gestionar','registrar rutas en el catálogo');
     const v=validarRutaDatos(d);
-    const r={id:'R-'+pad4(DB.seq.rut++),codigo:v.codigo,nombre:v.nombre,cliente:v.cliente,proyecto:v.proyecto,origenId:v.origenId,destinoId:v.destinoId,estado:'EN_TARIFACION',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:A.nombre,validadaEn:nowIso(),aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:''};
+    const r={id:'R-'+pad4(DB.seq.rut++),codigo:v.codigo,nombre:v.nombre,cliente:v.cliente,proyecto:v.proyecto,origen:v.origen,destino:v.destino,estado:'EN_TARIFACION',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:A.nombre,validadaEn:nowIso(),aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:''};
     DB.rutas.push(r);
-    auditAdd({entidad:'RUTA',accion:'Ruta registrada para tarifación',campo:'Ruta',nuevo:`${r.codigo} · ${nombreOrigen(r.origenId)} → ${nombreDestino(r.destinoId)}`,por:A,ref:r.id});
+    auditAdd({entidad:'RUTA',accion:'Ruta registrada para tarifación',campo:'Ruta',nuevo:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`,por:A,ref:r.id});
     return r;
   });},
   validarRuta(uid,id,d){return exec(uid,'validarRuta','',A=>{
     need(A,'rutas_validar','validar o asignar rutas');
     const r=DB.rutas.find(x=>x.id===id);if(!r)deny('La ruta no existe.','NO_EXISTE');
     if(r.estado!=='PENDIENTE')deny('Solo se validan rutas pendientes.','ESTADO_INVALIDO');
-    const v=validarRutaDatos({codigo:d&&d.codigo,nombre:r.nombre,cliente:r.cliente,proyecto:r.proyecto,origenId:d&&d.origenId,destinoId:d&&d.destinoId});
-    r.codigo=v.codigo;r.origenId=v.origenId;r.destinoId=v.destinoId;r.estado='EN_TARIFACION';r.validadaPor=A.nombre;r.validadaEn=nowIso();
-    auditAdd({entidad:'RUTA',accion:'Ruta validada',campo:'Estado',anterior:'Pendiente',nuevo:'En tarifación',por:A,ref:`${r.id} · ${r.codigo} · ${nombreOrigen(r.origenId)} → ${nombreDestino(r.destinoId)}`});
+    const v=validarRutaDatos({codigo:d&&d.codigo,nombre:r.nombre,cliente:r.cliente,proyecto:r.proyecto,origen:d&&d.origen,destino:d&&d.destino});
+    r.codigo=v.codigo;r.origen=v.origen;r.destino=v.destino;r.estado='EN_TARIFACION';r.validadaPor=A.nombre;r.validadaEn=nowIso();
+    auditAdd({entidad:'RUTA',accion:'Ruta validada',campo:'Estado',anterior:'Pendiente',nuevo:'En tarifación',por:A,ref:`${r.id} · ${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`});
     DB.trips.filter(t=>t.rutaId===r.id).forEach(t=>{
-      const ao=t.origenId,ad=t.destinoId;t.origenId=r.origenId;t.destinoId=r.destinoId;
-      auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Ruta asignada: origen y destino completados',campo:'Origen',anterior:ao?nombreOrigen(ao):'(pendiente)',nuevo:nombreOrigen(r.origenId),por:A,ref:r.id});
-      auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Ruta asignada: origen y destino completados',campo:'Destino',anterior:ad?nombreDestino(ad):'(pendiente)',nuevo:nombreDestino(r.destinoId),por:A,ref:r.id});
+      const ao=t.origen,ad=t.destino;t.origen=r.origen;t.destino=r.destino;
+      auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Ruta asignada: origen y destino completados',campo:'Origen',anterior:ao?nombreOrigen(ao):'(pendiente)',nuevo:nombreOrigen(r.origen),por:A,ref:r.id});
+      auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Ruta asignada: origen y destino completados',campo:'Destino',anterior:ad?nombreDestino(ad):'(pendiente)',nuevo:nombreDestino(r.destino),por:A,ref:r.id});
     });
-    notificar(A,{tipo:'RUTA_TARIFACION',destinatarios:['GERENTE_COMERCIAL'],asunto:`Ruta lista para definir tarifa: ${r.codigo}`,detalle:{ruta:r.nombre,codigo:r.codigo,proyecto:r.proyecto,cliente:r.cliente,origen:nombreOrigen(r.origenId),destino:nombreDestino(r.destinoId)}});
+    notificar(A,{tipo:'RUTA_TARIFACION',destinatarios:['GERENTE_COMERCIAL'],asunto:`Ruta lista para definir tarifa: ${r.codigo}`,detalle:{ruta:r.nombre,codigo:r.codigo,proyecto:r.proyecto,cliente:r.cliente,origen:nombreOrigen(r.origen),destino:nombreDestino(r.destino)}});
     return r;
   });},
   rechazarRuta(uid,id,motivo){return exec(uid,'rechazarRuta','',A=>{
@@ -1546,41 +1529,9 @@ const API={
     const antes=(CAT[k]||[]).join(' · ');
     DB.catalogosListas[k]=limpio.slice();
     CAT[k]=limpio.slice();
-    refrescarOrigenes();
+    refrescarSugerencias();
     auditAdd({entidad:'CATALOGO',accion:'Lista del sistema actualizada',campo:LISTAS_ETIQUETA[k]||k,anterior:antes,nuevo:limpio.join(' · '),por:A,ref:k});
     return {clave:k,valores:limpio};
-  });},
-
-  /* Catálogo de lugares: orígenes y destinos por cliente (master.lugares). */
-  guardarLugar(uid,d){return exec(uid,'guardarLugar','',A=>{
-    need(A,'catalogos_editar','administrar lugares (orígenes y destinos)');
-    const cl=DB.clientes.find(c=>c.id===(d&&d.cliente));
-    if(!cl)deny('Cliente no válido.','VALIDACION');
-    const tipo=String((d&&d.tipo)||'').toUpperCase();
-    if(!['ORIGEN','DESTINO'].includes(tipo))deny('Tipo no válido: ORIGEN o DESTINO.','VALIDACION');
-    const nombre=String((d&&d.nombre)||'').trim();
-    if(nombre.length<2||nombre.length>80)deny('El nombre del lugar debe tener entre 2 y 80 caracteres.','VALIDACION');
-    const direccion=String((d&&d.direccion)||'').trim().slice(0,200);
-    const id=String((d&&d.id)||'').trim();
-    const ex=id?DB.lugares.find(x=>x.id===id):null;
-    if(id&&!ex)deny('Lugar no encontrado.','NO_EXISTE');
-    /* El cliente y el tipo no se cambian: las rutas y viajes ya apuntan a este lugar. */
-    const cli=ex?ex.cliente:d.cliente, tip=ex?ex.tipo:tipo;
-    if(DB.lugares.some(l=>l.id!==id&&l.cliente===cli&&l.tipo===tip&&l.nombre.toLowerCase()===nombre.toLowerCase()))
-      deny('Ya existe un lugar con ese nombre para el cliente.','DUPLICADO');
-    if(ex){
-      const l=ex;
-      const antes=l.nombre;
-      l.nombre=nombre;l.direccion=direccion;
-      if(d.activo!==undefined)l.activo=!!d.activo;
-      auditAdd({entidad:'LUGAR',accion:'Lugar actualizado',campo:'Nombre',anterior:antes,nuevo:nombre,por:A,ref:`${l.id} · ${cl.cliente}`});
-      syncRefs();return l;
-    }
-    const nid='L-'+pad4(DB.seq.lug++);
-    const l={id:nid,cliente:d.cliente,tipo,nombre,direccion,activo:true};
-    DB.lugares.push(l);
-    auditAdd({entidad:'LUGAR',accion:'Lugar creado',campo:tipo==='ORIGEN'?'Origen':'Destino',nuevo:nombre,por:A,ref:`${nid} · ${cl.cliente}`});
-    syncRefs();return l;
   });},
 
   /* ----- administración ----- */

@@ -6,7 +6,7 @@ import { loadState, saveState, fotografia } from './store.mjs';
 
 export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
-  'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'activarUsuario', 'cambiarClave', 'guardarCatalogo', 'guardarLugar', 'crearReporteAyuda', 'cambiarEstadoReporteAyuda'];
+  'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'activarUsuario', 'cambiarClave', 'guardarCatalogo', 'crearReporteAyuda', 'cambiarEstadoReporteAyuda'];
 export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores', 'buscarViajes'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
@@ -154,7 +154,7 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
               : { auditoriaTail: 1 };
       const { db, catalogos } = await loadState(q, opciones);
       const E = createEngine();
-      E.PILOTOS.push(...catalogos.pilotos); E.FLOTA.push(...catalogos.flota); E.DESTINOS.push(...catalogos.destinos);
+      E.PILOTOS.push(...catalogos.pilotos); E.FLOTA.push(...catalogos.flota);
       E.setDB(db);
       const A = db.usuarios.find(u => u.id === actorId);
       if (!A || !A.activo) return { resp: falla('NO_AUTENTICADO', 'Tu cuenta no tiene un perfil activo en la aplicación.'), commit: false };
@@ -325,7 +325,7 @@ async function armarSnapshot(E, uid, deps, ventana) {
   const admin = has('usuarios_gestionar');
   const usuarios = DB.usuarios.map(u => admin ? { ...u, clave: '' } : { id: u.id, usuario: u.usuario, nombre: u.nombre, rol: u.rol, activo: u.activo, proyectos: u.proyectos, clave: '' });
   return {
-    yo: uid, ventana: ventana || null, usuarios, acceso: DB.acceso, permisos: DB.permisos, clientes, lugares: DB.lugares, trips, liquidaciones, evidencias, agrupaciones,
+    yo: uid, ventana: ventana || null, usuarios, acceso: DB.acceso, permisos: DB.permisos, clientes, trips, liquidaciones, evidencias, agrupaciones,
     audit: [...audit.values()].sort((a, b) => a.id < b.id ? -1 : 1),
     pagos: has('finanzas_ver') ? DB.pagos : [],
     ordenesPago: ord.map(o => { const c = JSON.parse(JSON.stringify(o));

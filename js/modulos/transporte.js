@@ -41,7 +41,7 @@ const curModel=()=>S.edit?S.edit.data:S.form;
 function initForm(){
   const d=new Date();d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
     const m={proyecto:esEnc()?(clientesAsig(S.user).length===1?clientesAsig(S.user)[0]:''):(S.user.rol==='ADMIN'?'':(clientesAsig(S.user)[0]||'')),proyectoCat:'',estado:'',shipment:'',noViaje:'',opl:'',tipoViaje:'',tipoCarga:'',noCarga:'',producto:'',placaArrastre:'',placaArrastreOtro:'',
-    fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',placaSel:'',rutaId:'',rutaRef:'',sinRuta:false,desvio:false,desvioDestinoId:'',noDocRetorno:'',qViaticos:'',gastosAdicionales:[],savedId:null,err:''};
+    fechaPlanD:todayStr(),fechaPlanT:pad(d.getHours())+':'+pad(d.getMinutes()),pilotoId:'',placaSel:'',rutaId:'',rutaRef:'',sinRuta:false,desvio:false,desvioDestino:'',noDocRetorno:'',qViaticos:'',gastosAdicionales:[],savedId:null,err:''};
   TKEYS.forEach(k=>m[k]='');DVKEYS.forEach(k=>m[k]='');
   const pc=usaCombo()?(m.proyecto?proyectosAsig(S.user,m.proyecto):[]):PROYECTOS_X[m.proyecto];if(pc&&pc.length===1)m.proyectoCat=pc[0];
   return m;
@@ -78,7 +78,7 @@ function rutasGrupos(M){
   filas.forEach(r=>{const k=claveRuta(r);if(!mapa.has(k))mapa.set(k,{key:k,cliente:r.cliente,proyecto:r.proyecto,nombre:rutaEtiqueta(r),filas:[]});mapa.get(k).filas.push(r);});
   const grupos=[...mapa.values()].map(g=>{
     const vistos=new Map();
-    g.filas.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id))).forEach(r=>{const o=r.origenId||FALTA,d=r.destinoId||FALTA;if(!vistos.has(o+'|'+d))vistos.set(o+'|'+d,{o,d,id:r.id});});
+    g.filas.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id))).forEach(r=>{const o=r.origen||FALTA,d=r.destino||FALTA;if(!vistos.has(o+'|'+d))vistos.set(o+'|'+d,{o,d,id:r.id});});
     return {key:g.key,cliente:g.cliente,proyecto:g.proyecto,nombre:g.nombre,combos:[...vistos.values()]};
   });
   const veces={};grupos.forEach(g=>{const n=normTxt(g.nombre);veces[n]=(veces[n]||0)+1;});
@@ -102,12 +102,12 @@ function resolverRuta(M){const e=estadoRuta(M);M.rutaId=e.combo?e.combo.id:'';}
 function aplicarCampo(M,k,v){
   M[k]=v;if('err' in M)M.err='';
   const limpiaRuta=()=>{M.rutaId='';M.rutaRef='';M.rutaGrupo='';M.rutaO='';M.rutaD='';};
-  if(k==='proyecto'){M.desvioDestinoId='';M.proyectoCat='';M.pilotoId='';M.placaSel='';limpiaRuta();const pc=M.proyecto?proyectosAsig(S.user,M.proyecto):[];if(pc.length===1)M.proyectoCat=pc[0];}
+  if(k==='proyecto'){M.desvioDestino='';M.proyectoCat='';M.pilotoId='';M.placaSel='';limpiaRuta();const pc=M.proyecto?proyectosAsig(S.user,M.proyecto):[];if(pc.length===1)M.proyectoCat=pc[0];}
   if(k==='proyectoCat')limpiaRuta();
   if(k==='rutaGrupo'){
     M.rutaO='';M.rutaD='';if(v)M.sinRuta=false;
     if(v==='NO_ASIGNADA')M.rutaId='NO_ASIGNADA';
-    else{M.rutaRef='';const g=rutasGrupos(M).find(x=>x.key===v);if(g){if(M.proyecto!==g.cliente){M.proyecto=g.cliente;M.pilotoId='';M.placaSel='';M.desvioDestinoId='';}M.proyectoCat=g.proyecto;}resolverRuta(M);}   /* cliente y proyecto salen de la ruta elegida */
+    else{M.rutaRef='';const g=rutasGrupos(M).find(x=>x.key===v);if(g){if(M.proyecto!==g.cliente){M.proyecto=g.cliente;M.pilotoId='';M.placaSel='';M.desvioDestino='';}M.proyectoCat=g.proyecto;}resolverRuta(M);}   /* cliente y proyecto salen de la ruta elegida */
   }
   if(k==='rutaO'||k==='rutaD')resolverRuta(M);
   if(k==='placaSel'){
@@ -206,7 +206,7 @@ function autoPlaca(M,plSel,ps){
 function agruparRutas(filas){
   const mapa=new Map();
   filas.forEach(r=>{const k=claveRuta(r);if(!mapa.has(k))mapa.set(k,{key:k,cliente:r.cliente,proyecto:r.proyecto,nombre:rutaEtiqueta(r),filas:[]});mapa.get(k).filas.push(r);});
-  const gs=[...mapa.values()].map(g=>{const v=new Map();g.filas.forEach(r=>{const o=r.origenId||FALTA,d=r.destinoId||FALTA;if(!v.has(o+'|'+d))v.set(o+'|'+d,{o,d});});return {key:g.key,cliente:g.cliente,proyecto:g.proyecto,nombre:g.nombre,filas:g.filas,combos:[...v.values()],activa:g.filas.some(r=>r.estado==='ACTIVA')};});
+  const gs=[...mapa.values()].map(g=>{const v=new Map();g.filas.forEach(r=>{const o=r.origen||FALTA,d=r.destino||FALTA;if(!v.has(o+'|'+d))v.set(o+'|'+d,{o,d});});return {key:g.key,cliente:g.cliente,proyecto:g.proyecto,nombre:g.nombre,filas:g.filas,combos:[...v.values()],activa:g.filas.some(r=>r.estado==='ACTIVA')};});
   const veces={};gs.forEach(g=>{const n=normTxt(g.nombre);veces[n]=(veces[n]||0)+1;});
   gs.forEach(g=>{g.etiqueta=(veces[normTxt(g.nombre)]>1?`${g.nombre} · ${cliNombre(g.cliente)} / ${g.proyecto}`:g.nombre)+(g.activa?'':' (no activa)');});
   return gs.sort((a,b)=>a.etiqueta.localeCompare(b.etiqueta,'es'));
@@ -267,13 +267,13 @@ function sinRutaHTML(M,d){
     ${M.sinRuta?`<div class="alertbox info" style="margin-bottom:10px"><b>Viaje SIN RUTA:</b> se guarda sin ruta asignada, queda identificado como «registrado sin ruta» y se envía una notificación a Gerencia. Elige el cliente y el proyecto en el formulario. Para quitarlo, vuelve a pulsar SIN RUTA o elige una ruta.</div>`:''}`;
 }
 
-/* ---- DESVÍO: botón en el espacio Ruta + «¿Hacia dónde fue el desvío?» (destinos del cliente, catálogo master.destinos) ---- */
+/* ---- DESVÍO: botón en el espacio Ruta + «¿Hacia dónde fue el desvío?» (texto libre con sugerencias del cliente) ---- */
 const destinosDesvio=M=>M.proyecto?DESTINOS.filter(x=>x.proyecto===M.proyecto).slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es')):[];
 function desvioHTML(M,d){
   if(S.edit)return '';
   const listo=!!M.proyecto,ds=destinosDesvio(M);
   return `<div class="fgroup"><button type="button" class="btn ${M.desvio?'primary':''}" data-act="desvio" aria-pressed="${!!M.desvio}" ${d}>Desvío</button><span class="hint">Actívalo si el viaje se desvió hacia otro destino. No cambia la ruta ni los demás datos del viaje.</span></div>
-    ${M.desvio?`<div class="fgroup"><label for="m_desvioDestinoId">¿Hacia dónde fue el desvío? <span class="mute">*</span> ${src('DESTINOS')}</label><select id="m_desvioDestinoId" data-m="desvioDestinoId" ${(d||!listo||!ds.length)?'disabled':''}><option value="">${listo?(ds.length?'Selecciona el destino del desvío':'Este cliente no tiene destinos registrados'):'Primero elige el cliente o la ruta'}</option>${ds.map(x=>`<option value="${esc(x.id)}" ${x.id===M.desvioDestinoId?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select></div>`:''}`;
+    ${M.desvio?`<div class="fgroup"><label for="m_desvioDestino">¿Hacia dónde fue el desvío? <span class="mute">*</span></label><input id="m_desvioDestino" data-m="desvioDestino" value="${esc(M.desvioDestino||'')}" list="dl_desvioDestino" autocomplete="off" placeholder="${listo?'Escribe o elige un destino ya usado':'Primero elige el cliente o la ruta'}" ${(d||!listo)?'disabled':''}><datalist id="dl_desvioDestino">${ds.map(x=>`<option value="${esc(x.nombre)}"></option>`).join('')}</datalist><span class="hint">Texto libre: el destino del desvío queda guardado en el viaje.</span></div>`:''}`;
 }
 
 /* ---- Gastos adicionales (Retorno y viáticos): varias filas concepto + importe; se guardan con el viaje ---- */
@@ -360,13 +360,13 @@ function fieldsHTML(M,groups,dis){
   if(has('ruta')&&!usaCombo()){
     const rs=(ready&&M.proyectoCat)?API.rutasParaViaje(S.user.id,M.proyecto,M.proyectoCat):[];
     const pend=M.rutaId==='NO_ASIGNADA',R=(!pend&&M.rutaId)?DB.rutas.find(x=>x.id===M.rutaId):null;
-    const opts=rs.map(r=>({id:r.id,nombre:`${r.codigo} · ${nombreOrigen(r.origenId)} → ${nombreDestino(r.destinoId)}`})).concat(S.edit||!hp('rutas_solicitar')?[]:[{id:'NO_ASIGNADA',nombre:'NUEVA RUTA · requiere validación, tarifa y doble aprobación'}]);
+    const opts=rs.map(r=>({id:r.id,nombre:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`})).concat(S.edit||!hp('rutas_solicitar')?[]:[{id:'NO_ASIGNADA',nombre:'NUEVA RUTA · requiere validación, tarifa y doble aprobación'}]);
     h+=`<div class="card fsec"><h3>Ruta</h3>
       ${sel('rutaId','Ruta',opts,{req:1,src:'RUTAS',dis:!ready||!M.proyectoCat,ph:(ready&&M.proyectoCat)?'Selecciona la ruta':'Primero elige el cliente y el proyecto',hint:(ready&&M.proyectoCat)?rs.length+' rutas asignadas de '+esc(M.proyectoCat):''})}
       ${sinRutaHTML(M,d)}
       ${desvioHTML(M,d)}
       ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
-      <div class="${R?'auto'+(S.flash?' flash':''):'auto empty2'}">${R?`<div class="ah">${icon('check',18)} Origen y destino tomados de la ruta · no se escriben a mano</div><div class="cells"><div class="cell"><small>Código ${src('RUTAS')}</small><b>${esc(R.codigo)}</b></div><div class="cell"><small>Origen ${src('RUTAS')}</small><b>${esc(nombreOrigen(R.origenId))}</b></div><div class="cell"><small>Destino ${src('RUTAS')}</small><b>${esc(nombreDestino(R.destinoId))}</b></div></div>`:(pend?'Origen y destino: pendientes de asignar.':'Elige la ruta: el origen y el destino se completan solos.')}</div></div>`;
+      <div class="${R?'auto'+(S.flash?' flash':''):'auto empty2'}">${R?`<div class="ah">${icon('check',18)} Origen y destino tomados de la ruta · no se escriben a mano</div><div class="cells"><div class="cell"><small>Código ${src('RUTAS')}</small><b>${esc(R.codigo)}</b></div><div class="cell"><small>Origen ${src('RUTAS')}</small><b>${esc(nombreOrigen(R.origen))}</b></div><div class="cell"><small>Destino ${src('RUTAS')}</small><b>${esc(nombreDestino(R.destino))}</b></div></div>`:(pend?'Origen y destino: pendientes de asignar.':'Elige la ruta: el origen y el destino se completan solos.')}</div></div>`;
   }
   if(has('ruta')&&usaCombo()){
     const falla=catalogoFalla(),listo=!falla;
@@ -424,7 +424,7 @@ VIEWS.nuevo=()=>{
 const rutaHTML=t=>{
   const r=DB.rutas.find(x=>x.id===t.rutaId);
   if(!r)return t.sinRuta?'<span class="badge" title="Registrado sin ruta">SIN RUTA</span>':'<span class="mute">—</span>';
-  if(['EN_TARIFACION','PENDIENTE_APROBACION','ACTIVA'].includes(r.estado))return `${rutaChip(r.estado)} ${esEnc()?'':esc(r.codigo)+' · '}${esc(nombreOrigen(r.origenId))} → ${esc(nombreDestino(r.destinoId))}`;
+  if(['EN_TARIFACION','PENDIENTE_APROBACION','ACTIVA'].includes(r.estado))return `${rutaChip(r.estado)} ${esEnc()?'':esc(r.codigo)+' · '}${esc(nombreOrigen(r.origen))} → ${esc(nombreDestino(r.destino))}`;
   return `${rutaChip(r.estado)} <span class="mute">${esc(r.nombre)}</span>`;
 };
 function liqsOf(t){try{return API.liquidaciones(S.user.id,t.id);}catch(e){return [];}}
@@ -479,16 +479,16 @@ let RUTAS_ERR='';
 function rutasData(){let r=[];RUTAS_ERR='';try{r=API.rutas(S.user.id);}catch(e){RUTAS_ERR=e.message||'Error al consultar las rutas.';}return r;}
 BODY.rutas=()=>{
   const q=S.rtQ.trim().toLowerCase(),fo=S.rtOri.trim().toLowerCase(),fd=S.rtDes.trim().toLowerCase(),fr=S.rtRuta.trim().toLowerCase();
-  const txtO=r=>r.origenId?nombreOrigen(r.origenId):r.origenProp,txtD=r=>r.destinoId?nombreDestino(r.destinoId):r.destinoProp;
+  const txtO=r=>r.origen?nombreOrigen(r.origen):r.origenProp,txtD=r=>r.destino?nombreDestino(r.destino):r.destinoProp;
   const todas=rutasData();
-  const rows=todas.filter(r=>(!(esAdm()&&S.rtCat)||(claveRuta(r)===S.rtCat&&(!S.rtOrig||(r.origenId||FALTA)===S.rtOrig)&&(!S.rtDest||(r.destinoId||FALTA)===S.rtDest)))&&(!S.rtCli||r.cliente===S.rtCli)&&(!S.rtPcat||r.proyecto===S.rtPcat)&&(!S.rtEst||r.estado===S.rtEst)
+  const rows=todas.filter(r=>(!(esAdm()&&S.rtCat)||(claveRuta(r)===S.rtCat&&(!S.rtOrig||(r.origen||FALTA)===S.rtOrig)&&(!S.rtDest||(r.destino||FALTA)===S.rtDest)))&&(!S.rtCli||r.cliente===S.rtCli)&&(!S.rtPcat||r.proyecto===S.rtPcat)&&(!S.rtEst||r.estado===S.rtEst)
     &&(!fr||(r.codigo+' '+r.nombre).toLowerCase().includes(fr))&&(!fo||String(txtO(r)).toLowerCase().includes(fo))&&(!fd||String(txtD(r)).toLowerCase().includes(fd))
     &&(!q||(r.codigo+' '+r.nombre+' '+r.cliente+' '+r.proyecto+' '+txtO(r)+' '+txtD(r)).toLowerCase().includes(q))).sort((a,b)=>({PENDIENTE:0,EN_TARIFACION:1,PENDIENTE_APROBACION:2,ACTIVA:3,RECHAZADA:4}[a.estado]-{PENDIENTE:0,EN_TARIFACION:1,PENDIENTE_APROBACION:2,ACTIVA:3,RECHAZADA:4}[b.estado])||a.cliente.localeCompare(b.cliente)||a.codigo.localeCompare(b.codigo));
   const val=hp('rutas_validar')||hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte');
   const pg=paginar('rutas',rows);
   return rows.length?`<div class="mute" style="margin-bottom:8px">${rows.length} ${rows.length===1?'ruta':'rutas'}</div><div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr>${esEnc()?'':'<th>Código</th>'}<th>Ruta</th><th>Cliente</th><th>Proyecto</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Solicitada por · fecha</th><th>Validada por · fecha</th><th>Viajes</th>${val?'<th>Acciones</th>':''}</tr></thead><tbody>
   ${pg.filas.map(r=>`<tr class="${r.estado==='ACTIVA'?'':'warnrow'}">${esEnc()?'':`<td>${r.codigo?`<b>${esc(r.codigo)}</b>`:'<span class="mute">sin código</span>'}</td>`}<td style="white-space:normal;min-width:220px">${esc(r.nombre)}</td><td>${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente||r.cliente)}</td><td>${esc(r.proyecto)}</td>
-  <td style="white-space:normal;min-width:150px">${r.origenId?esc(nombreOrigen(r.origenId)):(r.origenProp?`${esc(r.origenProp)} <span class="mute">(propuesto)</span>`:'<span class="mute">pendiente</span>')}</td><td style="white-space:normal;min-width:170px">${r.destinoId?esc(nombreDestino(r.destinoId)):(r.destinoProp?`${esc(r.destinoProp)} <span class="mute">(propuesto)</span>`:'<span class="mute">pendiente</span>')}</td>
+  <td style="white-space:normal;min-width:150px">${r.origen?esc(nombreOrigen(r.origen)):(r.origenProp?`${esc(r.origenProp)} <span class="mute">(propuesto)</span>`:'<span class="mute">pendiente</span>')}</td><td style="white-space:normal;min-width:170px">${r.destino?esc(nombreDestino(r.destino)):(r.destinoProp?`${esc(r.destinoProp)} <span class="mute">(propuesto)</span>`:'<span class="mute">pendiente</span>')}</td>
   <td>${rutaChip(r.estado)}${r.rechazo?`<br><span class="mute" style="font-size:12px">“${esc(r.rechazo.motivo)}”</span>`:''}${r.aprobacionComercial?'<br><span class="mute">Comercial ✓</span>':''}${r.aprobacionTransporte?'<br><span class="mute">Transporte ✓</span>':''}</td><td>${esc(r.solicitadaPor)}<br><span class="mute">${fmtDT(r.solicitadaEn)}${r.fuente==='VIAJE'?' · desde un viaje':''}</span></td><td>${r.validadaPor?`${esc(r.validadaPor)}<br><span class="mute">${fmtDT(r.validadaEn)}</span>`:'—'}</td><td>${r.viajes||0}</td>
   ${val?`<td style="white-space:nowrap">${r.estado==='PENDIENTE'&&hp('rutas_validar')?`<button class="btn sm primary" data-act="rutaValidarOpen" data-id="${r.id}">Validar</button> <button class="btn sm fix" data-act="rutaRechazarOpen" data-id="${r.id}">Rechazar</button>`:''}${r.estado==='PENDIENTE_APROBACION'&&hp('rutas_aprobar_comercial')&&!r.aprobacionComercial?`<button class="btn sm ok" data-act="rutaAprobarComOpen" data-id="${r.id}">Aprobar Comercial</button>`:''}${r.estado==='PENDIENTE_APROBACION'&&hp('rutas_aprobar_transporte')&&!r.aprobacionTransporte?`<button class="btn sm ok" data-act="rutaAprobarTraOpen" data-id="${r.id}">Aprobar Transporte</button>`:''}</td>`:''}</tr>`).join('')}
   </tbody></table></div>${paginador('rutas',pg)}`:(esAdm()?rutasVacioAdmin(todas):empty('No hay rutas con estos filtros','Cambia la búsqueda o registra una ruta nueva.'));
@@ -529,7 +529,7 @@ Object.assign(ACT,{
       f.err=ps.length>1?'Esta placa tiene más de un piloto asignado: elige el piloto del viaje.':'Esta placa no tiene un piloto asignado para este cliente: elige otra placa o pide a la administradora que asigne la unidad a un piloto.';render();topScroll();return;}
     const d={cliente:f.proyecto,fechaPlan:f.fechaPlanD&&f.fechaPlanT?f.fechaPlanD+'T'+f.fechaPlanT:'',rutaRef:f.rutaRef||''};
     [...DATA_KEYS,...TKEYS].forEach(k=>{d[k]=f[k];});
-    d.desvio=!!f.desvio;if(f.desvio){d.desvioDestinoId=f.desvioDestinoId||'';DVKEYS.forEach(k=>{d[k]=f[k]||'';});}   /* Desvío: sin él activo no se envía nada más */
+    d.desvio=!!f.desvio;if(f.desvio){d.desvioDestino=f.desvioDestino||'';DVKEYS.forEach(k=>{d[k]=f[k]||'';});}   /* Desvío: sin él activo no se envía nada más */
     d.sinRuta=!!f.sinRuta;                         /* SIN RUTA: se guarda con el viaje y avisa a Gerencia */
     if(f.sinRuta)d.rutaId='';
     d.unidadId=f.placaSel||'';                     /* la placa elegida es la unidad del viaje */
@@ -541,7 +541,7 @@ Object.assign(ACT,{
   async desvio(){
     if(S.edit)return;
     const M=curModel();if(!M)return;
-    M.desvio=!M.desvio;if(!M.desvio){M.desvioDestinoId='';DVKEYS.forEach(k=>{M[k]='';});}   /* solo se muestra/oculta el campo: no se toca ningún otro dato */
+    M.desvio=!M.desvio;if(!M.desvio){M.desvioDestino='';DVKEYS.forEach(k=>{M[k]='';});}   /* solo se muestra/oculta el campo: no se toca ningún otro dato */
     if('err' in M)M.err='';render();
   },
   async sinRuta(){
@@ -580,15 +580,15 @@ Object.assign(ACT,{
   async rutaSolicitarSave(){const m=S.modal.data;const r=await run(()=>API.solicitarRuta(S.user.id,m),x=>`Ruta solicitada (${x.id}): queda NO ASIGNADA. Se avisó a Comercial y Gerencia dentro de la aplicación.`,true);if(r.ok)afterWrite();},
   async rutaRegistrarOpen(){
     formM({title:'Registrar ruta validada',text:'Se agrega directamente al catálogo como ASIGNADA. El <b>código se asigna solo</b> con la sigla del cliente y un correlativo (por ejemplo COL-001).',
-      fields:[{k:'nombre',label:'Nombre de la ruta',req:1},{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},{k:'origenId',label:'Origen',type:'select',req:1,optsFn:optsOrigenes,ph:'Selecciona el origen'},{k:'destinoId',label:'Destino',type:'select',req:1,optsFn:optsDestinos,ph:'Primero elige el cliente'}],
-      data:{nombre:'',cliente:'',proyecto:'',origenId:'',destinoId:''},rerender:['cliente'],ok:'REGISTRAR RUTA',act:'rutaRegistrarSave'});
+      fields:[{k:'nombre',label:'Nombre de la ruta',req:1},{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},{k:'origen',label:'Origen',req:1,datalist:d=>sugerenciasOrigen(d.cliente),ph:'Escribe el origen (o elige uno ya usado)'},{k:'destino',label:'Destino',req:1,datalist:d=>sugerenciasDestino(d.cliente),ph:'Escribe el destino (o elige uno ya usado)'}],
+      data:{nombre:'',cliente:'',proyecto:'',origen:'',destino:''},rerender:['cliente'],ok:'REGISTRAR RUTA',act:'rutaRegistrarSave'});
   },
   async rutaRegistrarSave(){const m=S.modal.data;const r=await run(()=>API.registrarRuta(S.user.id,m),x=>`Ruta ${x.codigo} registrada.`,true);if(r.ok)afterWrite();},
   async rutaValidarOpen(d){
     const r=DB.rutas.find(x=>x.id===d.id);if(!r)return;
     formM({title:`Validar y asignar · ${r.nombre}`,text:`${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente)} · ${esc(r.proyecto)}. Solicitada por ${esc(r.solicitadaPor)}.<br>Origen propuesto: <b>${esc(r.origenProp||'no indicado')}</b> · Destino propuesto: <b>${esc(r.destinoProp||'no indicado')}</b>. Al asignarla se completan el origen y el destino de los viajes que la usan. El <b>código se asigna solo</b> (sigla del cliente y correlativo).`,
-      fields:[{k:'origenId',label:'Origen (del cliente)',type:'select',req:1,optsFn:()=>optsOrigenes({cliente:r.cliente}),ph:'Selecciona el origen'},{k:'destinoId',label:'Destino (catálogo del cliente)',type:'select',req:1,optsFn:()=>optsDestinos({cliente:r.cliente}),ph:'Selecciona el destino'}],
-      data:{origenId:'',destinoId:''},ok:'VALIDAR Y ASIGNAR',okCls:'ok',act:'rutaValidarOk',id:r.id});
+      fields:[{k:'origen',label:'Origen',req:1,datalist:()=>sugerenciasOrigen(r.cliente),ph:'Escribe el origen'},{k:'destino',label:'Destino',req:1,datalist:()=>sugerenciasDestino(r.cliente),ph:'Escribe el destino'}],
+      data:{origen:r.origenProp||'',destino:r.destinoProp||''},ok:'VALIDAR Y ASIGNAR',okCls:'ok',act:'rutaValidarOk',id:r.id});
   },
   async rutaValidarOk(d){const m=S.modal.data;const r=await run(()=>API.validarRuta(S.user.id,d.id,m),x=>`Ruta ${x.codigo} asignada: los viajes asociados ya tienen origen y destino.`,true);if(r.ok)afterWrite();},
   async rutaRechazarOpen(d){formM({title:'Rechazar ruta solicitada',text:'Explica por qué no se asigna. Quien la solicitó recibirá el aviso.',fields:[{k:'motivo',label:'Motivo del rechazo',type:'textarea',req:1}],ok:'RECHAZAR RUTA',okCls:'fix',act:'rutaRechazarOk',id:d.id});},

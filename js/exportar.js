@@ -88,7 +88,7 @@ function expFactDatos(o){
   const viajes=rows.map(r=>{
     const t=r.t,g=r.g,P=PILOTOS.find(p=>p.id===t.pilotoId)||{},F=FLOTA.find(f=>f.unidad===(t.unidadId||P.unidad))||{},R=DB.rutas.find(x=>x.id===t.rutaId)||{};
     const v={cliente:r.cliente,proyecto:r.proyecto,id:t.id,fechaViaje:fmtDate(planD(t)),horaPlan:planT(t),shipment:t.shipment||'',noViaje:t.noViaje||'',producto:t.producto||'',tipoCarga:t.tipoCarga||'',
-      rutaCod:R.codigo||'',rutaNom:R.nombre||t.rutaRef||'',origen:nombreOrigen(t.origenId||R.origenId),destino:nombreDestino(t.destinoId||R.destinoId),
+      rutaCod:R.codigo||'',rutaNom:R.nombre||t.rutaRef||'',origen:nombreOrigen(t.origen||R.origen),destino:nombreDestino(t.destino||R.destino),
       piloto:P.nombre||'',unidad:F.unidad||t.unidadId||'',placa:F.placa||'',capacidad:F.capacidad||'',
       factura:r.factura,grupo:r.grupo,fechaFactura:g.fechaFactura?fmtDate(g.fechaFactura):'',etapa:ETAPA_L[r.etapa]||'',registro:g.estado==='ANULADA'?'Anulada':'Vigente',
       envio:g.envio?expFH(g.envio.en):'',por:r.por||'',tarifa:nn(t.tarifaCliente),importe:r.importe,
