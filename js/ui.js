@@ -339,7 +339,7 @@ function nextStep(t){
   return `<p>Ciclo completo.</p>`;
 }
 const esDuenoUI=t=>{if(!t.creadoPorId)return true;if(t.creadoPorId===S.user.id)return true;const u=DB.usuarios.find(x=>x.id===t.creadoPorId);return !u||u.rol==='ADMIN'||hp('viajes_ver_todos');};
-const canEditT=t=>hp('viajes_editar_tiempos')&&mine(t)&&esDuenoUI(t)&&!['LIQUIDADO','ACEPTADO','FACTURADO','COBRADO'].includes(t.estado);
+const canEditT=t=>hp('viajes_editar_tiempos')&&(mine(t)||hp('viajes_ver_todos'))&&esDuenoUI(t)&&!['LIQUIDADO','ACEPTADO','FACTURADO','COBRADO'].includes(t.estado);
 const canEditD=t=>hp('viajes_editar_datos')&&mine(t)&&esDuenoUI(t)&&DATA_EDIT_STATES.includes(t.estado);
 const canEdit=t=>canEditT(t)||canEditD(t);
 const editGroups=t=>['cliente','plan','unidad','ruta','tiempos','otros'].filter(g=>g==='plan'||g==='tiempos'?canEditT(t):canEditD(t));
