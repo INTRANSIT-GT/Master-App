@@ -130,6 +130,9 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
     return r;
   };
   API.gastos=async(uid,o)=>(await llamar('gastos',[o||{}])).result;
+  /* «Mi guía de uso»: el servidor decide qué guías ve este usuario y firma los enlaces (5 min). No se refresca el estado. */
+  API.guiasUso=async()=>(await llamar('guiasUso',[])).result;
+  API.abrirGuia=async(uid,id,modo)=>(await llamar('abrirGuia',[id,modo])).result;
   BACKEND.sincronizarFlota=async()=>{
     let r;try{r=await sb.functions.invoke('sync-flota',{body:{}});}catch(e){throw new ApiError('SIN_CONEXION','No se pudo contactar al servidor.');}
     if(r.error){let b=null;try{b=await r.error.context.json();}catch(_){}throw new ApiError('SERVIDOR',(b&&b.message)||'No se pudo sincronizar con Fleetio.');}

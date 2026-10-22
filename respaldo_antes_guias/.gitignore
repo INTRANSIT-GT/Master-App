@@ -1,0 +1,6 @@
+# Archivos generados o de trabajo que no deben versionarse
+_rebuild/
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/

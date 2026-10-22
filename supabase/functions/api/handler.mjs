@@ -3,11 +3,12 @@
    tomado del token verificado, y se guardan en UNA transacción. Si algo falla, no se guarda nada. */
 import { createEngine } from './core.mjs';
 import { loadState, saveState, fotografia } from './store.mjs';
+import { guiasDeRol, guiaPermitida, fichaGuia, rutaImagen, TTL_ENLACE_SEG } from './guias.mjs';
 
 export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
   'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'activarUsuario', 'cambiarClave', 'guardarCatalogo', 'crearReporteAyuda', 'cambiarEstadoReporteAyuda'];
-export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores', 'buscarViajes'];
+export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores', 'buscarViajes', 'guiasUso', 'abrirGuia'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
 
@@ -121,13 +122,61 @@ function rutasDeArchivos(args) {
   visita(args); return [...new Set(out)];
 }
 
-/* deps: { transaccion(fn(q)), firmar(paths)→Map, crearUsuarioAuth({email,password})→id, borrarUsuarioAuth(id), cambiarClaveAuth({id,password}) } */
+
+/* «Mi guía de uso» · solo lectura. El rol sale SIEMPRE de master.perfiles (nunca del navegador) y se vuelve a comprobar en
+   cada solicitud. No toma el lock de escritura ni carga el estado completo: solo lee el perfil del actor.
+   Una guía que no existe y una guía de otro perfil responden EXACTAMENTE igual (no se revela cuál existe). */
+const NO_DISPONIBLE = () => falla('GUIA_NO_DISPONIBLE', 'Esa guía no está disponible para tu perfil.');
+async function ejecutarGuia(deps, actorId, op, args) {
+  try {
+    const perfil = await deps.transaccion(async q => (await q('select rol, activo from master.perfiles where id = $1', [actorId])).rows[0]);
+    if (!perfil || perfil.activo !== true) return falla('NO_AUTENTICADO', 'Tu cuenta no tiene un perfil activo en la aplicación.');
+    const rol = String(perfil.rol || '');
+    if (op === 'guiasUso') {
+      const lista = guiasDeRol(rol);
+      const guias = await Promise.all(lista.map(async x => {
+        const j = parseJson(await deps.leerManual(x.contenido));
+        return fichaGuia(x, {
+          version: j && typeof j.version === 'string' ? j.version : '', fecha: j && typeof j.fecha === 'string' ? j.fecha : '',
+          disponible: !!j, indice: j && Array.isArray(j.secciones) ? j.secciones.map(s => ({ id: String(s.id || ''), titulo: String(s.titulo || ''), texto: String(s.busqueda || '') })) : [],
+        });
+      }));
+      return { ok: true, result: { guias } };
+    }
+    /* abrirGuia(id, modo) · modo = 'pdf' (enlace de 5 minutos) | 'contenido' (páginas de consulta + capturas firmadas) */
+    const [id, modo] = Array.isArray(args) ? args : [];
+    const guia = guiaPermitida(rol, id);
+    if (!guia) return NO_DISPONIBLE();
+    if (modo === 'pdf') {
+      const urls = await deps.firmarManual([guia.pdf], TTL_ENLACE_SEG);
+      const url = urls.get(guia.pdf);
+      if (!url) return falla('GUIA_NO_CARGADA', 'El documento todavía no está cargado. Avisa a la Administradora.');
+      return { ok: true, result: { url, expiraEnSeg: TTL_ENLACE_SEG } };
+    }
+    if (modo === 'contenido') {
+      const j = parseJson(await deps.leerManual(guia.contenido));
+      if (!j || !Array.isArray(j.secciones)) return falla('GUIA_NO_CARGADA', 'La guía todavía no está cargada. Avisa a la Administradora.');
+      const nombres = (Array.isArray(j.imagenes) ? j.imagenes : []).filter(n => rutaImagen(n));
+      const urls = nombres.length ? await deps.firmarManual(nombres.map(rutaImagen), TTL_ENLACE_SEG) : new Map();
+      const imagenes = {}; nombres.forEach(n => { const u = urls.get(rutaImagen(n)); if (u) imagenes[n] = u; });
+      return { ok: true, result: { guia: fichaGuia(guia, { version: String(j.version || ''), fecha: String(j.fecha || '') }), secciones: j.secciones.map(s => ({ id: String(s.id || ''), titulo: String(s.titulo || ''), html: String(s.html || '') })), imagenes, expiraEnSeg: TTL_ENLACE_SEG } };
+    }
+    return falla('ARGUMENTOS', 'Solicitud inválida.');
+  } catch (e) {
+    console.error('guias error:', e && e.stack ? e.stack : e);
+    return falla('ERROR_SERVIDOR', 'No se pudo consultar la guía en este momento.');
+  }
+}
+function parseJson(t) { if (!t) return null; try { const j = JSON.parse(t); return j && typeof j === 'object' ? j : null; } catch { return null; } }
+
+/* deps: { transaccion(fn(q)), firmar(paths)→Map, crearUsuarioAuth({email,password})→id, borrarUsuarioAuth(id), cambiarClaveAuth({id,password}), leerManual(ruta)→texto|null, firmarManual(rutas,seg)→Map } */
 export async function ejecutar(deps, actorId, { op, args } = {}) {
   if (![...OPS_ESCRITURA, ...OPS_LECTURA].includes(op)) return falla('OP_INVALIDA', 'Operación no reconocida.');
   args = args == null ? [] : args;
   if (!Array.isArray(args)) return falla('ARGUMENTOS', 'Los argumentos deben ser una lista.');
   if (JSON.stringify(args).length > MAX_ARGS) return falla('ARGUMENTOS', 'La solicitud es demasiado grande.');
   if (!actorId || !/^[0-9a-f-]{36}$/i.test(String(actorId))) return falla('NO_AUTENTICADO', 'Sesión no válida.');
+  if (op === 'guiasUso' || op === 'abrirGuia') return ejecutarGuia(deps, actorId, op, args);
   let authCreado = null;
   try {
     const salida = await deps.transaccion(async q => {

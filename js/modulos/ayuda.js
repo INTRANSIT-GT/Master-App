@@ -46,10 +46,11 @@ function ayudaListaHTML(a,adm){
 VIEWS.ayuda=()=>{
   const a=ayudaSt(),adm=AYUDA_GESTORES.includes(S.user.rol);
   let n=0;try{n=API.reportesAyuda(S.user.id).length;}catch(e){}
-  const k=S.tab.ayuda==='lista'?'lista':'nuevo';
+  const k=S.tab.ayuda==='lista'?'lista':S.tab.ayuda==='guia'?'guia':'nuevo';
+  if(k==='guia')guiaAlEntrar();
   return `<div class="inner" style="max-width:1100px">${pageHead('Ayuda',adm?'Reportes de fallas enviados por los usuarios':'Reporta una falla o problema de la aplicación y consulta el estado de tus reportes')}
-    ${tabs('ayuda',[{k:'nuevo',l:'Reportar un problema'},{k:'lista',l:adm?`Todos los reportes (${n})`:`Mis reportes (${n})`}],k)}
-    <div style="margin-top:14px">${k==='nuevo'?ayudaFormHTML(a):ayudaListaHTML(a,adm)}</div></div>`;
+    ${tabs('ayuda',[{k:'nuevo',l:'Reportar un problema'},{k:'lista',l:adm?`Todos los reportes (${n})`:`Mis reportes (${n})`},{k:'guia',l:'Mi guía de uso'}],k)}
+    <div style="margin-top:14px">${k==='nuevo'?ayudaFormHTML(a):k==='lista'?ayudaListaHTML(a,adm):guiaHTML()}</div></div>`;
 };
 ACT.ayudaEnviar=async()=>{
   const a=ayudaSt();
@@ -77,5 +78,132 @@ ACT.ayudaEnviar=async()=>{
       const r=await run(()=>API.cambiarEstadoReporteAyuda(S.user.id,t.dataset.ayEstado,t.value),`Reporte ${t.dataset.ayEstado}: estado actualizado.`);
       render();return r;
     }
+  });
+})();
+
+/* =====================================================================
+   «Mi guía de uso» · guías por perfil dentro del Centro de ayuda.
+   - El navegador NO decide qué guía ve cada perfil: pide la lista y cada documento al servidor (API.guiasUso / API.abrirGuia),
+     que valida el rol del usuario en CADA solicitud. Aquí no existe ninguna tabla de roles→guías.
+   - Los PDF y las páginas viven en un bucket privado; llegan por enlaces firmados que caducan a los 5 minutos y no se guardan
+     en el dispositivo (el service worker no los cachea).
+   - No usa ni modifica permisos de la matriz, y no toca «Reportar un problema» ni «Mis reportes».
+   ===================================================================== */
+const GU_TAGS=new Set(['p','h3','h4','ul','ol','li','b','strong','i','em','table','thead','tbody','tr','th','td','div','br','span','img','small']);
+const GU_CLS=new Set(['call','warn','ver','rule','k','step','n','x','fig','c','t','si','no','box','cols','small','kicker','task','mute']);
+const guNorm=t=>String(t==null?'':t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const guSt=()=>{
+  if(!S.guiaUso||S.guiaUso.uid!==S.user.id)S.guiaUso={uid:S.user.id,estado:'',guias:[],err:'',q:'',abierta:null,cont:null,sec:'',cargandoCont:false,pdf:null,pdfCargando:'',errCont:''};
+  return S.guiaUso;
+};
+/* Limpieza propia (lista blanca) del HTML recibido: aunque el servidor lo entrega ya limpio, aquí se vuelve a depurar. */
+function guSanear(html,imagenes){
+  const doc=new DOMParser().parseFromString('<body>'+String(html||'')+'</body>','text/html');
+  (function rec(el){
+    for(const h of [...el.children]){
+      const t=h.tagName.toLowerCase();
+      if(!GU_TAGS.has(t)){h.remove();continue;}
+      if(t==='img'){
+        const n=h.getAttribute('data-img')||'',alt=h.getAttribute('alt')||'',u=imagenes&&imagenes[n];
+        for(const a of [...h.attributes])h.removeAttribute(a.name);
+        if(!u||!/^https:\/\//i.test(u)){h.remove();continue;}
+        h.setAttribute('src',u);h.setAttribute('alt',alt);h.setAttribute('loading','lazy');continue;
+      }
+      const cls=(h.getAttribute('class')||'').split(/\s+/).filter(c=>GU_CLS.has(c)).join(' ');
+      for(const a of [...h.attributes])h.removeAttribute(a.name);
+      if(cls)h.setAttribute('class',cls);
+      rec(h);
+    }
+  })(doc.body);
+  return doc.body.innerHTML;
+}
+function guiaAlEntrar(){
+  const g=guSt();
+  if(g.estado==='')setTimeout(guiaCargar,0);      /* primera vez en la sesión: se piden las guías al servidor */
+  setTimeout(()=>{const t=document.querySelector('.tabs [aria-selected="true"]');if(t&&t.scrollIntoView)t.scrollIntoView({block:'nearest',inline:'center'});},0);   /* en el móvil la pestaña activa queda a la vista */
+}
+async function guiaCargar(){
+  const g=guSt();
+  if(g.estado==='cargando')return;
+  if(typeof API.guiasUso!=='function'){g.estado='demo';render();return;}
+  g.estado='cargando';g.err='';render();
+  try{const r=await API.guiasUso(S.user.id);g.guias=(r&&r.guias)||[];g.estado='listo';}
+  catch(e){g.estado='error';g.err=(e instanceof ApiError)?e.message:'No se pudieron cargar las guías.';}
+  render();
+}
+function guiaBuscar(g){
+  const terms=guNorm(g.q).split(/\s+/).filter(t=>t.length>1);
+  if(!terms.length)return null;
+  const out=[];
+  for(const gu of g.guias)for(const s of gu.indice||[]){
+    const tit=guNorm(s.titulo),txt=guNorm(s.titulo+' '+s.texto);
+    if(!terms.every(t=>txt.includes(t)))continue;
+    const i=txt.indexOf(terms[0]),fr=(s.titulo+' '+s.texto).slice(Math.max(0,i-40),i+110).replace(/\s+/g,' ').trim();
+    out.push({gu,s,peso:terms.every(t=>tit.includes(t))?0:1,fr});
+  }
+  return out.sort((a,b)=>a.peso-b.peso).slice(0,25);
+}
+function guiaResultadosHTML(g){
+  const r=guiaBuscar(g);
+  if(r===null)return '';
+  if(!r.length)return `<div class="empty"><b>Sin resultados</b>Prueba con otra palabra (por ejemplo: viaje, factura, desvío, horario).</div>`;
+  return `<div class="gu-res" role="list">${r.map(x=>`<button type="button" class="gu-hit" role="listitem" data-act="guiaAbrir" data-id="${esc(x.gu.id)}" data-sec="${esc(x.s.id)}"><b>${esc(x.s.titulo)}</b><span class="mute">Guía ${esc(x.gu.numero)} · ${esc(x.gu.titulo)}</span><span class="gu-fr">${esc(x.fr)}…</span></button>`).join('')}</div>`;
+}
+function guiaListaHTML(g){
+  if(!g.guias.length)return empty('Aún no hay una guía para tu perfil','Cuando exista una guía para tu perfil aparecerá aquí.');
+  return `<div class="gu-grid">${g.guias.map(x=>`<div class="card gu-card"><div class="gu-num">${esc(x.numero)}</div><div style="flex:1;min-width:0"><b>${esc(x.titulo)}</b><div class="mute">Perfil: ${esc(x.perfil)}${x.version?` · versión ${esc(x.version)}`:''}${x.fecha?` · ${esc(x.fecha)}`:''}</div>
+    ${x.disponible?'':'<div class="mute">Todavía no está cargada. Avisa a la Administradora.</div>'}
+    <div class="gu-acc"><button type="button" class="btn primary" data-act="guiaAbrir" data-id="${esc(x.id)}" ${x.disponible?'':'disabled'}>Leer guía</button> <button type="button" class="btn" data-act="guiaPdf" data-id="${esc(x.id)}" ${g.pdfCargando===x.id?'disabled':''}>${g.pdfCargando===x.id?'Abriendo…':'Abrir PDF original'}</button></div></div></div>`).join('')}</div>`;
+}
+function guiaLectorHTML(g){
+  const gu=g.guias.find(x=>x.id===g.abierta),c=g.cont;
+  const volver=`<div class="gu-bar"><button type="button" class="btn" data-act="guiaCerrar">← Mis guías</button> <button type="button" class="btn" data-act="guiaVolverAyuda">Volver al Centro de ayuda</button></div>`;
+  if(g.cargandoCont)return volver+`<div class="empty"><b>Abriendo la guía…</b></div>`;
+  if(g.errCont||!c)return volver+`<div class="alertbox" role="alert"><b>${esc(g.errCont||'No se pudo abrir la guía.')}</b></div>`;
+  const sec=c.secciones.find(s=>s.id===g.sec)||c.secciones[0];
+  return volver+`<div class="gu-lector"><nav class="gu-toc" aria-label="Secciones de la guía"><b>${esc(c.guia.numero)} · ${esc(c.guia.titulo)}</b>${c.secciones.map(s=>`<button type="button" ${s.id===sec.id?'aria-current="true"':''} data-act="guiaSec" data-sec="${esc(s.id)}">${esc(s.titulo)}</button>`).join('')}</nav>
+    <article class="card gu-art" tabindex="-1"><div class="gu-meta mute">Guía ${esc(c.guia.numero)}${c.guia.version?` · versión ${esc(c.guia.version)}`:''}${gu&&gu.perfil?` · Perfil ${esc(gu.perfil)}`:''}</div><h2>${esc(sec.titulo)}</h2><div class="guiauso">${guSanear(sec.html,c.imagenes)}</div>
+    <div class="gu-acc"><button type="button" class="btn" data-act="guiaPdf" data-id="${esc(g.abierta)}" ${g.pdfCargando===g.abierta?'disabled':''}>Abrir PDF original</button></div>${guiaPdfAviso(g)}</article></div>`;
+}
+const guiaPdfAviso=g=>g.pdf?`<div class="mute" role="status" style="margin-top:8px">Si el PDF no se abrió, <a href="${esc(g.pdf.url)}" target="_blank" rel="noopener noreferrer">toca aquí</a>. El enlace caduca en 5 minutos.</div>`:'';
+function guiaHTML(){
+  const g=guSt();
+  if(g.estado==='demo')return `<div class="card fsec" style="max-width:760px"><h3>Mi guía de uso</h3><p>Las guías por perfil están disponibles cuando la aplicación está conectada al servidor. En modo demostración no se muestran.</p></div>`;
+  if(g.estado===''||g.estado==='cargando')return `<div class="empty"><b>Cargando tus guías…</b></div>`;
+  if(g.estado==='error')return `<div class="alertbox" role="alert"><b>${esc(g.err||'No se pudieron cargar las guías.')}</b></div><div style="margin-top:10px"><button type="button" class="btn" data-act="guiaReintentar">Reintentar</button></div>`;
+  if(g.abierta)return guiaLectorHTML(g);
+  return `<div style="max-width:980px">${g.guias.length?`<div class="fgroup"><label for="gu_q">Buscar por tarea o palabra clave</label><input id="gu_q" type="search" data-gu-q="1" value="${esc(g.q)}" placeholder="Ejemplo: desvío, horarios, factura, liquidación rechazada" autocomplete="off"></div><div id="gu_res" aria-live="polite">${guiaResultadosHTML(g)}</div>`:''}
+    <h3 style="margin:14px 0 8px">${g.guias.length>1?'Guías disponibles para tu perfil':'Tu guía'}</h3>${guiaListaHTML(g)}${guiaPdfAviso(g)}</div>`;
+}
+ACT.guiaReintentar=async()=>{guSt().estado='';guiaCargar();};
+ACT.guiaAbrir=async d=>{
+  const g=guSt();
+  g.abierta=d.id;g.sec=d.sec||'';g.cont=null;g.errCont='';g.cargandoCont=true;render();
+  try{g.cont=await API.abrirGuia(S.user.id,d.id,'contenido');if(!g.sec&&g.cont.secciones[0])g.sec=g.cont.secciones[0].id;}
+  catch(e){g.errCont=(e instanceof ApiError)?e.message:'No se pudo abrir la guía.';}
+  g.cargandoCont=false;render();
+  const m=document.getElementById('main');if(m)m.scrollTop=0;
+};
+ACT.guiaSec=async d=>{const g=guSt();g.sec=d.sec;render();const m=document.getElementById('main');if(m)m.scrollTop=0;};
+ACT.guiaCerrar=async()=>{const g=guSt();g.abierta=null;g.cont=null;g.errCont='';g.pdf=null;render();};
+ACT.guiaVolverAyuda=async()=>{const g=guSt();g.abierta=null;g.cont=null;g.errCont='';g.pdf=null;S.tab.ayuda='nuevo';render();};
+ACT.guiaPdf=async d=>{
+  const g=guSt();
+  if(g.pdfCargando)return;
+  g.pdfCargando=d.id;g.pdf=null;render();
+  try{
+    const r=await API.abrirGuia(S.user.id,d.id,'pdf');
+    g.pdf={url:r.url};
+    try{window.open(r.url,'_blank','noopener,noreferrer');}catch(e){}
+  }catch(e){toast((e instanceof ApiError)?e.message:'No se pudo abrir el PDF.','err');}
+  g.pdfCargando='';render();
+};
+/* El buscador actualiza solo los resultados (sin redibujar toda la pantalla) para no perder el cursor. */
+(()=>{
+  const app=document.getElementById('app');if(!app)return;
+  app.addEventListener('input',e=>{
+    const t=e.target;if(!t||!t.dataset||!t.dataset.guQ||!S.user)return;
+    const g=guSt();g.q=t.value;
+    const r=document.getElementById('gu_res');if(r)r.innerHTML=guiaResultadosHTML(g);
   });
 })();

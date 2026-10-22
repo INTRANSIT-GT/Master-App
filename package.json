@@ -16,7 +16,9 @@
     "test:encargado": "node tests/encargado.test.mjs",
     "test:visual": "node tests/prueba-visual.test.mjs",
     "test:demo": "node tests/exportar.test.mjs",
-    "test:liquidacion": "node tests/liquidacion.test.mjs"
+    "test:liquidacion": "node tests/liquidacion.test.mjs",
+    "test:guias": "node tests/guias.test.mjs",
+    "preparar:manuales": "node scripts/preparar-manuales.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",
