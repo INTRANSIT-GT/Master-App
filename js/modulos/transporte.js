@@ -154,15 +154,22 @@ function clientesAdminHTML(){
     ${gest?`<details class="section" id="cfgTorre" style="margin-top:18px"><summary style="cursor:pointer;font-weight:700">Configuración de Torre de Control</summary>${torreCfgAdmin()}</details>`:''}</div>`;
 }
 
+/* Aviso (no bloquea) si el piloto elegido tiene documentos vencidos o por vencer. */
+function docAviso(id){
+  const P=PILOTOS.find(p=>p.id===id);if(!P)return '';
+  const E=estadoDocumentos(P);if(E.ok)return '';
+  const t=E.docs.filter(d=>d.estado!=='VIGENTE').map(d=>d.label+' '+DOC_ESTADO_LBL[d.estado].toLowerCase()+(d.vence?' ('+fmtDate(d.vence)+')':'')).join(' · ');
+  return `<div class="alertbox" role="alert" style="margin-top:8px"><b>Documentos del piloto:</b> ${esc(t)}</div>`;
+}
 /* ---- Nuevo viaje · placa del equipo: la relación placa → unidad → piloto se resuelve sola ---- */
-function pilotosDePlaca(cliente,unidad){return PILOTOS.filter(p=>p.proyecto===cliente&&p.unidad&&p.unidad===unidad);}
+function pilotosDePlaca(cliente,unidad){return PILOTOS.filter(p=>p.activo!==false&&p.proyecto===cliente&&p.unidad&&p.unidad===unidad);}
 /* Pilotos que se pueden elegir para esa unidad: los asignados a ella y los que no tienen unidad asignada.
    El piloto asignado a la unidad se propone solo, pero se puede cambiar para ese viaje:
    en ese caso el viaje guarda la nota «piloto no asignado a unidad». */
 function pilotosElegibles(cliente,unidad){
   if(!unidad)return [];
   const dePlaca=pilotosDePlaca(cliente,unidad);
-  const sinUnidad=PILOTOS.filter(p=>p.proyecto===cliente&&!p.unidad);
+  const sinUnidad=PILOTOS.filter(p=>p.activo!==false&&p.proyecto===cliente&&!p.unidad);
   return [...dePlaca,...sinUnidad];
 }
 /* Equipo de arrastre que no está en la lista: se escribe la placa a mano. */
@@ -189,7 +196,7 @@ function ultimoArrastreDeUnidad(unidad){
    unidad y se elige de la lista; si el equipo no está en la lista se escribe la placa a mano (queda en la
    lista para los próximos viajes, porque la lista también incluye las placas ya usadas en viajes). */
 const etiquetaPlaca=f=>f?(String(f.placa||f.unidad||'')+(f.capacidad?' · '+f.capacidad:'')):'';
-function placasDe(cliente){const m=new Map();PILOTOS.filter(p=>p.proyecto===cliente&&p.unidad).forEach(p=>{const f=FLOTA.find(x=>x.unidad===p.unidad);if(f&&!m.has(f.unidad))m.set(f.unidad,f);});return [...m.values()].sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'es'));}
+function placasDe(cliente){const m=new Map();PILOTOS.filter(p=>p.activo!==false&&p.proyecto===cliente&&p.unidad).forEach(p=>{const f=FLOTA.find(x=>x.unidad===p.unidad);if(f&&!m.has(f.unidad))m.set(f.unidad,f);});return [...m.values()].sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'es'));}
 function autoPlaca(M,plSel,ps){
   const U=plSel?FLOTA.find(x=>x.unidad===plSel):null;
   if(!U)return `<div class="auto empty2">Elige la placa: la unidad, el Tango, el tipo de unidad, la capacidad y el piloto asignado se cargan solos.</div>`;
@@ -341,7 +348,7 @@ function fieldsHTML(M,groups,dis){
     const ps=plSel?pilotosElegibles(M.proyecto,plSel):[],sinPlacas=ready&&!falla&&!opts.length;
     h+=`<div class="card fsec"><h3>Placa y unidad</h3>
       ${falla?`<div class="alertbox" role="alert" style="margin-bottom:10px"><b>${esc(falla)}</b>${REINTENTAR}</div>`:''}
-      ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?(PILOTOS.some(p=>p.proyecto===M.proyecto)?'Selecciona un piloto':'Este cliente no tiene pilotos'):'Primero elige el cliente',hint:'Puedes elegir cualquier piloto del cliente; la placa se ajusta a su unidad y luego puedes cambiarla.'})}
+      ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.activo!==false&&p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?(PILOTOS.some(p=>p.proyecto===M.proyecto)?'Selecciona un piloto':'Este cliente no tiene pilotos'):'Primero elige el cliente',hint:'Puedes elegir cualquier piloto del cliente; la placa se ajusta a su unidad y luego puedes cambiarla.'})}${docAviso(M.pilotoId)}
       ${fcombo('placaSel','Placa del equipo',opts,plSel,{req:1,src:'FLOTA',dis:!ready||!!falla||sinPlacas,ph:!ready?'Primero elige el cliente o la ruta':(falla?'No disponible':(sinPlacas?'Sin placas disponibles':'Selecciona o escribe la placa')),hint:sinPlacas?'Este cliente no tiene placas disponibles: ninguno de sus pilotos tiene una unidad asignada en la flota.':'Se propone la placa del piloto; si la cambias, el piloto se ajusta a esa unidad.'})}
       ${autoPlaca(M,plSel,ps)}
       ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}</div>`;
@@ -353,7 +360,7 @@ function fieldsHTML(M,groups,dis){
     const sinPlacas=ready&&!falla&&!opts.length;
     h+=`<div class="card fsec"><h3>Piloto y unidad</h3>
       ${fcombo('placaSel','Placa del equipo',opts,plSel,{req:1,src:'FLOTA',dis:!ready||!!falla||sinPlacas,ph:!ready?'Primero elige el cliente':(falla?'No disponible':(sinPlacas?'Sin placas disponibles':'Selecciona la placa')),hint:sinPlacas?'Este cliente no tiene placas disponibles: ninguno de sus pilotos tiene una unidad asignada en la flota.':'Puedes cambiar la placa (unidad) del piloto: siempre dentro de este cliente. El cliente no se cambia.'})}
-      ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?'Selecciona un piloto':'Primero elige el cliente'})}
+      ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.activo!==false&&p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?'Selecciona un piloto':'Primero elige el cliente'})}${docAviso(M.pilotoId)}
       ${autoCard(M)}
       ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}</div>`;
   }

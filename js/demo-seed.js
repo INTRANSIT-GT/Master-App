@@ -41,6 +41,7 @@ function seedDB(){
     {id:'P-013',nombre:'Hugo Barrios',unidad:'T-3022',proyecto:'CMI'},
     {id:'P-021',nombre:'Ricardo Lemus',unidad:'T-4010',proyecto:'COCACOLA'},{id:'P-022',nombre:'Kevin Ramírez',unidad:'T-4015',proyecto:'COCACOLA'},
     {id:'P-031',nombre:'Byron Xicay',unidad:'T-5010',proyecto:'FRITOLAY'},{id:'P-032',nombre:'Estuardo Paz',unidad:'T-5015',proyecto:'FRITOLAY'});
+  DB.pilotos=PILOTOS;   /* en demostración la tabla en memoria es la misma lista */
   FLOTA.length=0;FLOTA.push(
     {unidad:'T-2084',placa:'C-482KLM',tango:'TNG-0412',capacidad:'10 Ton',tipo:'10TON'},{unidad:'T-2091',placa:'C-517PQR',tango:'TNG-0427',capacidad:'12 Ton',tipo:'12TON'},
     {unidad:'T-2102',placa:'C-390DFG',tango:'TNG-0433',capacidad:'5 Ton',tipo:'5TON'},{unidad:'T-3010',placa:'C-221HJK',tango:'TNG-0518',capacidad:'10 Ton',tipo:'RAS L'},

@@ -22,6 +22,7 @@ const CAT={
   opl:[],
   tipoCarga:[],
   tipoViaje:[],
+  tipoLicencia:[],
   origen:[]
 };
 
@@ -130,12 +131,13 @@ const PERMS=[
   ['rutas_aprobar_comercial','Aprobar ruta y tarifa por Gerencia Comercial','Rutas'],
   ['rutas_aprobar_transporte','Aprobar ruta por Gerencia de Transporte','Rutas'],
   ['unidades_asignar','Asignar unidades y pilotos a vehículos','Transporte'],
-  ['catalogos_editar','Editar las listas del sistema (tipo de unidad, OPL, tipos)','Consulta']
+  ['catalogos_editar','Editar las listas del sistema (tipo de unidad, OPL, tipos)','Consulta'],
+  ['pilotos_gestionar','Administrar pilotos y sus documentos (licencia, salud, antecedentes)','Flotas']
 ];
 const PERM_KEYS=PERMS.map(p=>p[0]);
 /* Listas del sistema: viven en master.catalogos (Supabase) y se editan desde la pantalla Catálogos. */
-const LISTAS_SISTEMA=['tipoUnidad','opl','tipoCarga','tipoViaje','arrastre'];
-const LISTAS_ETIQUETA={tipoUnidad:'Tipo de unidad',opl:'OPL · Transportistas',tipoCarga:'Tipo de carga',tipoViaje:'Tipo de viaje',arrastre:'Equipos de arrastre (placas)'};
+const LISTAS_SISTEMA=['tipoUnidad','opl','tipoCarga','tipoViaje','arrastre','tipoLicencia'];
+const LISTAS_ETIQUETA={tipoUnidad:'Tipo de unidad',opl:'OPL · Transportistas',tipoCarga:'Tipo de carga',tipoViaje:'Tipo de viaje',arrastre:'Equipos de arrastre (placas)',tipoLicencia:'Tipo de licencia'};
 /* Orígenes y destinos: se escriben en la ruta y quedan ligados a su cliente por la propia ruta.
    No hay catálogo; aquí solo se juntan los que ya se usaron para ofrecerlos como sugerencia. */
 function refrescarSugerencias(){
@@ -166,7 +168,7 @@ const ROLES={
 Object.values(ROLES).forEach(r=>{if(!r.nav.includes('ayuda'))r.nav.push('ayuda');});
 const PERM_DEFAULT={
   ADMIN:PERM_KEYS.slice(),
-  GERENTE_TRANSPORTE:['viajes_ver','viajes_ver_todos','viajes_crear','viajes_editar_datos','historial_ver','liq_ver','rutas_ver','rutas_validar','rutas_aprobar_transporte','viajes_aprobar_duplicado','unidades_asignar','tarifas_opl_ver','tarifas_opl_crear','viajes_editar_estado','tarifas_ver','finanzas_ver','liq_aprobar','liq_devolver'],
+  GERENTE_TRANSPORTE:['viajes_ver','viajes_ver_todos','viajes_crear','viajes_editar_datos','pilotos_gestionar','catalogos_ver','historial_ver','liq_ver','rutas_ver','rutas_validar','rutas_aprobar_transporte','viajes_aprobar_duplicado','unidades_asignar','tarifas_opl_ver','tarifas_opl_crear','viajes_editar_estado','tarifas_ver','finanzas_ver','liq_aprobar','liq_devolver'],
   VALIDADOR:['viajes_ver','liq_ver','liq_aprobar','liq_devolver','historial_ver'],
   OPERATIVO:['viajes_ver','viajes_crear','viajes_editar_datos','viajes_editar_tiempos','viajes_iniciar','viajes_finalizar','liq_ver','liq_enviar','historial_ver','rutas_ver','rutas_solicitar'],
   ANALISTA_COMERCIAL:['comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_solicitar','rutas_validar','historial_ver','clientes_gestionar'],
@@ -229,8 +231,34 @@ Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo 
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos','Gastos adicionales'];
 
 /* ---------- Base de datos ---------- */
-const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1}});
+const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],pilotos:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1,pil:0}});
+/* ---------- Pilotos: documentos y vigencia (licencia, salud, penales, policíacos) ---------- */
+const DOC_PILOTO=[['licenciaVence','Licencia'],['saludVence','Tarjeta de salud'],['penalesVence','Antecedentes penales'],['policiacosVence','Antecedentes policíacos']];
+const DOC_DIAS_AVISO=30;
+const DOC_ESTADO_LBL={VIGENTE:'Al día',POR_VENCER:'Por vencer',VENCIDO:'Vencido',FALTA:'Falta'};
+function fechaReal(f){
+  const t=String(f||'').slice(0,10);
+  if(!RX_D.test(t))return false;
+  const d=new Date(t+'T00:00:00'); if(isNaN(d.getTime()))return false;
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')===t;
+}
+function diasParaFecha(fecha){
+  const f=String(fecha||'').slice(0,10);
+  if(!fechaReal(f))return null;
+  const d=Date.parse(f+'T00:00:00'); if(isNaN(d))return null;
+  const h=new Date(), hoy=Date.parse(h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0')+'T00:00:00');
+  return Math.round((d-hoy)/86400000);
+}
+function estadoDocumentos(p){
+  const docs=DOC_PILOTO.map(([k,l])=>{const v=String((p&&p[k])||'').slice(0,10),d=diasParaFecha(v);
+    return {clave:k,label:l,vence:v,dias:d,estado:d==null?'FALTA':(d<0?'VENCIDO':(d<=DOC_DIAS_AVISO?'POR_VENCER':'VIGENTE'))};});
+  const vencidos=docs.filter(x=>x.estado==='VENCIDO'||x.estado==='FALTA'),porVencer=docs.filter(x=>x.estado==='POR_VENCER');
+  return {docs,vencidos,porVencer,ok:!vencidos.length&&!porVencer.length,estado:vencidos.length?'VENCIDO':(porVencer.length?'POR_VENCER':'VIGENTE')};
+}
+/* En el servidor los pilotos viven en DB.pilotos (tabla). PILOTOS es la vista que usan las pantallas. */
+function refrescarPilotos(){const l=DB&&DB.pilotos;if(Array.isArray(l)&&l!==PILOTOS){PILOTOS.length=0;for(const p of l)PILOTOS.push(p);}}
 function syncRefs(){
+  if(DB&&!Array.isArray(DB.pilotos))DB.pilotos=PILOTOS;   /* en el navegador la tabla vive en la misma lista */
   PROYECTOS=DB.clientes.map(c=>({id:c.id,nombre:c.nombre,cliente:c.cliente,activo:c.activo!==false,
     encargado:DB.usuarios.filter(u=>u.rol==='OPERATIVO'&&u.activo&&DB.acceso.some(a=>a.userId===u.id&&a.cliente===c.id)).map(u=>u.nombre).join(', ')||'—'}));
   PROYECTOS_X={};DB.clientes.forEach(c=>{PROYECTOS_X[c.id]=c.proyectos||[];if(!CAT.clientes.includes(c.cliente))CAT.clientes.push(c.cliente);});
@@ -348,6 +376,7 @@ function normGastos(g){
   return out;
 }
 const RX_DT=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const RX_D=/^\d{4}-\d{2}-\d{2}$/;
 function valKey(cliente,k,v){
   const vacio=v===''||v==null;
   switch(k){
@@ -769,6 +798,8 @@ const API={
     if(!cl)deny('Cliente no válido.','VALIDACION');
     if(cl.activo===false)deny('El cliente está desactivado: no admite viajes nuevos.','VALIDACION');
     if(!clientesAsig(A).includes(cliente))deny('No tienes asignado ese cliente: no puedes crear viajes para él.');
+    const P0=PILOTOS.find(p=>p.id===(d&&d.pilotoId));
+    if(P0&&P0.activo===false)deny('El piloto está dado de baja: elige otro.','VALIDACION');
     const keys=[...DATA_KEYS,...TIEMPO_KEYS,...DVKEYS,'rutaRef','sinRuta','desvio','desvioDestino'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origen'||k==='destino'?'El origen y el destino se toman de la ruta del viaje.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
@@ -849,6 +880,7 @@ const API={
         if(['FACTURADO','COBRADO'].includes(t.estado))deny('El viaje ya fue facturado: sus fechas y horas ya no se pueden modificar.','ESTADO_BLOQUEADO');
       }else if(DATA_KEYS.includes(k)){
         need(A,'viajes_editar_datos','editar datos distintos de fechas y horas');
+        if(k==='pilotoId'&&String(v)!==String(t.pilotoId)){const Pn=PILOTOS.find(p=>p.id===v);if(Pn&&Pn.activo===false)deny('El piloto está dado de baja: elige otro.','VALIDACION');}
         if(!esAsig)deny('Solo puedes editar viajes de tus clientes asignados.');
         if(!todos&&!esDueno(A,t))deny('Solo puedes editar los viajes que registraste tú (o los que no tienen responsable asignado).','SIN_PROPIEDAD');
         if(!DATA_EDIT_STATES.includes(t.estado))deny(`El viaje está en "${ESTADOS[t.estado].l}": sus datos ya no se pueden editar.`,'ESTADO_BLOQUEADO');
@@ -1514,6 +1546,64 @@ const API={
     return {clave:k,valores:limpio};
   });},
 
+  /* Alta y edición de un piloto con sus documentos. La baja es aparte (cambiarEstadoPiloto): nunca se borra. */
+  guardarPiloto(uid,d){return exec(uid,'guardarPiloto','',A=>{
+    need(A,'pilotos_gestionar','administrar pilotos y sus documentos');
+    refrescarPilotos();
+    const id=String((d&&d.id)||'').trim();
+    const cli=String((d&&d.cliente)||'').trim();
+    if(!DB.clientes.some(c=>c.id===cli))deny('Elige el cliente del piloto.','VALIDACION');
+    const nombre=String((d&&d.nombre)||'').trim().replace(/\s+/g,' ');
+    if(nombre.length<3)deny('Escribe el nombre del piloto (mínimo 3 caracteres).','VALIDACION');
+    if(nombre.length>80)deny('El nombre admite máximo 80 caracteres.','VALIDACION');
+    const licencia=String((d&&d.licencia)||'').trim();
+    if(!licencia)deny('Escribe el número de licencia.','VALIDACION');
+    if(licencia.length>40)deny('La licencia admite máximo 40 caracteres.','VALIDACION');
+    const tipo=String((d&&d.licenciaTipo)||'').trim();
+    if(!tipo)deny('Elige el tipo de licencia.','VALIDACION');
+    const fecha=(v,campo)=>{const t=String(v||'').slice(0,10);if(t&&!fechaReal(t))deny(`La fecha de ${campo} no es válida (AAAA-MM-DD).`,'VALIDACION');return t;};
+    const licenciaVence=fecha(d&&d.licenciaVence,'vencimiento de la licencia');
+    if(!licenciaVence)deny('Escribe la fecha de vencimiento de la licencia.','VALIDACION');
+    const saludVence=fecha(d&&d.saludVence,'la tarjeta de salud'),penalesVence=fecha(d&&d.penalesVence,'antecedentes penales'),policiacosVence=fecha(d&&d.policiacosVence,'antecedentes policíacos');
+    const unidad=String((d&&d.unidad)||'').trim();
+    if(unidad&&!FLOTA.some(f=>f.unidad===unidad))deny('La unidad no está en la flota.','VALIDACION');
+    const notas=String((d&&d.notas)||'').trim().slice(0,300);
+    const lista=Array.isArray(DB.pilotos)?DB.pilotos:(DB.pilotos=[]);
+    const P=id?PILOTOS.find(p=>p.id===id):null;
+    if(id&&!P)deny('Piloto no encontrado.','NO_ENCONTRADO');
+    const limpio={nombre,proyecto:cli,unidad,licencia,licenciaTipo:tipo,licenciaVence,saludVence,penalesVence,policiacosVence,notas};
+    let obj=P;
+    if(!obj){
+      let n=Number(DB.seq.pil||0);
+      const libre=x=>!PILOTOS.some(p=>p.id===x)&&!lista.some(p=>p.id===x);
+      do{ n++; }while(!libre('P-'+String(n).padStart(4,'0')));
+      DB.seq.pil=n;
+      obj=Object.assign({id:'P-'+String(n).padStart(4,'0'),activo:true,actualizadoEn:nowIso()},limpio);
+      lista.push(obj); if(lista!==PILOTOS)PILOTOS.push(obj);
+      auditAdd({entidad:'PILOTO',accion:'Piloto creado',campo:'Piloto',anterior:'',nuevo:`${nombre} · licencia ${licencia}`,por:A,ref:obj.id});
+    }else{
+      const dif=Object.keys(limpio).filter(k=>String(P[k]==null?'':P[k])!==String(limpio[k]==null?'':limpio[k]));
+      if(!dif.length)return P;
+      const resumen=dif.map(k=>`${k}: ${P[k]==null||P[k]===''?'—':P[k]} → ${limpio[k]==null||limpio[k]===''?'—':limpio[k]}`).join(' · ');
+      auditAdd({entidad:'PILOTO',accion:'Piloto actualizado',campo:dif.join(', '),anterior:'',nuevo:resumen.slice(0,500),por:A,ref:P.id});
+      Object.assign(P,limpio,{actualizadoEn:nowIso()});
+    }
+    return obj;
+  });},
+
+  /* Baja / alta: no se borra el piloto (los viajes históricos lo siguen mostrando). */
+  cambiarEstadoPiloto(uid,id,activo){return exec(uid,'cambiarEstadoPiloto',id,A=>{
+    need(A,'pilotos_gestionar','dar de alta o baja pilotos');
+    refrescarPilotos();
+    const P=PILOTOS.find(p=>p.id===id);
+    if(!P)deny('Piloto no encontrado.','NO_ENCONTRADO');
+    const v=!!activo,antes=P.activo!==false;
+    if(antes===v)return {id:P.id,activo:v};
+    P.activo=v;
+    auditAdd({entidad:'PILOTO',accion:v?'Piloto dado de alta':'Piloto dado de baja',campo:'Activo',anterior:antes?'Sí':'No',nuevo:v?'Sí':'No',por:A,ref:P.id});
+    return {id:P.id,activo:v};
+  });},
+
   /* ----- administración ----- */
   setPermiso(uid,rol,perm,hab){return exec(uid,'setPermiso','',A=>{
     need(A,'permisos_gestionar','administrar permisos');
@@ -1638,6 +1728,6 @@ const API={
    SIEMBRA: datos de demostración creados con la propia API (mismas reglas)
    ===================================================================== */
 
-return {API,ApiError,ROLES,PERMS,PERM_KEYS,PERM_DEFAULT,PROHIBIDO,ENV,CAT,PILOTOS,FLOTA,DESTINOS,ORIGENES,hasPerm,blankDB,syncRefs,
+return {API,ApiError,ROLES,PERMS,PERM_KEYS,PERM_DEFAULT,PROHIBIDO,ENV,CAT,PILOTOS,FLOTA,DESTINOS,ORIGENES,hasPerm,blankDB,syncRefs,estadoDocumentos,refrescarPilotos,
   getDB:()=>DB, setDB:d=>{DB=d;syncRefs();}};
 }

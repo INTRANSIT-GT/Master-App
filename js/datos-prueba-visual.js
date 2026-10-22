@@ -28,6 +28,7 @@
     ruta('R-0009','CMI-001','CP → CMI Delta','CMI','ABASA','CP','D-3'));
   ids.forEach(id=>DB.rutas.push(ruta('R-'+id,'RC-'+id,'Ruta '+id,id,'P-'+id,'CP','D-1')));
   PILOTOS.length=0;PILOTOS.push({id:'P-1',nombre:'Juan Pérez (ejemplo)',unidad:'T-1',proyecto:'COLGATE'},{id:'P-2',nombre:'Carlos Mejía (ejemplo)',unidad:'T-2',proyecto:'COLGATE'},{id:'P-3',nombre:'Marvin López (ejemplo)',unidad:'T-3',proyecto:'CMI'});
+  DB.pilotos=PILOTOS;   /* en demostración la tabla en memoria es la misma lista */
   FLOTA.length=0;FLOTA.push({unidad:'T-1',placa:'C-482KLM',tango:'TG-01',capacidad:'10 Ton',tipo:'10TON'},{unidad:'T-2',placa:'C-517PQR',tango:'TG-02',capacidad:'12 Ton',tipo:'12TON'},{unidad:'T-3',placa:'C-221HJK',tango:'TG-03',capacidad:'10 Ton',tipo:'10TON'});
   DESTINOS.length=0;DESTINOS.push({id:'D-1',nombre:'Mayorista Escuintla',proyecto:'COLGATE'},{id:'D-2',nombre:'Distribuidora Los Andes',proyecto:'COLGATE'},{id:'D-3',nombre:'Centro de Distribución Norte',proyecto:'CMI'});
   /* Las listas del sistema viven en la base (master.catalogos): aquí van las de ejemplo, para que la

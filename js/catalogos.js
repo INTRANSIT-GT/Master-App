@@ -13,6 +13,7 @@ const CAT={
   opl:[],
   tipoCarga:[],
   tipoViaje:[],
+  tipoLicencia:[],
   origen:[]
 };
 const FLOTA=[];

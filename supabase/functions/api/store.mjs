@@ -46,17 +46,20 @@ export const TABLAS = [
   S('notificaciones', 'notificaciones', ['id'], [['id', 'id', 't'], ['tipo', 'tipo', 't'], ['destinatarios', 'destinatarios', 'a'], ['usuarios', 'usuarios', 'a'], ['asunto', 'asunto', 't'], ['detalle', 'detalle', 'jo'], ['creadaPor', 'creada_por', 'tn'], ['creadaPorId', 'creada_por_id', 'tn'],
     ['creadaEn', 'creada_en', 'ts'], ['leidaPor', 'leida_por', 'a'], ['canal', 'canal', 't'], ['externo', 'externo', 'jo']]),
   /* Ayuda: reportes de fallas. OPCIONAL: si la migración 027 aún no se aplicó, la tabla no existe y el resto de la aplicación sigue funcionando (la lista queda vacía). */
+  S('pilotos', 'pilotos', ['id'], [['id', 'id', 't'], ['nombre', 'nombre', 't'], ['unidad', 'unidad', 'tn'], ['proyecto', 'cliente_id', 't'],
+    ['licencia', 'licencia', 't'], ['licenciaTipo', 'licencia_tipo', 't'], ['licenciaVence', 'licencia_vence', 'd'],
+    ['saludVence', 'salud_vence', 'd'], ['penalesVence', 'penales_vence', 'd'], ['policiacosVence', 'policiacos_vence', 'd'],
+    ['activo', 'activo', 'b'], ['notas', 'notas', 't'], ['actualizadoEn', 'actualizado_en', 'ts']], { sinExtra: true }),
   S('reportes_ayuda', 'reportesAyuda', ['id'], [['id', 'id', 't'], ['usuarioId', 'usuario_id', 't'], ['usuario', 'usuario', 't'], ['rol', 'rol', 't'], ['modulo', 'modulo', 't'], ['tipo', 'tipo', 't'], ['descripcion', 'descripcion', 't'],
     ['intento', 'intento', 't'], ['estado', 'estado', 't'], ['creadoEn', 'creado_en', 'ts'], ['actualizadoEn', 'actualizado_en', 'ts'], ['actualizadoPor', 'actualizado_por', 'tn'], ['historial', 'historial', 'ja']], { opcional: true }),
   S('auditoria', 'audit', ['id'], [['id', 'id', 't'], ['entidad', 'entidad', 't'], ['viajeId', 'viaje_id', 't'], ['accion', 'accion', 't'], ['campo', 'campo', 't'], ['anterior', 'anterior', 't'], ['nuevo', 'nuevo', 't'], ['porId', 'por_id', 't'], ['por', 'por', 't'], ['rol', 'rol', 't'],
     ['en', 'en', 'ts'], ['motivo', 'motivo', 't'], ['ref', 'ref', 't'], ['prev', 'prev', 't'], ['hash', 'hash', 't']], { soloAgregar: true })
 ];
 const CATALOGOS = [
-  { tabla: 'pilotos', lista: 'pilotos', cols: [['id', 'id', 't'], ['nombre', 'nombre', 't'], ['unidad', 'unidad', 'tn'], ['proyecto', 'cliente_id', 't']] },
   { tabla: 'flota', lista: 'flota', cols: [['unidad', 'unidad', 't'], ['placa', 'placa', 't'], ['tango', 'tango', 't'], ['capacidad', 'capacidad', 't'], ['tipo', 'tipo', 't']] },
 ];
 const ISO = c => `to_char(${c} at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
-const sel = ([f, c, t]) => (t === 'ts' ? `${ISO(c)} as ${c}` : t === 'n' ? `${c}::float8 as ${c}` : c);
+const sel = ([f, c, t]) => (t === 'ts' ? `${ISO(c)} as ${c}` : t === 'n' ? `${c}::float8 as ${c}` : t === 'd' ? `to_char(${c},'YYYY-MM-DD') as ${c}` : c);
 
 const enc = (t, v) => {
   switch (t) {
@@ -66,6 +69,7 @@ const enc = (t, v) => {
     case 'i': return Number(v) || 0;
     case 'b': return !!v;
     case 'ts': return v == null || v === '' ? null : String(v);
+    case 'd': return v == null || v === '' ? null : String(v);
     case 'u': return String(v);
     case 'a': return Array.isArray(v) ? v.map(String) : [];   // el driver lo envía como arreglo de Postgres (text[])
     case 'j': return v == null ? null : v;                    // objeto/arreglo/escalar real: el driver lo serializa a jsonb
@@ -76,7 +80,7 @@ const enc = (t, v) => {
 };
 const dec = (t, v) => {
   switch (t) {
-    case 't': case 'tn': case 'ts': return v == null ? '' : v;
+    case 't': case 'tn': case 'ts': case 'd': return v == null ? '' : v;
     case 'n': return v == null ? '' : Number(v);
     case 'i': return Number(v);
     case 'b': return !!v;
@@ -86,7 +90,7 @@ const dec = (t, v) => {
   }
 };
 const ph = (t, i) => ({ a: `$${i}::text[]`, j: `$${i}::jsonb`, jo: `$${i}::jsonb`, ja: `$${i}::jsonb`,
-  ts: `$${i}::timestamptz`, n: `$${i}::numeric`, i: `$${i}::int`, b: `$${i}::boolean`, u: `$${i}::uuid` }[t] || `$${i}`);
+  ts: `$${i}::timestamptz`, d: `$${i}::date`, n: `$${i}::numeric`, i: `$${i}::int`, b: `$${i}::boolean`, u: `$${i}::uuid` }[t] || `$${i}`);
 
 async function leerTabla(q, tabla, cols, extra, orden) {
   const { rows } = await q(`select ${cols.map(sel).join(', ')}${extra ? ', extra' : ''} from master.${tabla} order by ${orden}`);

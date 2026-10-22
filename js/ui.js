@@ -511,18 +511,48 @@ function flePanel(){
     <h3>Mantenimientos <span class="mute" style="font-weight:500">· servicio</span></h3>${tm}
     <h3 style="margin:18px 0 8px">Gastos <span class="mute" style="font-weight:500">· egresos por unidad</span></h3>${tg}`;
 }
+/* ---- Catálogos · Pilotos: alta/baja y vigencia de documentos ---- */
+function tonoDocumento(e){return e==='VIGENTE'?'var(--ok)':(e==='POR_VENCER'?'var(--warn)':'var(--fix)');}
+function pilPanel(){
+  const puede=hp('pilotos_gestionar'),q=(S.pilQ||'').trim().toLowerCase(),f=S.pilDoc||'';
+  const pn=id=>esc((PROYECTOS.find(p=>p.id===id)||{}).nombre||id);
+  const filas=PILOTOS.slice().filter(p=>{
+    const e=estadoDocumentos(p).estado;
+    if(f==='baja')return p.activo===false;
+    if(f==='ok')return p.activo!==false&&e==='VIGENTE';
+    if(f==='warn')return p.activo!==false&&e==='POR_VENCER';
+    if(f==='bad')return p.activo!==false&&e==='VENCIDO';
+    return true;
+  }).filter(p=>!q||(p.id+' '+p.nombre+' '+(p.licencia||'')+' '+(p.licenciaTipo||'')+' '+(p.unidad||'')+' '+pn(p.proyecto)).toLowerCase().includes(q))
+    .sort((a,b)=>(a.activo===false)-(b.activo===false)||String(a.nombre).localeCompare(String(b.nombre),'es'));
+  const celda=d=>d&&d.vence?`<span style="color:${tonoDocumento(d.estado)};font-weight:600" title="${esc(d.label+': '+DOC_ESTADO_LBL[d.estado])}">${esc(fmtDate(d.vence))}</span>`:'<span class="mute" title="Sin fecha registrada">—</span>';
+  const pg=paginar('catpil',filas);
+  const rows=pg.filas.map(p=>{const E=estadoDocumentos(p),baja=p.activo===false;
+    const avisos=E.docs.filter(d=>d.estado!=='VIGENTE').map(d=>d.label+': '+DOC_ESTADO_LBL[d.estado]).join(' · ');
+    return `<tr class="${baja?'warnrow':''}"><td>${esc(p.id)}</td><td><b>${esc(p.nombre)}</b></td><td>${pn(p.proyecto)}</td><td>${p.unidad?esc(p.unidad):'<span class="mute">—</span>'}</td>
+      <td>${esc(p.licenciaTipo||'')}${p.licencia?' · '+esc(p.licencia):''}</td>
+      <td>${celda(E.docs[0])}</td><td>${celda(E.docs[1])}</td><td>${celda(E.docs[2])}</td><td>${celda(E.docs[3])}</td>
+      <td><span class="est" style="--tone:${tonoDocumento(E.estado)}" title="${esc(baja?'Piloto dado de baja':(avisos||'Licencia, salud, penales y policíacos vigentes'))}">${DOC_ESTADO_LBL[E.estado]}</span>${baja?' <span class="est">Baja</span>':''}</td>
+      <td style="white-space:nowrap">${puede?`<button class="btn sm ghost" data-act="pilotoOpen" data-id="${esc(p.id)}">Editar</button> <button class="btn sm ${baja?'ok':'fix'}" data-act="pilotoEstado" data-id="${esc(p.id)}">${baja?'Alta':'Baja'}</button>`:'<span class="mute">—</span>'}</td></tr>`;}).join('');
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+      <label class="dlab">Buscar <input type="text" id="qPil" value="${esc(S.pilQ||'')}" placeholder="Nombre, licencia, cliente o unidad"></label>
+      <label class="dlab">Documentos <select data-pilf><option value="">Todos</option><option value="ok" ${f==='ok'?'selected':''}>Al día</option><option value="warn" ${f==='warn'?'selected':''}>Por vencer (30 días)</option><option value="bad" ${f==='bad'?'selected':''}>Vencidos o faltan</option><option value="baja" ${f==='baja'?'selected':''}>Dados de baja</option></select></label>
+      ${puede?'<button class="btn primary sm" data-act="pilotoOpen">Nuevo piloto</button>':''}
+      <span class="mute" style="font-size:12.5px">Al día = licencia, salud, penales y policíacos vigentes · Por vencer = 30 días o menos</span></div>
+    <div class="tablewrap scrollx"><table style="min-width:1150px"><thead><tr><th>Id</th><th>Piloto</th><th>Cliente</th><th>Unidad</th><th>Licencia</th><th>Vence lic.</th><th>Salud</th><th>Penales</th><th>Policíacos</th><th>Documentos</th><th>Acciones</th></tr></thead><tbody>${rows||'<tr><td colspan="11" class="mute">Sin pilotos con este filtro.</td></tr>'}</tbody></table></div>${paginador('catpil',pg)}`;
+}
 VIEWS.catalogos=()=>{
   const k0=S.tab.cat||'pil',verFle=hp('catalogos_ver')||hp('finanzas_ver'),k=(k0==='fle'&&!verFle)?'pil':k0;
   const T=[{k:'pil',l:'PILOTOS',f:()=>true},{k:'flo',l:'FLOTA',f:()=>true},{k:'cat',l:'CATALOGO (listas)',f:()=>true},...(verFle?[{k:'fle',l:'FLEETIO',f:()=>true}]:[])];
   const tb=(h,rows,key)=>{const pg=paginar(key||'cat',rows);return `<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${pg.filas.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${paginador(key||'cat',pg)}`;};
   const pn=id=>esc((PROYECTOS.find(p=>p.id===id)||{}).nombre||id);
   const body={
-    pil:tb(['Id','Piloto','Unidad asignada','Proyecto'],PILOTOS.map(p=>[p.id,esc(p.nombre),p.unidad?esc(p.unidad):'<span class="mute">Sin unidad</span>',pn(p.proyecto)]),'catpil'),
+    pil:pilPanel(),
     flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)]),'catflo'),
-    cat:`<div class="grid g2">${Object.entries({'clientes':'CLIENTES','proyectos':'PROYECTOS','tipoUnidad':'TIPO DE UNIDAD','opl':'OPL · TRANSPORTISTAS','tipoCarga':'TIPO CARGA','tipoViaje':'TIPO DE VIAJE','arrastre':'EQUIPOS DE ARRASTRE (PLACAS)'}).map(([k,n])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${(CAT[k]||[]).length}</span>${puedeEditarListas()?` <button class="btn sm ghost" data-act="catalogoOpen" data-k="${k}">Editar</button>`:''}</h3><div class="bgs">${(CAT[k]||[]).map(x=>`<span class="est">${esc(x)}</span>`).join('')||'<span class="mute">Sin valores</span>'}</div>${LISTAS_SISTEMA.includes(k)?'<div class="mute" style="font-size:12px;margin-top:6px">Se guarda en la base y la app lo usa de inmediato.</div>':'<div class="mute" style="font-size:12px;margin-top:6px">Se arma solo con la ficha de cada cliente.</div>'}</div>`).join('')}</div>`,
+    cat:`<div class="grid g2">${Object.entries({'clientes':'CLIENTES','proyectos':'PROYECTOS','tipoUnidad':'TIPO DE UNIDAD','opl':'OPL · TRANSPORTISTAS','tipoCarga':'TIPO CARGA','tipoViaje':'TIPO DE VIAJE','arrastre':'EQUIPOS DE ARRASTRE (PLACAS)','tipoLicencia':'TIPO DE LICENCIA'}).map(([k,n])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${(CAT[k]||[]).length}</span>${puedeEditarListas()?` <button class="btn sm ghost" data-act="catalogoOpen" data-k="${k}">Editar</button>`:''}</h3><div class="bgs">${(CAT[k]||[]).map(x=>`<span class="est">${esc(x)}</span>`).join('')||'<span class="mute">Sin valores</span>'}</div>${LISTAS_SISTEMA.includes(k)?'<div class="mute" style="font-size:12px;margin-top:6px">Se guarda en la base y la app lo usa de inmediato.</div>':'<div class="mute" style="font-size:12px;margin-top:6px">Se arma solo con la ficha de cada cliente.</div>'}</div>`).join('')}</div>`,
     fle:flePanel()}[k];
   return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; todos vienen de la base (Supabase)')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
-    <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS y FLOTA se leen de sus tablas; las listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje y arrastre) se guardan en <code>catalogos</code>. CLIENTES y PROYECTOS se arman con la ficha de cada cliente. <b>El origen y el destino se escriben en cada ruta</b> (quedan ligados a su cliente por la ruta).</div></div>`;
+    <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS (con alta, baja y documentos) y FLOTA se leen de sus tablas; las listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje y arrastre) se guardan en <code>catalogos</code>. CLIENTES y PROYECTOS se arman con la ficha de cada cliente. <b>El origen y el destino se escriben en cada ruta</b> (quedan ligados a su cliente por la ruta).</div></div>`;
 };
 
 /* ---- Notificaciones (solo dentro de la aplicación) ---- */
@@ -753,6 +783,48 @@ const ACT={
     const r=await run(()=>API.guardarCatalogo(S.user.id,d.id,valores),v=>`Lista guardada (${v.valores.length} valores).`);
     if(r.ok){try{await BACKEND.refrescar();}catch(e){/* la lista ya quedó guardada */}afterWrite();}
   },
+  /* alta/edición de un piloto y sus documentos */
+  async pilotoOpen(d){
+    if(!hp('pilotos_gestionar')){toast('Tu perfil no puede administrar pilotos.','err');return;}
+    const P=d&&d.id?PILOTOS.find(p=>p.id===d.id):null;
+    const clis=PROYECTOS.filter(p=>clientesAsig(S.user).includes(p.id)&&p.activo!==false).map(p=>({id:p.id,nombre:p.nombre}));
+    const tipos=(CAT.tipoLicencia||[]).map(x=>({id:x,nombre:x}));
+    const cli=P?P.proyecto:((clis[0]||{}).id||'');
+    formM({title:P?'Editar piloto':'Nuevo piloto',ancho:'720px',
+      text:'Los cuatro documentos se controlan por fecha de vencimiento. La baja no borra al piloto ni sus viajes.',
+      fields:[
+        {k:'nombre',label:'Nombre completo',req:1},
+        {k:'cliente',label:'Cliente',type:'select',req:1,opts:P?clis.filter(c=>c.id===P.proyecto):clis,ph:'Selecciona el cliente',hint:P?'El cliente no se cambia al editar.':''},
+        {k:'unidad',label:'Unidad asignada',datalist:data=>[...new Set(PILOTOS.filter(p=>p.proyecto===data.cliente&&p.unidad).map(p=>p.unidad))],ph:'Opcional: escribe la placa o déjala vacía'},
+        {k:'licencia',label:'Número de licencia',req:1},
+        {k:'licenciaTipo',label:'Tipo de licencia',type:'select',req:1,opts:tipos,ph:'Selecciona el tipo'},
+        {k:'licenciaVence',label:'Vence la licencia',type:'date',req:1},
+        {k:'saludVence',label:'Vence la tarjeta de salud',type:'date'},
+        {k:'penalesVence',label:'Vence antecedentes penales',type:'date'},
+        {k:'policiacosVence',label:'Vence antecedentes policíacos',type:'date'},
+        {k:'notas',label:'Notas',type:'textarea'}],
+      data:{nombre:P?P.nombre:'',cliente:cli,unidad:P?P.unidad||'':'',licencia:P?P.licencia||'':'',licenciaTipo:P?P.licenciaTipo||'':'',licenciaVence:P?P.licenciaVence||'':'',saludVence:P?P.saludVence||'':'',penalesVence:P?P.penalesVence||'':'',policiacosVence:P?P.policiacosVence||'':'',notas:P?P.notas||'':''},
+      rerender:['cliente'],ok:'GUARDAR PILOTO',act:'pilotoSave',id:P?P.id:''});
+  },
+  async pilotoSave(d){
+    const m=S.modal;if(!m)return;
+    const datos=Object.assign({},m.data);if(d&&d.id)datos.id=d.id;
+    const r=await run(()=>API.guardarPiloto(S.user.id,datos),x=>`Piloto ${x.nombre} guardado.`,true);
+    if(r.ok){try{await BACKEND.refrescar();}catch(e){/* ya quedó guardado */}afterWrite();}
+  },
+  async pilotoEstado(d){
+    const P=PILOTOS.find(p=>p.id===d.id);if(!P)return;
+    const alta=P.activo===false;
+    confirmM(alta?'¿Dar de alta al piloto?':'¿Dar de baja al piloto?',
+      `<b>${esc(P.nombre)}</b> · ${esc((PROYECTOS.find(p=>p.id===P.proyecto)||{}).nombre||P.proyecto)}.<br>${alta?'Volverá a aparecer en los formularios de viaje.':'Dejará de aparecer en los formularios nuevos; sus viajes históricos se conservan.'}`,
+      alta?'DAR DE ALTA':'DAR DE BAJA','pilotoEstadoOk',P.id,alta?'ok':'fix');
+  },
+  async pilotoEstadoOk(d){
+    const P=PILOTOS.find(p=>p.id===d.id);if(!P)return;
+    const nuevo=P.activo===false;
+    const r=await run(()=>API.cambiarEstadoPiloto(S.user.id,d.id,nuevo),`Piloto ${nuevo?'dado de alta':'dado de baja'}.`,true);
+    if(r.ok){try{await BACKEND.refrescar();}catch(e){}afterWrite();}
+  },
   /* mover elementos entre las dos listas (clientes / proyectos asignados) */
   async mvMove(d){
     const m=S.modal;if(!m||!d.k)return;
@@ -872,6 +944,7 @@ app.addEventListener('keydown',e=>{
 app.addEventListener('submit',e=>{e.preventDefault();doLogin();});
 app.addEventListener('change',async e=>{
   const t=e.target;
+  if(t.dataset.pilf){S.pilDoc=t.value;render();return;}
   if(t.dataset.torre){await run(()=>API.guardarReglasTorre(S.user.id,{cliente:t.dataset.torre,torreEstatus:t.checked}),'Regla de Torre actualizada.');render();return;}
   if(t.dataset.mfile&&S.modal){const f=t.files&&t.files[0];if(!f)return;if(f.size>2000000){S.modal.err='El archivo supera 2 MB.';render();return;}const k=t.dataset.mfile;const rd=new FileReader();rd.onload=()=>{S.modal.data[k]=rd.result;S.modal.err='';render();};rd.readAsDataURL(f);return;}
   if(t.dataset.auto){autoSave(t.dataset.id,t.dataset.auto,t.value);return;}
@@ -921,6 +994,7 @@ app.addEventListener('input',e=>{
   if(t.dataset.live){S[t.dataset.live]=t.value;const fn=S.view==='comercial'?(S.tab.com==='hist'?BODY.hist:S.tab.com==='tar'?BODY.tarifas:BODY.comercial):BODY[S.view];const vb=document.getElementById('vb');if(fn&&vb)vb.innerHTML=fn();}
   if(t.dataset.motivo&&S.edit)S.edit.motivo=t.value;
   if(t.id==='qCli'){S.qCli=t.value;render();const el=document.getElementById('qCli');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}return;}
+  if(t.id==='qPil'){S.pilQ=t.value;render();const el=document.getElementById('qPil');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}return;}
   if(t.id==='q'){S.q=t.value;if(BODY[S.view]&&$('#vb'))$('#vb').innerHTML=BODY[S.view]();if(S.view==='todos')ACT.buscarHistorico();}
 });
 window.addEventListener('popstate',()=>{
