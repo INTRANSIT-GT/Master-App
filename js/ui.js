@@ -549,7 +549,7 @@ VIEWS.catalogos=()=>{
   const body={
     pil:pilPanel(),
     flo:tb(['Unidad','Placa','Tango','Capacidad','Tipo'],FLOTA.map(f=>[esc(f.unidad),esc(f.placa),esc(f.tango),esc(f.capacidad),esc(f.tipo)]),'catflo'),
-    cat:`<div class="grid g2">${Object.entries({'clientes':'CLIENTES','proyectos':'PROYECTOS','tipoUnidad':'TIPO DE UNIDAD','opl':'OPL · TRANSPORTISTAS','tipoCarga':'TIPO CARGA','tipoViaje':'TIPO DE VIAJE','arrastre':'EQUIPOS DE ARRASTRE (PLACAS)','tipoLicencia':'TIPO DE LICENCIA'}).map(([k,n])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${(CAT[k]||[]).length}</span>${puedeEditarListas()?` <button class="btn sm ghost" data-act="catalogoOpen" data-k="${k}">Editar</button>`:''}</h3><div class="bgs">${(CAT[k]||[]).map(x=>`<span class="est">${esc(x)}</span>`).join('')||'<span class="mute">Sin valores</span>'}</div>${LISTAS_SISTEMA.includes(k)?'<div class="mute" style="font-size:12px;margin-top:6px">Se guarda en la base y la app lo usa de inmediato.</div>':'<div class="mute" style="font-size:12px;margin-top:6px">Se arma solo con la ficha de cada cliente.</div>'}</div>`).join('')}</div>`,
+    cat:`<div class="grid g2">${Object.entries({'clientes':'CLIENTES','proyectos':'PROYECTOS','tipoUnidad':'TIPO DE UNIDAD','opl':'OPL · TRANSPORTISTAS','tipoCarga':'TIPO CARGA','tipoViaje':'TIPO DE VIAJE','arrastre':'EQUIPOS DE ARRASTRE (PLACAS)','tipoLicencia':'TIPO DE LICENCIA'}).map(([k,n])=>`<div class="card"><h3>${n} <span class="mute" style="font-weight:500">· ${(CAT[k]||[]).length}</span>${LISTAS_SISTEMA.includes(k)&&puedeEditarListas()?` <button class="btn sm ghost" data-act="catalogoOpen" data-k="${k}">Editar</button>`:''}</h3><div class="bgs">${(CAT[k]||[]).map(x=>`<span class="est">${esc(x)}</span>`).join('')||'<span class="mute">Sin valores</span>'}</div>${LISTAS_SISTEMA.includes(k)?'<div class="mute" style="font-size:12px;margin-top:6px">Se guarda en la base y la app lo usa de inmediato.</div>':'<div class="mute" style="font-size:12px;margin-top:6px">Se arma solo con la ficha de cada cliente.</div>'}</div>`).join('')}</div>`,
     fle:flePanel()}[k];
   return `<div class="inner">${pageHead('Catálogos','Datos maestros que la aplicación consulta; todos vienen de la base (Supabase)')}${tabs('cat',T,k,null).replace(/<span class="c">0<\/span>/g,'')}<div style="height:14px"></div>${body}
     <div class="alertbox info" style="margin-top:14px"><b>Nota:</b> PILOTOS (con alta, baja y documentos) y FLOTA se leen de sus tablas; las listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje y arrastre) se guardan en <code>catalogos</code>. CLIENTES y PROYECTOS se arman con la ficha de cada cliente. <b>El origen y el destino se escriben en cada ruta</b> (quedan ligados a su cliente por la ruta).</div></div>`;
@@ -603,6 +603,14 @@ function fieldM(f,data){
       <div class="mv-btns">${b('to','\u203A','Asignar lo seleccionado')}${b('from','\u2039','Quitar lo seleccionado')}${b('toall','\u00BB','Asignar todo','ghost')}${b('fromall','\u00AB','Quitar todo','ghost')}</div>
       <div class="mv-col"><div class="mv-t">Asignados · ${asg.length}</div>${col('mv_'+f.k+'_si',asg,'Todavía no hay nada asignado',true)}</div>
     </div>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
+  }
+  if(f.type==='addmulti'){
+    const op=f.optsFn?f.optsFn(data):(f.opts||[]),sel=Array.isArray(val)?val:[],todos=op.slice();
+    sel.forEach(v=>{if(!todos.some(o=>o.id===v))todos.push({id:v,nombre:v+' (nuevo)'});});
+    return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px"><input type="text" id="add_${f.k}" data-addfor="${f.k}" placeholder="Escribe un proyecto nuevo" autocomplete="off"><button type="button" class="btn sm" data-act="addMulti" data-k="${f.k}">Agregar</button></div>
+      <div class="chips">${todos.length?todos.map(o=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mfm="${f.k}" value="${esc(o.id)}" ${sel.includes(o.id)?'checked':''}> ${esc(o.nombre)}</label>`).join(''):'<span class="mute">Sin proyectos: escribe uno arriba</span>'}</div>
+      <span class="hint">Marca los existentes o escribe uno nuevo. Los proyectos se comparten entre clientes.</span></div>`;
   }
   if(f.type==='checks'){const op=f.optsFn?f.optsFn(data):(f.opts||[]);return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><div class="chips">${op.length?op.map(o=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mfm="${f.k}" value="${esc(o.id)}" ${(val||[]).includes(o.id)?'checked':''}> ${esc(o.nombre)}</label>`).join(''):'<span class="mute">Primero elige el cliente para ver sus proyectos</span>'}</div></div>`;}
   if(f.type==='file')return `${W}${lab}<input type="file" id="${id}" data-mfile="${f.k}" accept="image/*,application/pdf">${val?`<span class="hint">✓ Archivo cargado</span>`:''}</div>`;
@@ -782,6 +790,18 @@ const ACT={
     const valores=String(m.data.valores||'').split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean);
     const r=await run(()=>API.guardarCatalogo(S.user.id,d.id,valores),v=>`Lista guardada (${v.valores.length} valores).`);
     if(r.ok){try{await BACKEND.refrescar();}catch(e){/* la lista ya quedó guardada */}afterWrite();}
+  },
+  /* agregar un valor nuevo a una lista de casillas (proyectos del cliente) */
+  async addMulti(d){
+    const m=S.modal;if(!m)return;
+    const k=String(d.k||''),el=document.getElementById('add_'+k),v=String(el&&el.value||'').trim().replace(/\s+/g,' ');
+    if(v.length<2){toast('Escribe el nombre del proyecto (mínimo 2 caracteres).','err');return;}
+    if(v.length>60){toast('El proyecto admite máximo 60 caracteres.','err');return;}
+    const cur=Array.isArray(m.data[k])?m.data[k]:[];
+    if(cur.some(x=>String(x).toLowerCase()===v.toLowerCase())){toast('Ese proyecto ya está marcado.','err');return;}
+    m.data[k]=cur.concat([v]);
+    if(el)el.value='';
+    render();
   },
   /* alta/edición de un piloto y sus documentos */
   async pilotoOpen(d){

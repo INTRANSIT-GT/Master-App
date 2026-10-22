@@ -1715,7 +1715,17 @@ const API={
     if(!/^[A-Z0-9_-]{2,20}$/.test(id))deny('Código del cliente: 2 a 20 caracteres (letras, números, guion).','VALIDACION');
     const nombre=String(d.nombre||'').trim();if(nombre.length<2||nombre.length>60)deny('Escribe el nombre del cliente (2 a 60 caracteres).','VALIDACION');
     const cl=String(d.cliente||'').trim().toUpperCase();if(cl.length<2||cl.length>60)deny('Escribe el nombre del cliente tal como aparece (o aparecerá) en la lista CLIENTES del catálogo (2 a 60 caracteres).','VALIDACION');
-    const proy=(d.proyectos||[]).filter(p=>CAT.proyectos.includes(p));if(!proy.length)deny('Asigna al menos un proyecto del catálogo.','VALIDACION');
+    /* Los proyectos se escriben (no solo se eligen del catálogo): Comercial y Administración pueden crear uno nuevo. */
+    const proy=[...new Set((d.proyectos||[]).map(p=>String(p==null?'':p).trim().replace(/\s+/g,' ')).filter(Boolean))];
+    if(!proy.length)deny('Asigna al menos un proyecto al cliente.','VALIDACION');
+    if(proy.length>40)deny('Máximo 40 proyectos por cliente.','VALIDACION');
+    const malo=proy.find(p=>p.length<2||p.length>60);if(malo)deny(`Proyecto "${malo}": debe tener entre 2 y 60 caracteres.`,'VALIDACION');
+    if(editando){
+      const c0=DB.clientes.find(x=>x.id===id);
+      const quitados=c0?c0.proyectos.filter(p=>!proy.includes(p)):[];
+      const enUso=quitados.filter(p=>DB.trips.some(t=>t.proyecto===id&&t.proyectoCat===p)||DB.rutas.some(r=>r.cliente===id&&r.proyecto===p)||DB.tarifas.some(t=>t.cliente===id&&t.proyecto===p));
+      if(enUso.length)deny(`No se puede quitar ${enUso.join(', ')}: tiene viajes, rutas o tarifas registradas.`,'VALIDACION');
+    }
     const nit=String(d.nit||'').trim().toUpperCase();if(nit&&!/^[A-Z0-9][A-Z0-9\-\/\.]{3,19}$/.test(nit))deny('Identificador fiscal no válido (4 a 20 caracteres).','VALIDACION');
     const correo=String(d.correoFacturacion||'').trim();if(correo&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo))deny('Correo de facturación no válido.','VALIDACION');
     const tel=String(d.telefono||'').trim();if(tel.length>20)deny('Teléfono: máximo 20 caracteres.','VALIDACION');
