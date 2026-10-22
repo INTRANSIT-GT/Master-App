@@ -41,7 +41,7 @@ const salida = `/* ARCHIVO GENERADO por scripts/build-core.mjs a partir de js/en
 export function createEngine(){
 ${prelude}
 ${motor}
-return {API,ApiError,ROLES,PERMS,PERM_KEYS,PERM_DEFAULT,PROHIBIDO,ENV,CAT,PILOTOS,FLOTA,DESTINOS,ORIGENES,hasPerm,blankDB,syncRefs,
+return {API,ApiError,ROLES,PERMS,PERM_KEYS,PERM_DEFAULT,PROHIBIDO,ENV,CAT,PILOTOS,FLOTA,DESTINOS,ORIGENES,hasPerm,blankDB,syncRefs,estadoDocumentos,refrescarPilotos,
   getDB:()=>DB, setDB:d=>{DB=d;syncRefs();}};
 }
 `;
