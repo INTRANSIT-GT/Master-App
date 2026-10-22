@@ -630,8 +630,9 @@ function aplicarTema(){
   try{const t=PREF.tema==='claro'?'light':PREF.tema==='oscuro'?'dark':'';const d=document.documentElement;
     if(t)d.dataset.theme=t;else delete d.dataset.theme;}catch(e){}
 }
-/* ---- Perfil «Administrador»: menú lateral agrupado por módulos. Solo reordena el acceso a pantallas que YA existen;
-   cada opción respeta los mismos permisos de siempre (allowed) y los demás perfiles conservan su menú tal cual. ----
+/* ---- Menú lateral agrupado por módulos para TODOS los perfiles. Solo reordena el acceso a pantallas que YA existen;
+   cada opción respeta los mismos permisos de siempre (allowed). Un módulo se muestra si el perfil tiene al menos una
+   de sus pantallas, aunque sea una sola. ----
    v: pantalla existente · l: etiqueta si difiere de la habitual · k: clave propia cuando dos opciones abren la misma pantalla · tab: pestaña con la que abre */
 const ADM_MODULOS=[
   {t:'VIAJES',    items:[{v:'nuevo'},{v:'liquidaciones'},{v:'todos'},{v:'viajes',l:'Viajes por estado'}]},
@@ -669,8 +670,7 @@ function navHTML(){
   const items=navItems();
   if(items.length<2)return'';
   const act=S.view==='detalle'&&S.from?S.from.view:(S.view==='proyecto'?'proyectos':S.view);
-  if(S.user.rol==='ADMIN')return admNavHTML(items,act);
-  return `<nav class="side" aria-label="Navegación principal">${items.map(v=>`${v==='catalogos'?'<div class="sep"></div>':''}<button data-act="nav" data-v="${v}" ${act===v?'aria-current="page"':''}>${icon(NAVLBL[v][1],18)}${NAVLBL[v][0]}</button>`).join('')}</nav>`;
+  return admNavHTML(items,act);
 }
 function render(){
   const movil=esMovil();
