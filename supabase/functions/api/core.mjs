@@ -1424,6 +1424,8 @@ const API={
     return DB.rutas.filter(r=>rutaVisible(A,r)).map(r=>Object.assign({},r,{viajes:porRuta.get(r.id)||0}));
   },
   rutasParaViaje(uid,cliente,proyecto){const A=actor(uid);return DB.rutas.filter(r=>r.estado==='ACTIVA'&&r.cliente===cliente&&r.proyecto===proyecto&&rutaVisible(A,r)).map(r=>Object.assign({},r));},
+  /* Rutas que pueden recibir una tarifa: la que espera tarifación, la que ya tiene tarifa y espera aprobaciones, y las activas (otra capacidad). */
+  rutasParaTarifa(uid,cliente,proyecto){const A=actor(uid);return DB.rutas.filter(r=>['EN_TARIFACION','PENDIENTE_APROBACION','ACTIVA'].includes(r.estado)&&r.cliente===cliente&&r.proyecto===proyecto&&rutaVisible(A,r)).map(r=>Object.assign({},r));},
   solicitarRuta(uid,d){return exec(uid,'solicitarRuta','',A=>{
     need(A,'rutas_solicitar','solicitar rutas nuevas');
     const cliente=d&&d.cliente,cl=DB.clientes.find(c=>c.id===cliente);if(!cl)deny('Selecciona el cliente.','VALIDACION');

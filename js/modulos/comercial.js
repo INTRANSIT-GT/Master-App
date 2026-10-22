@@ -141,6 +141,12 @@ function histFiltros(){
 }
 /* ---- Tarifas ---- */
 function tarData(){let t=[];try{t=API.tarifas(S.user.id);}catch(e){}return t;}
+/* Rutas que se pueden tarifar: validadas (en tarifación), con tarifa pendiente de aprobación o activas (otra capacidad). */
+const optRutaTarifa=(cliente,proyecto)=>{
+  if(!cliente||!proyecto)return [];
+  return API.rutasParaTarifa(S.user.id,cliente,proyecto).map(r=>({id:r.id,
+    nombre:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`+(r.estado==='EN_TARIFACION'?' · en tarifación':(r.estado==='PENDIENTE_APROBACION'?' · pendiente de aprobación':''))}));
+};
 function rutaTxt(id){const r=DB.rutas.find(x=>x.id===id);return r?`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`:id;}
 BODY.tarifas=()=>{
   const q=S.tfQ.trim().toLowerCase();
@@ -288,9 +294,9 @@ Object.assign(ACT,{
         fields:[{k:'importe',label:'Importe cliente (Q)',type:'number',req:1},{k:'qDieselPactado',label:'Q diésel pactado cliente (opcional · activa el ajuste por combustible)',type:'number'},{k:'combustiblePct',label:'% de combustible cliente (opcional · 0 a 100)',type:'number'},{k:'importeOpl',label:'Importe proveedor / OPL (Q, opcional)',type:'number'},{k:'dieselPactadoOpl',label:'Q diésel pactado proveedor (opcional)',type:'number'},{k:'combustiblePctOpl',label:'% de combustible proveedor (opcional · 0 a 100)',type:'number'},{k:'vigenteDesde',label:'Vigente desde',type:'date',req:1},{k:'vigenteHasta',label:'Vigente hasta (opcional)',type:'date'},{k:'motivo',label:'Motivo del cambio (opcional)',type:'textarea'}],
         data:{importe:t.importe,qDieselPactado:t.qDieselPactado==null?'':t.qDieselPactado,combustiblePct:t.combustiblePct==null?'':t.combustiblePct,importeOpl:t.importeOpl==null?'':t.importeOpl,dieselPactadoOpl:t.dieselPactadoOpl==null?'':t.dieselPactadoOpl,combustiblePctOpl:t.combustiblePctOpl==null?'':t.combustiblePctOpl,vigenteDesde:t.vigenteDesde,vigenteHasta:t.vigenteHasta,motivo:''},ok:'GUARDAR CAMBIOS',act:'tarifaSave',id:t.id});
     }else{
-      formM({title:'Nueva tarifa',text:'La tarifa aplica solo a la combinación cliente, proyecto, ruta (asignada) y capacidad que elijas.',
+      formM({title:'Nueva tarifa',text:'La tarifa aplica solo a la combinación cliente, proyecto, ruta y capacidad que elijas. Aparecen las rutas validadas (en tarifación), las que esperan aprobación y las activas (para otra capacidad).',
         fields:[{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},
-          {k:'rutaId',label:'Ruta',type:'select',req:1,optsFn:x=>(x.cliente&&x.proyecto?API.rutasParaViaje(S.user.id,x.cliente,x.proyecto):[]).map(r=>({id:r.id,nombre:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`})),ph:'Selecciona la ruta (solo rutas asignadas)'},
+          {k:'rutaId',label:'Ruta',type:'select',req:1,optsFn:x=>optRutaTarifa(x.cliente,x.proyecto),ph:'Primero elige el cliente y el proyecto'},
           {k:'capacidad',label:'Capacidad',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad'},
           {k:'importe',label:'Importe cliente (Q)',type:'number',req:1},{k:'qDieselPactado',label:'Q diésel pactado cliente (opcional · activa el ajuste por combustible)',type:'number'},{k:'combustiblePct',label:'% de combustible cliente (opcional · 0 a 100)',type:'number'},{k:'importeOpl',label:'Importe proveedor / OPL (Q, opcional)',type:'number'},{k:'dieselPactadoOpl',label:'Q diésel pactado proveedor (opcional)',type:'number'},{k:'combustiblePctOpl',label:'% de combustible proveedor (opcional · 0 a 100)',type:'number'},{k:'vigenteDesde',label:'Vigente desde',type:'date',req:1},{k:'vigenteHasta',label:'Vigente hasta (opcional)',type:'date'}],
         data:{cliente:optsClientes().length===1?optsClientes()[0].id:'',proyecto:'',rutaId:'',capacidad:'',importe:'',qDieselPactado:'',combustiblePct:'',importeOpl:'',dieselPactadoOpl:'',combustiblePctOpl:'',vigenteDesde:todayStr(),vigenteHasta:''},rerender:['cliente','proyecto'],ok:'GUARDAR TARIFA',act:'tarifaSave',id:''});
