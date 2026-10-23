@@ -281,10 +281,15 @@ table.xl tbody tr.dim td{color:var(--mute)}
 .selbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--brand-soft);border:1px solid var(--brand);border-radius:12px;padding:10px 14px;margin-bottom:12px}
 .cyc{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--surface2)}
 .cycb{display:flex;gap:12px;align-items:flex-start;margin-top:8px}
-table.pm{font-size:13px}
-table.pm th{text-align:center;min-width:92px}table.pm th:first-child{text-align:left;min-width:260px}
-table.pm td{text-align:center;border-bottom:1px solid var(--line2)}table.pm td:first-child{text-align:left}
-table.pm tr.grp td{background:var(--brand-soft);font-weight:700;color:var(--brand);text-align:left}
+/* Matriz de permisos: encabezados fijos y columna «Permiso» fija al desplazar. */
+.pmwrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table.pm{font-size:13px;border-collapse:separate;border-spacing:0}
+table.pm th{position:sticky;top:0;z-index:3;background:var(--surface2);text-align:center;min-width:92px;border-bottom:1px solid var(--line);color:var(--ink2)}
+table.pm th:first-child{left:0;z-index:5;text-align:left;min-width:260px;box-shadow:inset -1px 0 var(--line)}
+table.pm td{text-align:center;border-bottom:1px solid var(--line2)}
+table.pm td:first-child{position:sticky;left:0;z-index:2;text-align:left;background:var(--surface);box-shadow:inset -1px 0 var(--line)}
+table.pm tr.grp td{position:static;background:var(--brand-soft);font-weight:700;color:var(--brand);text-align:left}
+table.pm tbody tr:not(.grp):hover td{background:var(--brand-soft)}
 table.pm input[type=checkbox]{width:18px;height:18px}
 .dlg input[type=checkbox],.selbar input[type=checkbox]{width:18px;height:18px;min-height:0}
 
