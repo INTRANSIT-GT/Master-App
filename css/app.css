@@ -99,6 +99,10 @@ button.kpi:hover{border-color:var(--brand)}
 .kpi.ka .n{color:var(--fix);display:flex;align-items:center;gap:8px}
 .kpi.ka .l{color:var(--ink)}
 .kpi.ka:hover{border-color:var(--fix);background:var(--fix-bg)}
+.kpigrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;align-items:stretch}
+.kpi.ka{min-height:96px;height:100%;padding:12px 14px;gap:2px;justify-content:center}
+.kpi.ka .n{font-size:26px}
+.kpi.ka .l,.kpi.ka .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
 .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:6px;border-bottom:1px solid var(--line)}
 .tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px;font-weight:700;color:var(--mute);white-space:nowrap;min-height:44px;display:flex;gap:8px;align-items:center}
@@ -162,10 +166,10 @@ tbody tr[role=button]{cursor:pointer} tbody tr[role=button]:hover{background:var
 /* Inicio encargado */
 .hello{margin-bottom:22px}
 .projline{display:flex;align-items:center;gap:10px;margin-top:10px}
-.bigbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.bigbtn{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;text-align:left;display:flex;flex-direction:column;gap:10px;min-height:132px}
+.bigbtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.bigbtn{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;text-align:left;display:flex;flex-direction:row;align-items:center;gap:14px;min-height:88px}
 .bigbtn:hover{border-color:var(--brand)}
-.bigbtn .ico{width:44px;height:44px;border-radius:12px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center}
+.bigbtn .ico{flex:none;width:40px;height:40px;border-radius:12px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center}
 .bigbtn.main1{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
 .bigbtn.main1 .ico{background:rgba(255,255,255,.18);color:var(--brand-ink)}
 .bigbtn b{font-family:var(--font-display);font-size:19px;letter-spacing:.01em}
