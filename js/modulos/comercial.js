@@ -83,7 +83,9 @@ function agrTable(list,acts){
     if(g.fase==='ENVIADA'&&hp('facturas_emitir'))ac+=B('emitirOpen','Marcar emitida','primary');
     if(g.fase==='EMITIDA'){ac+=B('evidenciaVer','Ver evidencia','');if(fa!=null&&fa-cob>0.004&&hp('cobros_registrar'))ac+=B('cobroOpen','Registrar cobro','ok');}
     if(g.numeroFactura&&g.fase!=='PREPARADA'&&hp('comercial_corregir'))ac+=B('corregirOpen','Corregir nº','');
-    if(hp('comercial_anular'))ac+=B('anularOpen','Anular','fix');
+    /* Descartar una preparada lo puede hacer quien la arma (Facturación/Comercial); anular una ya
+       enviada o emitida exige el permiso restringido de anulación. */
+    if(g.fase==='PREPARADA'?hp('comercial_agrupar'):hp('comercial_anular'))ac+=B('anularOpen',g.fase==='PREPARADA'?'Descartar':'Anular','fix');
   }
   return `<tr class="${okA?'':'dim'}"><td><b>${g.id}</b></td><td>${g.modalidad==='AGRUPADA'?'Agrupada':'Individual'}</td><td>${esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente)}</td><td title="Viajes: ${g.viajeIds.join(', ')}">${g.viajeIds.slice(0,8).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${g.viajeIds.length>8?' <span class="mute">…</span>':''} <b class="mute">[${g.viajeIds.length}]</b>${reas}</td>
   <td>${g.numeroFactura?`<b>${esc(g.numeroFactura)}</b>`:'<span class="warnl">pendiente</span>'}</td><td>${g.fechaFactura?fmtDate(g.fechaFactura):'—'}</td>
@@ -282,7 +284,8 @@ Object.assign(ACT,{
   },
   async corregirOpen(d){formM({title:`Corregir factura · ${d.id}`,text:'La corrección conserva el número anterior y queda auditada.',fields:[{k:'numero',label:'Nuevo número de factura',req:1},{k:'motivo',label:'Motivo de la corrección',type:'textarea',req:1}],ok:'GUARDAR CORRECCIÓN',act:'corregirOk',id:d.id});},
   async corregirOk(d){const r=await run(()=>API.corregirFactura(S.user.id,d.id,S.modal.data.numero,S.modal.data.motivo),`Factura de ${d.id} corregida.`,true);if(r.ok)afterWrite();},
-  async anularOpen(d){formM({title:`Anular factura ${d.id}`,text:'Los viajes quedan libres para facturarse de nuevo. La factura se conserva marcada como anulada.',fields:[{k:'motivo',label:'Motivo de la anulación',type:'textarea',req:1}],ok:'ANULAR FACTURA',okCls:'fix',act:'anularOk',id:d.id});},
+  async anularOpen(d){let g=null;try{g=API.agrupaciones(S.user.id).find(x=>x.id===d.id);}catch(e){}const prep=!!g&&g.fase==='PREPARADA';
+    formM({title:`${prep?'Descartar':'Anular'} factura ${d.id}`,text:prep?'Se descarta la factura preparada y sus viajes quedan libres para agruparlos en otra factura. No llegó a enviarse a facturación.':'Los viajes quedan libres para facturarse de nuevo. La factura se conserva marcada como anulada.',fields:[{k:'motivo',label:prep?'Motivo del descarte':'Motivo de la anulación',type:'textarea',req:1}],ok:prep?'DESCARTAR FACTURA':'ANULAR FACTURA',okCls:'fix',act:'anularOk',id:d.id});},
   async anularOk(d){const r=await run(()=>API.anularAgrupacion(S.user.id,d.id,S.modal.data.motivo),`Factura ${d.id} anulada.`,true);if(r.ok)afterWrite();},
   async agrDetalle(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;

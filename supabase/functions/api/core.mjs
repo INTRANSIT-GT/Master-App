@@ -1199,14 +1199,18 @@ const API={
   });},
 
   anularAgrupacion(uid,agrId,motivo){return exec(uid,'anularAgrupacion','',A=>{
-    need(A,'comercial_anular','anular facturas');
     const g=DB.agrupaciones.find(x=>x.id===agrId);if(!g)deny('La factura no existe.','NO_EXISTE');
+    /* Una factura preparada todavía no es una factura: basta el permiso de armarlas para descartarla y
+       liberar sus viajes. Anular una ya enviada o emitida exige el permiso restringido de anulación. */
+    const prep=g.fase==='PREPARADA';
+    if(prep)need(A,'comercial_agrupar','descartar facturas preparadas');
+    else need(A,'comercial_anular','anular facturas');
     if(g.estado!=='ACTIVA')deny('La factura ya está anulada.','ESTADO_INVALIDO');
     const m=String(motivo||'').trim();if(m.length<5)deny('El motivo de la anulación es obligatorio (mínimo 5 caracteres).','VALIDACION');
     if(cobradoDe(g)>0)deny('La factura ya tiene cobros registrados: no se puede anular sin revertir antes esos cobros.','TIENE_COBROS');
     const fase=g.fase;
     g.estado='ANULADA';g.anulada={porId:A.id,por:A.nombre,en:nowIso(),motivo:m,faseAlAnular:fase};
-    auditAdd({entidad:'AGRUPACION',accion:'Factura anulada',campo:'Estado',anterior:'ACTIVA',nuevo:'ANULADA',por:A,motivo:m,ref:`${g.id}${g.numeroFactura?' · '+g.numeroFactura:''}`});
+    auditAdd({entidad:'AGRUPACION',accion:prep?'Factura preparada descartada':'Factura anulada',campo:'Estado',anterior:'ACTIVA',nuevo:'ANULADA',por:A,motivo:m,ref:`${g.id}${g.numeroFactura?' · '+g.numeroFactura:''}`});
     g.viajeIds.forEach(id=>{
       const t=getT(id);const prev=`${g.id}${t.numeroFactura?' · '+t.numeroFactura:''}`;
       t.agrupacionId='';t.numeroFactura='';
