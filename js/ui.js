@@ -1057,17 +1057,26 @@ app.addEventListener('change',async e=>{
   if(t.dataset.fltchk){S[t.dataset.fltchk]=t.checked;render();return;}
   if(t.dataset.perm){
     const [rol,perm]=t.dataset.perm.split('|');
-    await run(()=>API.setPermiso(S.user.id,rol,perm,t.checked),'Permiso actualizado.');
+    let ok=false,msg='';
+    for(let i=0;i<2&&!ok;i++){
+      try{await API.setPermiso(S.user.id,rol,perm,t.checked);ok=true;}
+      catch(e){msg=e.message;if(i===0)await new Promise(r=>setTimeout(r,400));}
+    }
+    if(ok)toast('Permiso actualizado.');else toast(sinPerfil(msg||'No se pudo guardar el permiso.'),'err');
     render();return;
   }
-  if(t.dataset.secperm){
-    const [rol,sec]=t.dataset.secperm.split('|');
-    await run(()=>API.setAcceso(S.user.id,rol,'SECCION',sec,t.checked),'Acceso de la sección actualizado.');
-    render();return;
-  }
-  if(t.dataset.modperm){
-    const [rol,mod]=t.dataset.modperm.split('|');
-    await run(()=>API.setAcceso(S.user.id,rol,'MODULO',mod,t.checked),'Acceso del módulo actualizado.');
+  if(t.dataset.secperm||t.dataset.modperm){
+    /* Un fallo de guardado es poco frecuente (arranque en frío o corte momentáneo): se reintenta una vez
+       en silencio para no dejar la casilla a medias por un parpadeo de la conexión. */
+    const [rol,clave]=(t.dataset.secperm||t.dataset.modperm).split('|'),tipo=t.dataset.secperm?'SECCION':'MODULO';
+    const enviar=()=>API.setAcceso(S.user.id,rol,tipo,clave,t.checked);
+    let ok=false,msg='';
+    for(let i=0;i<2&&!ok;i++){
+      try{await enviar();ok=true;}
+      catch(e){msg=e.message;if(i===0)await new Promise(r=>setTimeout(r,400));}
+    }
+    if(ok)toast(tipo==='MODULO'?'Acceso del módulo actualizado.':'Acceso de la sección actualizado.');
+    else toast(sinPerfil(msg||'No se pudo guardar el acceso.'),'err');
     render();return;
   }
 });
