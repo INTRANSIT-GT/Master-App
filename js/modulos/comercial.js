@@ -70,6 +70,14 @@ function agrTable(list,acts){
   ${pg.filas.map(g=>{const et=etapaAgr(g),cob=cobradoDe(g),fa=g.fase==='EMITIDA'?nn(g.importeFacturado):null,okA=g.estado==='ACTIVA';
   const B=(a,l,c)=>`<button class="btn sm ${c||''}" data-act="${a}" data-id="${g.id}">${l}</button> `;
   let ac=B('agrDetalle','Ver viajes','ghost');
+  /* En una factura anulada, decir dónde quedó cada viaje: libre para facturar o ya tomado por otra factura. */
+  let reas='';
+  if(g.estado==='ANULADA'){
+    const c={};g.viajeIds.forEach(id=>{const t=DB.trips.find(x=>x.id===id);if(!t)return;
+      const k=t.agrupacionId&&t.agrupacionId!==g.id?t.agrupacionId:'libre';(c[k]=c[k]||[]).push(id);});
+    const partes=Object.keys(c).sort().map(k=>k==='libre'?`${c[k].length} libre${c[k].length===1?'':'s'}`:`${c[k].length} en ${k}`);
+    if(partes.length)reas=`<div class="mute" style="font-size:11px;margin-top:3px">Ahora: ${partes.join(' · ')}</div>`;
+  }
   if(okA){
     if(g.fase==='PREPARADA'&&hp('comercial_agrupar'))ac+=B('facturaEditar','Completar / enviar','primary');
     if(g.fase==='ENVIADA'&&hp('facturas_emitir'))ac+=B('emitirOpen','Marcar emitida','primary');
@@ -77,7 +85,7 @@ function agrTable(list,acts){
     if(g.numeroFactura&&g.fase!=='PREPARADA'&&hp('comercial_corregir'))ac+=B('corregirOpen','Corregir nº','');
     if(hp('comercial_anular'))ac+=B('anularOpen','Anular','fix');
   }
-  return `<tr class="${okA?'':'dim'}"><td><b>${g.id}</b></td><td>${g.modalidad==='AGRUPADA'?'Agrupada':'Individual'}</td><td>${esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente)}</td><td title="Viajes: ${g.viajeIds.join(', ')}">${g.viajeIds.slice(0,8).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${g.viajeIds.length>8?' <span class="mute">…</span>':''} <b class="mute">[${g.viajeIds.length}]</b></td>
+  return `<tr class="${okA?'':'dim'}"><td><b>${g.id}</b></td><td>${g.modalidad==='AGRUPADA'?'Agrupada':'Individual'}</td><td>${esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente)}</td><td title="Viajes: ${g.viajeIds.join(', ')}">${g.viajeIds.slice(0,8).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${g.viajeIds.length>8?' <span class="mute">…</span>':''} <b class="mute">[${g.viajeIds.length}]</b>${reas}</td>
   <td>${g.numeroFactura?`<b>${esc(g.numeroFactura)}</b>`:'<span class="warnl">pendiente</span>'}</td><td>${g.fechaFactura?fmtDate(g.fechaFactura):'—'}</td>
   <td style="text-align:right">${g.fase==='PREPARADA'?'<span class="mute">sin enviar</span>':qfmt(g.importeEnviado)}</td><td>${g.envio?`${esc(g.envio.por)}<br><span class="mute">${fmtDT(g.envio.en)}</span>`:'—'}</td>
   <td style="white-space:normal;min-width:170px">${g.emision?`${fmtDate(g.emision.fecha)}<br><span class="mute">${esc(g.emision.evidencia)}</span>`:'<span class="mute">Sin emitir</span>'}</td>
