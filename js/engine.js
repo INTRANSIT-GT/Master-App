@@ -124,7 +124,7 @@ const ROLES={
   VALIDADOR:{label:'Validador',home:'viajes',nav:['viajes','liquidaciones'],alcance:'Revisar/aprobar liquidaciones de clientes asignados'},
   OPERATIVO:{label:'Operativo',home:'inicio',nav:['inicio','nuevo','viajes','rutas','liquidaciones'],alcance:'Registrar, editar y liquidar viajes de clientes asignados. Ve y solicita rutas de su proyecto.'},
   ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','tarifas','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
-  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'rutas',nav:['proyectos','tarifas','rutas','opl'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
+  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','tarifas','rutas','opl'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
   FACTURACION:{label:'Facturación',home:'comercial',nav:['todos','comercial'],alcance:'Cargar facturas, revisar viajes por facturar'},
   COBROS:{label:'Cobros / Contabilidad',home:'comercial',nav:['comercial'],alcance:'Registrar cobros y pagos'},
   PAGO_OPL:{label:'Pago OPL',home:'opl',nav:['opl'],alcance:'Registrar OPL y tarifas a proveedores (requieren autorización)'},

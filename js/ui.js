@@ -29,6 +29,9 @@ function allowed(v){
   if(!S.user)return false;
   if(v==='detalle')return true;
   if(v==='proyecto')return allowed('proyectos');
+  /* Inicio: también entra quien aprueba rutas, define tarifas o aprueba liquidaciones
+     aunque no tenga «ver viajes» (p. ej. Gerencia Comercial). */
+  if(v==='inicio')return rolDe(S.user.rol).nav.includes(v)&&(hp('viajes_ver')||hp('viajes_ver_todos')||hp('rutas_validar')||hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte')||hp('tarifas_crear')||hp('liq_aprobar'));
   return rolDe(S.user.rol).nav.includes(v)&&(!VIEW_PERM[v]||hp(VIEW_PERM[v]));
 }
 const navItems=()=>rolDe(S.user.rol).nav.filter(v=>allowed(v));
@@ -131,28 +134,79 @@ function loginHTML(){
 }
 
 /* ---- Inicio del encargado ---- */
-VIEWS.inicio=()=>{
+/* ---- Inicio ----
+   Dos bloques según el perfil: la cola de decisiones (rutas, tarifas y liquidaciones)
+   para quienes aprueban, y el bloque operativo (viajes) para quienes los registran. */
+const nombreCli=id=>(DB.clientes.find(c=>c.id===id)||{}).nombre||(PROYECTOS.find(p=>p.id===id)||{}).cliente||id;
+const etqRuta=r=>`${r.codigo||r.nombre} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`;
+function colaRow(titulo,meta,acc){return `<div class="qrow"><div class="qm"><b>${titulo}</b><span class="qs">${meta}</span></div><div class="qa">${acc}</div></div>`;}
+function colaSeccion(titulo,nota,filas){
+  return `<section class="section"><h2>${titulo} <span class="mute" style="font-weight:600">${filas.length}</span></h2>${nota?`<div class="mute" style="font-size:12.5px;margin:-4px 0 8px">${nota}</div>`:''}<div class="qlist">${filas.join('')}</div></section>`;
+}
+function inicioGestion(){
+  const u=S.user;let rs=[];try{rs=API.rutas(u.id);}catch(e){rs=[];}
+  const val=hp('rutas_validar')?rs.filter(r=>r.estado==='PENDIENTE'):[];
+  const tar=hp('tarifas_crear')?rs.filter(r=>r.estado==='EN_TARIFACION'):[];
+  const com=hp('rutas_aprobar_comercial')?rs.filter(r=>r.estado==='PENDIENTE_APROBACION'&&!r.aprobacionComercial):[];
+  const tra=hp('rutas_aprobar_transporte')?rs.filter(r=>r.estado==='PENDIENTE_APROBACION'&&!r.aprobacionTransporte):[];
+  let sin=[];if(hp('comercial_ver')){try{sin=API.viajesSinTarifa(u.id);}catch(e){sin=[];}}
+  const liq=hp('liq_aprobar')?vis().filter(t=>t.estado==='LIQUIDADO'):[];
+  const sec=[];
+  if(val.length)sec.push(colaSeccion('Rutas por validar','Revisa el código, el origen y el destino: al validarlas pasan a tarifación.',val.map(r=>colaRow(esc(etqRuta(r)),`${esc(nombreCli(r.cliente))} · ${esc(r.proyecto)} · solicitada por ${esc(r.solicitadaPor||'—')}`,`<button class="btn sm primary" data-act="rutaValidarOpen" data-id="${r.id}">Validar</button>`))));
+  if(tar.length)sec.push(colaSeccion('Rutas sin tarifa','Ya están validadas: define la tarifa del cliente para enviarlas a aprobación.',tar.map(r=>colaRow(esc(etqRuta(r)),`${esc(nombreCli(r.cliente))} · ${esc(r.proyecto)}`,`<button class="btn sm" data-act="tarifaRutaOpen" data-id="${r.id}">Definir tarifa</button>`))));
+  if(com.length)sec.push(colaSeccion('Aprobación de Gerencia Comercial','La ruta se activa cuando también la apruebe Gerencia de Transporte.',com.map(r=>colaRow(esc(etqRuta(r)),`${esc(nombreCli(r.cliente))} · ${esc(r.proyecto)}`,`<button class="btn sm ok" data-act="rutaAprobarComOpen" data-id="${r.id}">Aprobar</button>`))));
+  if(tra.length)sec.push(colaSeccion('Aprobación de Gerencia de Transporte','La ruta se activa cuando también la apruebe Gerencia Comercial.',tra.map(r=>colaRow(esc(etqRuta(r)),`${esc(nombreCli(r.cliente))} · ${esc(r.proyecto)}`,`<button class="btn sm ok" data-act="rutaAprobarTraOpen" data-id="${r.id}">Aprobar</button>`))));
+  if(hp('comercial_ver')&&sin.length){
+    const acc=x=>x.disponible&&hp('tarifa_registrar')?`<button class="btn sm primary" data-act="aplicarTarifaViaje" data-id="${esc(x.id)}">Aplicar tarifa</button>`:(allowed('tarifas')?'<button class="btn sm" data-act="nav" data-v="tarifas">Revisar en Tarifas</button>':'<span class="mute" style="font-size:12.5px">Comercial debe definir la tarifa</span>');
+    const filas=sin.slice(0,8).map(x=>colaRow(`Viaje #${esc(x.id)}`,`${esc(nombreCli(x.cliente))} · ${esc(x.proyecto)} · ${esc(x.motivo)}`,acc(x)));
+    if(sin.length>8)filas.push(`<div class="mute" style="font-size:12.5px;padding:4px 2px">Se muestran 8 de ${sin.length}. El detalle completo está en Tarifas.</div>`);
+    sec.push(colaSeccion('Viajes sin tarifa','Viajes aceptados a los que les falta la tarifa del cliente o la del proveedor (OPL).',filas));
+  }
+  if(liq.length)sec.push(colaSeccion('Liquidaciones por aprobar','Revisa la evidencia antes de aceptar o devolver con un comentario.',liq.slice(0,8).map(t=>colaRow(`Viaje #${esc(t.id)}`,`${esc(nombreCli(t.proyecto))} · ${esc(t.proyectoCat||'')} · plan ${esc(fmtDate(planD(t)))}`,`<button class="btn sm ok" data-act="aprobarAsk" data-id="${t.id}">Aceptar</button><button class="btn sm fix" data-act="devolverOpen" data-id="${t.id}">Rechazar</button>`))));
+  const n=val.length+tar.length+com.length+tra.length+sin.length+liq.length;
+  const k=[];
+  if(hp('rutas_validar'))k.push(`<button class="kpi fk" data-act="nav" data-v="rutas"><span class="n">${val.length}</span><span class="l">${icon('truck',16)} Rutas por validar</span></button>`);
+  if(hp('tarifas_crear'))k.push(`<button class="kpi fk" data-act="nav" data-v="rutas"><span class="n">${tar.length}</span><span class="l">${icon('dollar',16)} Rutas sin tarifa</span></button>`);
+  if(hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte'))k.push(`<button class="kpi fk" data-act="nav" data-v="rutas"><span class="n">${com.length+tra.length}</span><span class="l">${icon('check',16)} Aprobaciones de rutas</span></button>`);
+  if(hp('comercial_ver'))k.push(allowed('tarifas')?`<button class="kpi fk" data-act="nav" data-v="tarifas"><span class="n">${sin.length}</span><span class="l">${icon('alert',16)} Viajes sin tarifa</span></button>`:`<div class="kpi"><span class="n">${sin.length}</span><span class="l">${icon('alert',16)} Viajes sin tarifa</span></div>`);
+  if(hp('liq_aprobar')&&allowed('liquidaciones'))k.push(`<button class="kpi fk" data-act="nav" data-v="liquidaciones"><span class="n">${liq.length}</span><span class="l">${icon('receipt',16)} Liquidaciones por aprobar</span></button>`);
+  if(!sec.length)return `<section class="section"><h2>Lo que requiere tu decisión</h2><div class="card" style="display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>No tienes aprobaciones pendientes.</b> Todo lo de tu área está al día.</span></div></section>`;
+  return `<section class="section"><h2>Lo que requiere tu decisión${n?` <span class="mute" style="font-weight:600">${n}</span>`:''}</h2>
+    ${n?`<div class="kpigrid" style="margin-bottom:10px">${k.join('')}</div>`:''}
+    ${n?'':`<div class="card" style="display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>No tienes aprobaciones pendientes.</b> Todo lo de tu área está al día.</span></div>`}
+    ${sec.join('')}</section>`;
+}
+function inicioOperativo(){
   const u=S.user;cargaHistorico();
   const cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean),all=vis(),ts=S.inicioProy?all.filter(t=>t.proyecto===S.inicioProy):all;
   const w={RECHAZADO:0,ENTREGADO:1,PLANIFICADO:2};
-  const act=ts.filter(t=>w[t.estado]!==undefined).sort((a,b)=>w[a.estado]-w[b.estado]);
+  const actAll=ts.filter(t=>w[t.estado]!==undefined).sort((a,b)=>w[a.estado]-w[b.estado]);
+  const act=actAll.slice(0,6);
   const fix=cnt(ts,t=>t.estado==='RECHAZADO');
-  return `<div class="inner">
-    <div class="hello"><h1>Bienvenido, ${esc(first(u.nombre))}</h1><div class="projline">${cls.length?comboHTML('inicioProy',S.inicioProy||'',[{id:'',nombre:'Todos mis proyectos'},...cls.map(p=>({id:p.id,nombre:p.nombre+' · '+p.cliente}))],'Buscar proyecto'):'<span class="mute">Sin cliente asignado</span>'}<span class="mute">Solo ves la información de tu proyecto</span></div></div>
-    <div class="bigbtns">
-      <button class="bigbtn main1" data-act="nav" data-v="nuevo"><span class="ico">${icon('plus',24)}</span><span><b>NUEVO VIAJE</b><br><span class="h">Registrar un viaje</span></span></button>
-      <button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta</span></span></button>
-      <button class="bigbtn" data-act="nav" data-v="liquidaciones"><span class="ico">${icon('receipt',24)}</span><span><b>LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>
-    </div>
-    ${fix?`<div class="alertbox" style="margin-top:18px;display:flex;gap:10px;align-items:center">${icon('alert',20)}<span><b>${fix} ${fix===1?'viaje fue rechazado':'viajes fueron rechazados'}</b>. Ábrelos para ver los comentarios y corregirlos.</span></div>`:''}
-    <section class="section"><h2>Viajes por mes · por estado</h2>
+  const filtro=!hp('viajes_ver_todos')&&cls.length?`<div class="projline" style="margin-bottom:10px">${comboHTML('inicioProy',S.inicioProy||'',[{id:'',nombre:'Todos mis proyectos'},...cls.map(p=>({id:p.id,nombre:p.nombre+' · '+p.cliente}))],'Buscar proyecto')}<span class="mute">Solo ves la información de tu proyecto</span></div>`:'';
+  const b=[];
+  if(hp('viajes_crear'))b.push(`<button class="bigbtn main1" data-act="nav" data-v="nuevo"><span class="ico">${icon('plus',24)}</span><span><b>NUEVO VIAJE</b><br><span class="h">Registrar un viaje</span></span></button>`);
+  if(hp('viajes_ver'))b.push(`<button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta</span></span></button>`);
+  if(hp('liq_ver'))b.push(`<button class="bigbtn" data-act="nav" data-v="liquidaciones"><span class="ico">${icon('receipt',24)}</span><span><b>LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>`);
+  return `${filtro}${b.length?`<div class="bigbtns">${b.join('')}</div>`:''}
+    ${fix&&(hp('liq_enviar')||hp('viajes_editar_datos'))?`<div class="alertbox" style="margin-top:18px;display:flex;gap:10px;align-items:center">${icon('alert',20)}<span><b>${fix} ${fix===1?'viaje fue rechazado':'viajes fueron rechazados'}</b>. Ábrelos para ver los comentarios y corregirlos.</span></div>`:''}
+    <section class="section"><h2>Tus viajes por mes · por estado</h2>
       <div class="card"><div id="chartMes">${historicoMeses()||(S.finHistCargando?'<div class="mute">Calculando el resumen de tus viajes…</div>':histVacio())}</div>
       <div class="mute" style="font-size:12.5px;margin-top:8px">Tus viajes por <b>fecha plan</b> (todos, no solo los cargados en pantalla), divididos por estado con el color de cada estado. Pasa el cursor por un tramo para ver el número; un mes «todo verde» ya está liquidado, facturado o cobrado.</div></div>
     </section>
-    <section class="section"><h2>Requiere tu atención</h2>${act.length?`<div class="cards">${act.map(tripCard).join('')}</div>`:empty('Todo al día','No tienes viajes esperando una acción.')}</section>
+    <section class="section"><h2>Requiere tu atención</h2>${act.length?`<div class="cards">${act.map(tripCard).join('')}</div>${actAll.length>act.length?`<div class="mute" style="margin-top:8px">Se muestran ${act.length} de ${actAll.length}. <button class="linkbtn" data-act="nav" data-v="viajes">Ver todos</button></div>`:''}`:empty('Todo al día','No tienes viajes esperando una acción.')}</section>`;
+}
+VIEWS.inicio=()=>{
+  const u=S.user;
+  const gestion=hp('rutas_validar')||hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte')||hp('tarifas_crear')||hp('tarifa_registrar')||hp('liq_aprobar');
+  const oper=hp('viajes_crear')||hp('liq_enviar')||hp('viajes_iniciar')||hp('viajes_finalizar')||hp('viajes_ver');
+  const hoy=new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  return `<div class="inner">
+    <div class="hello"><h1>Hola, ${esc(first(u.nombre))}</h1><div class="projline"><span class="mute">${esc(rolL(u.rol))} · ${esc(hoy)}</span></div></div>
+    ${gestion?inicioGestion():''}
+    ${oper?inicioOperativo():(!gestion?inicioOperativo():'')}
   </div>`;
 };
-
 /* ---- Selector desplegable con búsqueda (listas largas de clientes/proyectos) ---- */
 const CBOPTS={},CBVAL={};
 function cbListHTML(flt){

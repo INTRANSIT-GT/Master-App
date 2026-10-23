@@ -94,6 +94,14 @@ body.phone #shell{width:392px;height:min(850px,100%);border-radius:40px;border:9
 button.kpi:hover{border-color:var(--brand)}
 .kpi .n{font-family:var(--font-display);font-size:32px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
 .kpi .l{color:var(--ink2);font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+.kpigrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.qlist{display:flex;flex-direction:column;gap:8px}
+.qrow{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px}
+.qrow .qm{flex:1;min-width:0}
+.qrow .qm b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qrow .qs{color:var(--mute);font-size:12.5px;display:block;margin-top:2px}
+.qrow .qa{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:700px){.qrow{flex-direction:column;align-items:stretch}.qrow .qa{justify-content:flex-start}}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
 .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:6px;border-bottom:1px solid var(--line)}
 .tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px;font-weight:700;color:var(--mute);white-space:nowrap;min-height:44px;display:flex;gap:8px;align-items:center}
