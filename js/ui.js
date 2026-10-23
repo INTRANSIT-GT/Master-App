@@ -137,58 +137,67 @@ function loginHTML(){
 /* ---- Inicio ----
    Dos bloques según el perfil: la cola de decisiones (rutas, tarifas y liquidaciones)
    para quienes aprueban, y el bloque operativo (viajes) para quienes los registran. */
-function inicioGestion(){
-  const u=S.user;let rs=[];try{rs=API.rutas(u.id);}catch(e){rs=[];}
+/* ---- Inicio ----
+   Arriba los accesos de operación (nuevo viaje, viajes, liquidaciones) y debajo el resumen de
+   pendientes en cuadros: solo informan y llevan a la pantalla donde se corrige. */
+function inicioAvisos(u,ts){
+  let rs=[];try{rs=API.rutas(u.id);}catch(e){rs=[];}
   const val=hp('rutas_validar')?rs.filter(r=>r.estado==='PENDIENTE').length:0;
   const tar=hp('tarifas_crear')?rs.filter(r=>r.estado==='EN_TARIFACION').length:0;
   const com=hp('rutas_aprobar_comercial')?rs.filter(r=>r.estado==='PENDIENTE_APROBACION'&&!r.aprobacionComercial).length:0;
   const tra=hp('rutas_aprobar_transporte')?rs.filter(r=>r.estado==='PENDIENTE_APROBACION'&&!r.aprobacionTransporte).length:0;
   let sin=0;if(hp('comercial_ver')){try{sin=API.viajesSinTarifa(u.id).length;}catch(e){sin=0;}}
-  const liq=hp('liq_aprobar')?vis().filter(t=>t.estado==='LIQUIDADO').length:0;
-  const pl=(n,s,p)=>`${n} ${n===1?s:p}`;
-  const avisos=[];
-  if(val)avisos.push(`<b>${pl(val,'ruta pendiente','rutas pendientes')} de validación.</b> ${val===1?'Revísala':'Revísalas'} en Rutas.`);
-  if(tar)avisos.push(`<b>${pl(tar,'ruta sin tarifa','rutas sin tarifa')}.</b> ${tar===1?'Defínela':'Defínelas'} en Tarifas.`);
-  if(com)avisos.push(`<b>${pl(com,'ruta esperando tu aprobación de Gerencia Comercial','rutas esperando tu aprobación de Gerencia Comercial')}.</b> ${com===1?'Apruébala':'Apruébalas'} en Rutas.`);
-  if(tra)avisos.push(`<b>${pl(tra,'ruta esperando tu aprobación de Gerencia de Transporte','rutas esperando tu aprobación de Gerencia de Transporte')}.</b> ${tra===1?'Apruébala':'Apruébalas'} en Rutas.`);
-  if(sin)avisos.push(`<b>${pl(sin,'viaje sin tarifa','viajes sin tarifa')}</b> (del cliente o del proveedor). ${allowed('tarifas')?(sin===1?'Revísalo en Tarifas.':'Revísalos en Tarifas.'):(sin===1?'Coordínalo con Comercial.':'Coordínalos con Comercial.')}`);
-  if(liq)avisos.push(`<b>${pl(liq,'liquidación por aprobar','liquidaciones por aprobar')}.</b> ${liq===1?'Revísala':'Revísalas'} en Liquidaciones.`);
-  if(!avisos.length)return `<section class="section"><h2>Resumen de pendientes</h2><div class="card" style="display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>No tienes aprobaciones pendientes.</b> Todo lo de tu área está al día.</span></div></section>`;
-  return `<section class="section"><h2>Resumen de pendientes</h2>
-    ${avisos.map(t=>`<div class="alertbox" style="margin-bottom:10px;display:flex;gap:10px;align-items:center">${icon('alert',20)}<span>${t}</span></div>`).join('')}</section>`;
+  const liq=hp('liq_aprobar')?ts.filter(t=>t.estado==='LIQUIDADO').length:0;
+  const fix=(hp('liq_enviar')||hp('viajes_editar_datos'))?cnt(ts,t=>t.estado==='RECHAZADO'):0;
+  const aDestino=allowed('todos')?'todos':'viajes';
+  const a=[];
+  if(fix)a.push({n:fix,t:'Viajes rechazados',d:'Ver comentarios y corregir',v:aDestino,est:'RECHAZADO'});
+  if(val)a.push({n:val,t:'Rutas por validar',d:'Definir código, origen y destino',v:'rutas',est:'PENDIENTE'});
+  if(tar)a.push({n:tar,t:'Rutas sin tarifa',d:'Definir la tarifa del cliente',v:'rutas',est:'EN_TARIFACION'});
+  if(com)a.push({n:com,t:'Aprobación · Comercial',d:'Rutas esperando a Gerencia Comercial',v:'rutas',est:'PENDIENTE_APROBACION'});
+  if(tra)a.push({n:tra,t:'Aprobación · Transporte',d:'Rutas esperando a Gerencia de Transporte',v:'rutas',est:'PENDIENTE_APROBACION'});
+  if(sin&&allowed('tarifas'))a.push({n:sin,t:'Viajes sin tarifa',d:'Del cliente o del proveedor',v:'tarifas'});
+  if(liq)a.push({n:liq,t:'Liquidaciones por aprobar',d:'Revisar la evidencia',v:aDestino,est:'LIQUIDADO'});
+  return a;
 }
-
-function inicioOperativo(){
-  const u=S.user;cargaHistorico();
-  const cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean),all=vis(),ts=S.inicioProy?all.filter(t=>t.proyecto===S.inicioProy):all;
-  const w={RECHAZADO:0,ENTREGADO:1,PLANIFICADO:2};
-  const actAll=ts.filter(t=>w[t.estado]!==undefined).sort((a,b)=>w[a.estado]-w[b.estado]);
-  const act=actAll.slice(0,6);
+function avisosHTML(u,ts){
+  const a=inicioAvisos(u,ts);
+  if(!a.length)return `<section class="section"><h2>Resumen de pendientes</h2><div class="card" style="display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>Todo al día.</b> No tienes pendientes que corregir.</span></div></section>`;
+  return `<section class="section"><h2>Resumen de pendientes</h2><div class="kpigrid" role="list">${a.map(x=>`<button class="kpi fk ka" role="listitem" data-act="irAlerta" data-v="${x.v}" ${x.est?`data-est="${x.est}"`:''} title="${esc(x.t)} · ${esc(x.d)}" aria-label="${esc(x.n+' '+x.t+'. '+x.d)}"><span class="n">${icon('alert',20)}${x.n}</span><span class="l">${esc(x.t)}</span><span class="s">${esc(x.d)}</span></button>`).join('')}</div></section>`;
+}
+function inicioAcciones(u,ts){
+  const cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean);
   const fix=cnt(ts,t=>t.estado==='RECHAZADO');
   const filtro=!hp('viajes_ver_todos')&&cls.length?`<div class="projline" style="margin-bottom:10px">${comboHTML('inicioProy',S.inicioProy||'',[{id:'',nombre:'Todos mis proyectos'},...cls.map(p=>({id:p.id,nombre:p.nombre+' · '+p.cliente}))],'Buscar proyecto')}<span class="mute">Solo ves la información de tu proyecto</span></div>`:'';
   const b=[];
   if(hp('viajes_crear'))b.push(`<button class="bigbtn main1" data-act="nav" data-v="nuevo"><span class="ico">${icon('plus',24)}</span><span><b>NUEVO VIAJE</b><br><span class="h">Registrar un viaje</span></span></button>`);
   if(hp('viajes_ver'))b.push(`<button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta</span></span></button>`);
   if(hp('liq_ver'))b.push(`<button class="bigbtn" data-act="nav" data-v="liquidaciones"><span class="ico">${icon('receipt',24)}</span><span><b>LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>`);
-  return `${filtro}${b.length?`<div class="bigbtns">${b.join('')}</div>`:''}
-    ${fix&&(hp('liq_enviar')||hp('viajes_editar_datos'))?`<div class="alertbox" style="margin-top:18px;display:flex;gap:10px;align-items:center">${icon('alert',20)}<span><b>${fix} ${fix===1?'viaje fue rechazado':'viajes fueron rechazados'}</b>. Ábrelos para ver los comentarios y corregirlos.</span></div>`:''}
-    <section class="section"><h2>Tus viajes por mes · por estado</h2>
+  return `${filtro}${b.length?`<div class="bigbtns">${b.join('')}</div>`:''}`;
+}
+function inicioResto(ts){
+  cargaHistorico();
+  const w={RECHAZADO:0,ENTREGADO:1,PLANIFICADO:2};
+  const actAll=ts.filter(t=>w[t.estado]!==undefined).sort((a,b)=>w[a.estado]-w[b.estado]);
+  const act=actAll.slice(0,6);
+  return `<section class="section"><h2>Tus viajes por mes · por estado</h2>
       <div class="card"><div id="chartMes">${historicoMeses()||(S.finHistCargando?'<div class="mute">Calculando el resumen de tus viajes…</div>':histVacio())}</div>
       <div class="mute" style="font-size:12.5px;margin-top:8px">Tus viajes por <b>fecha plan</b> (todos, no solo los cargados en pantalla), divididos por estado con el color de cada estado. Pasa el cursor por un tramo para ver el número; un mes «todo verde» ya está liquidado, facturado o cobrado.</div></div>
     </section>
     <section class="section"><h2>Requiere tu atención</h2>${act.length?`<div class="cards">${act.map(tripCard).join('')}</div>${actAll.length>act.length?`<div class="mute" style="margin-top:8px">Se muestran ${act.length} de ${actAll.length}. <button class="linkbtn" data-act="nav" data-v="viajes">Ver todos</button></div>`:''}`:empty('Todo al día','No tienes viajes esperando una acción.')}</section>`;
 }
 VIEWS.inicio=()=>{
-  const u=S.user;
-  const gestion=hp('rutas_validar')||hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte')||hp('tarifas_crear')||hp('tarifa_registrar')||hp('liq_aprobar');
+  const u=S.user,all=vis(),ts=S.inicioProy?all.filter(t=>t.proyecto===S.inicioProy):all;
   const oper=hp('viajes_crear')||hp('liq_enviar')||hp('viajes_iniciar')||hp('viajes_finalizar');
   const hoy=new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   return `<div class="inner">
     <div class="hello"><h1>Hola, ${esc(first(u.nombre))}</h1><div class="projline"><span class="mute">${esc(rolL(u.rol))} · ${esc(hoy)}</span></div></div>
-    ${gestion?inicioGestion():''}
-    ${oper?inicioOperativo():(!gestion?inicioOperativo():'')}
+    ${oper?inicioAcciones(u,ts):''}
+    ${avisosHTML(u,ts)}
+    ${oper?inicioResto(ts):''}
   </div>`;
 };
+
 /* ---- Selector desplegable con búsqueda (listas largas de clientes/proyectos) ---- */
 const CBOPTS={},CBVAL={};
 function cbListHTML(flt){
@@ -927,6 +936,14 @@ const ACT={
   async back(){const f=S.from;if(f&&f.view&&allowed(f.view))go(f.view,f.param);else go(homeOf(S.user));},
   async proj(d){S.fEstado='';go('proyecto',d.id);},
   async kpi(d){S.fEstado=d.v;S.fProy='';S.q='';go(allowed('todos')?'todos':homeOf(S.user));},
+  /* Cuadros del Inicio: solo llevan a la pantalla donde se corrige, con el filtro ya puesto. */
+  async irAlerta(d){
+    S.q='';S.fProy='';S.fCli='';S.fPcat='';S.fDesde='';S.fHasta='';S.fProv='';
+    if(d.v==='rutas'){S.rtEst=d.est||'';S.rtCli='';S.rtPcat='';S.rtQ='';S.rtRuta='';S.rtOri='';S.rtDes='';S.rtCat='';S.rtOrig='';S.rtDest='';S.pag.rutas=1;}
+    if(d.v==='tarifas'){S.tfQ='';S.tfCli='';S.tfPcat='';S.tfCap='';S.tfEst='';S.pag.tar=1;}
+    if(d.v==='todos'||d.v==='viajes'){S.fEstado=d.est||'';S.pag.todos=1;S.pag.viajes=1;}
+    go(d.v);
+  },
   async tab(d){S.tab[d.k]=d.v;S.q='';render();if(d.k==='cat'&&d.v==='fle'&&!S.fle)ACT.fleLoad();},
   async tproy(d){S.tProy=d.v;render();},
   async fproy(d){S.fProy=d.v;render();},
