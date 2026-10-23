@@ -290,6 +290,8 @@ table.pm th:first-child{left:0;z-index:5;text-align:left;min-width:260px;box-sha
 table.pm td{text-align:center;border-bottom:1px solid var(--line2)}
 table.pm td:first-child{position:sticky;left:0;z-index:2;text-align:left;background:var(--surface);box-shadow:inset -1px 0 var(--line)}
 table.pm tr.grp td{position:static;background:var(--brand-soft);font-weight:700;color:var(--brand);text-align:left}
+table.pm tr.mgrp td{background:var(--brand-soft);font-weight:700;color:var(--brand);text-align:center}
+table.pm tr.mgrp td:first-child{text-align:left;background:var(--brand-soft)}
 table.pm tbody tr:not(.grp):hover td{background:var(--brand-soft)}
 table.pm input[type=checkbox]{width:18px;height:18px}
 .dlg input[type=checkbox],.selbar input[type=checkbox]{width:18px;height:18px;min-height:0}

@@ -25,16 +25,17 @@ const J=t=>{
 };
 const rolDe=r=>(ROLES[r]||{label:String(r||'Sistema'),home:'inicio',nav:[]});
 const homeOf=u=>rolDe(u&&u.rol).home;
+/* Acceso a cada pantalla: lo manda la matriz (secciones «sec_<pantalla>»).
+   Los permisos de acción siguen siendo los de siempre y el veto de separación de funciones se conserva. */
 function allowed(v){
   if(!S.user)return false;
   if(v==='detalle')return true;
   if(v==='proyecto')return allowed('proyectos');
-  /* Inicio: también entra quien aprueba rutas, define tarifas o aprueba liquidaciones
-     aunque no tenga «ver viajes» (p. ej. Gerencia Comercial). */
-  if(v==='inicio')return rolDe(S.user.rol).nav.includes(v)&&(hp('viajes_ver')||hp('viajes_ver_todos')||hp('rutas_validar')||hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte')||hp('tarifas_crear')||hp('liq_aprobar'));
-  return rolDe(S.user.rol).nav.includes(v)&&(!VIEW_PERM[v]||hp(VIEW_PERM[v]));
+  const sec=SEC_DE[v];if(!sec)return false;
+  if(sec.base&&(PROHIBIDO[S.user.rol]||[]).includes(sec.base))return false;
+  return hp('sec_'+v);
 }
-const navItems=()=>rolDe(S.user.rol).nav.filter(v=>allowed(v));
+const navItems=()=>SECCIONES.map(s=>s[0]).filter(allowed);
 
 /* ---------- Componentes ---------- */
 /* Colores de estado: UNA sola tabla. Cada estado del proceso trae su color en ESTADOS (clase CSS st-<ESTADO>). */
@@ -1057,6 +1058,16 @@ app.addEventListener('change',async e=>{
   if(t.dataset.perm){
     const [rol,perm]=t.dataset.perm.split('|');
     await run(()=>API.setPermiso(S.user.id,rol,perm,t.checked),'Permiso actualizado.');
+    render();return;
+  }
+  if(t.dataset.secperm){
+    const [rol,sec]=t.dataset.secperm.split('|');
+    await run(()=>API.setAcceso(S.user.id,rol,'SECCION',sec,t.checked),'Acceso de la sección actualizado.');
+    render();return;
+  }
+  if(t.dataset.modperm){
+    const [rol,mod]=t.dataset.modperm.split('|');
+    await run(()=>API.setAcceso(S.user.id,rol,'MODULO',mod,t.checked),'Acceso del módulo actualizado.');
     render();return;
   }
 });

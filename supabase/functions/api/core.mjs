@@ -157,7 +157,7 @@ const ROLES={
   VALIDADOR:{label:'Validador',home:'viajes',nav:['viajes','liquidaciones'],alcance:'Revisar/aprobar liquidaciones de clientes asignados'},
   OPERATIVO:{label:'Operativo',home:'inicio',nav:['inicio','nuevo','viajes','rutas','liquidaciones'],alcance:'Registrar, editar y liquidar viajes de clientes asignados. Ve y solicita rutas de su proyecto.'},
   ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','tarifas','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
-  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','tarifas','rutas','opl'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
+  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','tarifas','rutas','opl','finanzas','catalogos'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
   FACTURACION:{label:'Facturación',home:'comercial',nav:['todos','comercial'],alcance:'Cargar facturas, revisar viajes por facturar'},
   COBROS:{label:'Cobros / Contabilidad',home:'comercial',nav:['comercial'],alcance:'Registrar cobros y pagos'},
   PAGO_OPL:{label:'Pago OPL',home:'opl',nav:['opl'],alcance:'Registrar OPL y tarifas a proveedores (requieren autorización)'},
@@ -203,6 +203,30 @@ const PROHIBIDO={
 /* Permisos que no se pueden quitar (evita bloquearse a sí misma) */
 const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']};
 const VIEW_PERM={tarifas:'tarifas_ver',proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
+/* Accesos por módulo y sección. La matriz manda sobre el menú: cada pantalla (sección) tiene su
+   propio permiso «sec_<pantalla>», y el módulo es el grupo del menú que las agrupa.
+   El permiso de acción que ya existía se conserva como regla de separación de funciones. */
+const SECCIONES=[
+  ['inicio','Inicio','viajes_ver','VIAJES'],
+  ['nuevo','Nuevo viaje','viajes_crear','VIAJES'],
+  ['viajes','Viajes por estado','viajes_ver','VIAJES'],
+  ['todos','Todos los viajes','viajes_ver_todos','VIAJES'],
+  ['liquidaciones','Liquidaciones','liq_ver','VIAJES'],
+  ['torre','Torre de control','viajes_ver_todos','TORRE'],
+  ['comercial','Facturación','comercial_ver','COMERCIAL'],
+  ['proyectos','Clientes','clientes_gestionar','COMERCIAL'],
+  ['tarifas','Tarifas','tarifas_ver','COMERCIAL'],
+  ['finanzas','Finanzas','finanzas_ver','COMERCIAL'],
+  ['catalogos','Catálogos','catalogos_ver','COMERCIAL'],
+  ['opl','OPL · Proveedores','tarifas_opl_ver','OPL'],
+  ['rutas','Rutas','rutas_ver','ADMINISTRACIÓN'],
+  ['usuarios','Usuarios y permisos','usuarios_gestionar','ADMINISTRACIÓN'],
+  ['auditoria','Auditoría','auditoria_ver','ADMINISTRACIÓN'],
+  ['modelo','Modelo de datos','catalogos_ver','ADMINISTRACIÓN'],
+  ['ayuda','Ayuda',null,'AYUDA']
+];
+const MODULOS_SEC=[['VIAJES',['inicio','nuevo','viajes','todos','liquidaciones']],['TORRE',['torre']],['COMERCIAL',['comercial','proyectos','tarifas','finanzas','catalogos']],['OPL',['opl']],['FLOTAS',['catalogos']],['ADMINISTRACIÓN',['rutas','usuarios','auditoria','modelo']],['AYUDA',['ayuda']]];
+const SEC_DE={};SECCIONES.forEach(x=>{SEC_DE[x[0]]={l:x[1],base:x[2],mod:x[3],perm:'sec_'+x[0]};});
 const NAVLBL={tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck'],ayuda:['Ayuda','help']};
 /* ---------- Ayuda: reportes de fallas (todos los perfiles pueden reportar; solo el Administrador gestiona) ---------- */
 const AYUDA_TIPOS=['No puedo guardar información','No puedo ingresar a una sección','Error en un formulario','La información no aparece o no se actualiza','Problema con un botón o una función','Otro'];
@@ -1620,6 +1644,25 @@ const API={
   });},
 
   /* ----- administración ----- */
+  /* Accesos de módulo/sección: el módulo activa o desactiva todas sus secciones de una vez. */
+  setAcceso(uid,rol,tipo,clave,hab){return exec(uid,'setAcceso','',A=>{
+    need(A,'permisos_gestionar','cambiar los accesos de módulos y secciones');
+    if(!ROLES[rol])deny('Rol no válido.','VALIDACION');
+    const mod=tipo==='MODULO'?MODULOS_SEC.find(x=>x[0]===String(clave)):null;
+    if(tipo==='MODULO'&&!mod)deny('Módulo no válido.','VALIDACION');
+    if(tipo!=='MODULO'&&!SEC_DE[clave])deny('Sección no válida.','VALIDACION');
+    const lista=tipo==='MODULO'?mod[1]:[clave],hab2=!!hab,cambios=[];
+    lista.forEach(v=>{
+      const base=SEC_DE[v]&&SEC_DE[v].base;
+      if(hab2&&base&&(PROHIBIDO[rol]||[]).includes(base))return;   /* sección vetada por separación de funciones */
+      const p='sec_'+v;
+      let r=DB.permisos.find(x=>x.rol===rol&&x.permiso===p);
+      if(!r){r={rol,permiso:p,habilitado:false};DB.permisos.push(r);}
+      if(!!r.habilitado!==hab2){r.habilitado=hab2;cambios.push(v);}
+    });
+    cambios.forEach(v=>auditAdd({entidad:'PERMISO',accion:'Acceso de sección modificado',campo:`${ROLES[rol].label} · ${SEC_DE[v].l}`,anterior:hab2?'No':'Sí',nuevo:hab2?'Sí':'No',por:A,ref:(tipo==='MODULO'?'Módulo '+clave:'sec_'+v)}));
+    return {cambios};
+  });},
   setPermiso(uid,rol,perm,hab){return exec(uid,'setPermiso','',A=>{
     need(A,'permisos_gestionar','administrar permisos');
     if(!ROLES[rol])deny('Rol no válido.','VALIDACION');

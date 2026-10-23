@@ -7,7 +7,7 @@ import { guiasDeRol, guiaPermitida, fichaGuia, rutaImagen, TTL_ENLACE_SEG } from
 
 export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
-  'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'activarUsuario', 'cambiarClave', 'guardarCatalogo', 'guardarPiloto', 'cambiarEstadoPiloto', 'crearReporteAyuda', 'cambiarEstadoReporteAyuda'];
+  'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'setAcceso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'activarUsuario', 'cambiarClave', 'guardarCatalogo', 'guardarPiloto', 'cambiarEstadoPiloto', 'crearReporteAyuda', 'cambiarEstadoReporteAyuda'];
 export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores', 'buscarViajes', 'guiasUso', 'abrirGuia'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
