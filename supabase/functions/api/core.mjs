@@ -540,7 +540,10 @@ function activarRutaSiLista(r,A){
   if(!r.aprobacionComercial||!r.aprobacionTransporte)return false;
   if(!DB.tarifas.some(t=>t.rutaId===r.id))return false;
   r.estado='ACTIVA';
-  DB.tarifas.filter(t=>t.rutaId===r.id).forEach(t=>{t.activa=true;t.modificadoPor=A.nombre;t.modificadoEn=nowIso();});
+  /* Una sola tarifa activa por ruta+capacidad+fecha (uq_tarifa_activa): si hay duplicados
+     heredados, se activa la primera y las demás quedan inactivas. */
+  const vistos=new Set();
+  DB.tarifas.filter(t=>t.rutaId===r.id).forEach(t=>{const k=t.capacidad+'|'+t.vigenteDesde;if(vistos.has(k))return;vistos.add(k);t.activa=true;t.modificadoPor=A.nombre;t.modificadoEn=nowIso();});
   auditAdd({entidad:'RUTA',accion:'Ruta activada',campo:'Estado',anterior:'Pendiente de aprobaciones',nuevo:'ACTIVA',por:A,ref:r.id});
   notificar(A,{tipo:'RUTA_ACTIVA',destinatarios:[],usuarios:[r.solicitadaPorId],asunto:`Ruta activa: ${r.codigo}`,detalle:{ruta:r.nombre,codigo:r.codigo,proyecto:r.proyecto,cliente:r.cliente}});
   return true;
@@ -1362,6 +1365,10 @@ const API={
   crearTarifa(uid,d){return exec(uid,'crearTarifa','',A=>{
     need(A,'tarifas_crear','crear tarifas');
     const v=validarTarifa(d,null);
+    /* Misma ruta + capacidad + fecha de vigencia: el índice uq_tarifa_activa lo rechazaría
+       al activar la ruta (y dejaba la aprobación de Transporte en error). Se bloquea al crear. */
+    const dup=DB.tarifas.find(x=>x.cliente===v.cliente&&x.proyecto===v.proyecto&&x.rutaId===v.rutaId&&x.capacidad===v.capacidad&&x.vigenteDesde===v.vigenteDesde);
+    if(dup)deny(`Ya existe una tarifa con esa ruta, capacidad y fecha de vigencia (${dup.id}). Edítala en vez de crear otra.`,'TARIFA_DUPLICADA');
     const r=DB.rutas.find(x=>x.id===v.rutaId);
     const t=Object.assign({id:'TAR-'+pad4(DB.seq.tar++),activa:r&&r.estado==='ACTIVA',creadoPorId:A.id,creadoPor:A.nombre,creadoEn:nowIso(),modificadoPor:'',modificadoEn:''},v);
     DB.tarifas.push(t);
@@ -1476,12 +1483,14 @@ const API={
   });},
   aprobarRutaComercial(uid,id){return exec(uid,'aprobarRutaComercial',id,A=>{
     need(A,'rutas_aprobar_comercial','aprobar rutas por Comercial');const r=DB.rutas.find(x=>x.id===id);if(!r)deny('La ruta no existe.','NO_EXISTE');
+    if(r.estado==='ACTIVA')deny('La ruta ya está activa: no requiere más aprobaciones.','ESTADO_INVALIDO');
     if(r.estado!=='PENDIENTE_APROBACION')deny('La ruta requiere una tarifa definida antes de aprobarla.','ESTADO_INVALIDO');
     if(r.aprobacionComercial)deny('Gerencia Comercial ya aprobó esta ruta.','ESTADO_INVALIDO');
     r.aprobacionComercial={porId:A.id,por:A.nombre,en:nowIso()};auditAdd({entidad:'RUTA',accion:'Ruta aprobada por Gerencia Comercial',campo:'Aprobación',nuevo:A.nombre,por:A,ref:r.id});activarRutaSiLista(r,A);return r;
   });},
   aprobarRutaTransporte(uid,id){return exec(uid,'aprobarRutaTransporte',id,A=>{
     need(A,'rutas_aprobar_transporte','aprobar rutas por Transporte');const r=DB.rutas.find(x=>x.id===id);if(!r)deny('La ruta no existe.','NO_EXISTE');
+    if(r.estado==='ACTIVA')deny('La ruta ya está activa: no requiere más aprobaciones.','ESTADO_INVALIDO');
     if(r.estado!=='PENDIENTE_APROBACION')deny('La ruta requiere una tarifa definida antes de aprobarla.','ESTADO_INVALIDO');
     if(r.aprobacionTransporte)deny('Gerencia de Transporte ya aprobó esta ruta.','ESTADO_INVALIDO');
     r.aprobacionTransporte={porId:A.id,por:A.nombre,en:nowIso()};auditAdd({entidad:'RUTA',accion:'Ruta aprobada por Gerencia de Transporte',campo:'Aprobación',nuevo:A.nombre,por:A,ref:r.id});activarRutaSiLista(r,A);return r;
