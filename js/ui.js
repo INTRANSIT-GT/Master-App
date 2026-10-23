@@ -137,45 +137,27 @@ function loginHTML(){
 /* ---- Inicio ----
    Dos bloques según el perfil: la cola de decisiones (rutas, tarifas y liquidaciones)
    para quienes aprueban, y el bloque operativo (viajes) para quienes los registran. */
-const nombreCli=id=>(DB.clientes.find(c=>c.id===id)||{}).nombre||(PROYECTOS.find(p=>p.id===id)||{}).cliente||id;
-const etqRuta=r=>`${r.codigo||r.nombre} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`;
-function colaRow(titulo,meta,acc){return `<div class="qrow"><div class="qm"><b>${titulo}</b><span class="qs">${meta}</span></div><div class="qa">${acc}</div></div>`;}
-function colaSeccion(titulo,nota,filas){
-  return `<section class="section"><h2>${titulo} <span class="mute" style="font-weight:600">${filas.length}</span></h2>${nota?`<div class="mute" style="font-size:12.5px;margin:-4px 0 8px">${nota}</div>`:''}<div class="qlist">${filas.join('')}</div></section>`;
-}
 function inicioGestion(){
   const u=S.user;let rs=[];try{rs=API.rutas(u.id);}catch(e){rs=[];}
-  const val=hp('rutas_validar')?rs.filter(r=>r.estado==='PENDIENTE'):[];
-  const tar=hp('tarifas_crear')?rs.filter(r=>r.estado==='EN_TARIFACION'):[];
-  const com=hp('rutas_aprobar_comercial')?rs.filter(r=>r.estado==='PENDIENTE_APROBACION'&&!r.aprobacionComercial):[];
-  const tra=hp('rutas_aprobar_transporte')?rs.filter(r=>r.estado==='PENDIENTE_APROBACION'&&!r.aprobacionTransporte):[];
-  let sin=[];if(hp('comercial_ver')){try{sin=API.viajesSinTarifa(u.id);}catch(e){sin=[];}}
-  const liq=hp('liq_aprobar')?vis().filter(t=>t.estado==='LIQUIDADO'):[];
-  const sec=[];
-  if(val.length)sec.push(colaSeccion('Rutas por validar','Revisa el código, el origen y el destino: al validarlas pasan a tarifación.',val.map(r=>colaRow(esc(etqRuta(r)),`${esc(nombreCli(r.cliente))} · ${esc(r.proyecto)} · solicitada por ${esc(r.solicitadaPor||'—')}`,`<button class="btn sm primary" data-act="rutaValidarOpen" data-id="${r.id}">Validar</button>`))));
-  if(tar.length)sec.push(colaSeccion('Rutas sin tarifa','Ya están validadas: define la tarifa del cliente para enviarlas a aprobación.',tar.map(r=>colaRow(esc(etqRuta(r)),`${esc(nombreCli(r.cliente))} · ${esc(r.proyecto)}`,`<button class="btn sm" data-act="tarifaRutaOpen" data-id="${r.id}">Definir tarifa</button>`))));
-  if(com.length)sec.push(colaSeccion('Aprobación de Gerencia Comercial','La ruta se activa cuando también la apruebe Gerencia de Transporte.',com.map(r=>colaRow(esc(etqRuta(r)),`${esc(nombreCli(r.cliente))} · ${esc(r.proyecto)}`,`<button class="btn sm ok" data-act="rutaAprobarComOpen" data-id="${r.id}">Aprobar</button>`))));
-  if(tra.length)sec.push(colaSeccion('Aprobación de Gerencia de Transporte','La ruta se activa cuando también la apruebe Gerencia Comercial.',tra.map(r=>colaRow(esc(etqRuta(r)),`${esc(nombreCli(r.cliente))} · ${esc(r.proyecto)}`,`<button class="btn sm ok" data-act="rutaAprobarTraOpen" data-id="${r.id}">Aprobar</button>`))));
-  if(hp('comercial_ver')&&sin.length){
-    const acc=x=>x.disponible&&hp('tarifa_registrar')?`<button class="btn sm primary" data-act="aplicarTarifaViaje" data-id="${esc(x.id)}">Aplicar tarifa</button>`:(allowed('tarifas')?'<button class="btn sm" data-act="nav" data-v="tarifas">Revisar en Tarifas</button>':'<span class="mute" style="font-size:12.5px">Comercial debe definir la tarifa</span>');
-    const filas=sin.slice(0,8).map(x=>colaRow(`Viaje #${esc(x.id)}`,`${esc(nombreCli(x.cliente))} · ${esc(x.proyecto)} · ${esc(x.motivo)}`,acc(x)));
-    if(sin.length>8)filas.push(`<div class="mute" style="font-size:12.5px;padding:4px 2px">Se muestran 8 de ${sin.length}. El detalle completo está en Tarifas.</div>`);
-    sec.push(colaSeccion('Viajes sin tarifa','Viajes aceptados a los que les falta la tarifa del cliente o la del proveedor (OPL).',filas));
-  }
-  if(liq.length)sec.push(colaSeccion('Liquidaciones por aprobar','Revisa la evidencia antes de aceptar o devolver con un comentario.',liq.slice(0,8).map(t=>colaRow(`Viaje #${esc(t.id)}`,`${esc(nombreCli(t.proyecto))} · ${esc(t.proyectoCat||'')} · plan ${esc(fmtDate(planD(t)))}`,`<button class="btn sm ok" data-act="aprobarAsk" data-id="${t.id}">Aceptar</button><button class="btn sm fix" data-act="devolverOpen" data-id="${t.id}">Rechazar</button>`))));
-  const n=val.length+tar.length+com.length+tra.length+sin.length+liq.length;
-  const k=[];
-  if(hp('rutas_validar'))k.push(`<button class="kpi fk" data-act="nav" data-v="rutas"><span class="n">${val.length}</span><span class="l">${icon('truck',16)} Rutas por validar</span></button>`);
-  if(hp('tarifas_crear'))k.push(`<button class="kpi fk" data-act="nav" data-v="rutas"><span class="n">${tar.length}</span><span class="l">${icon('dollar',16)} Rutas sin tarifa</span></button>`);
-  if(hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte'))k.push(`<button class="kpi fk" data-act="nav" data-v="rutas"><span class="n">${com.length+tra.length}</span><span class="l">${icon('check',16)} Aprobaciones de rutas</span></button>`);
-  if(hp('comercial_ver'))k.push(allowed('tarifas')?`<button class="kpi fk" data-act="nav" data-v="tarifas"><span class="n">${sin.length}</span><span class="l">${icon('alert',16)} Viajes sin tarifa</span></button>`:`<div class="kpi"><span class="n">${sin.length}</span><span class="l">${icon('alert',16)} Viajes sin tarifa</span></div>`);
-  if(hp('liq_aprobar')&&allowed('liquidaciones'))k.push(`<button class="kpi fk" data-act="nav" data-v="liquidaciones"><span class="n">${liq.length}</span><span class="l">${icon('receipt',16)} Liquidaciones por aprobar</span></button>`);
-  if(!sec.length)return `<section class="section"><h2>Lo que requiere tu decisión</h2><div class="card" style="display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>No tienes aprobaciones pendientes.</b> Todo lo de tu área está al día.</span></div></section>`;
-  return `<section class="section"><h2>Lo que requiere tu decisión${n?` <span class="mute" style="font-weight:600">${n}</span>`:''}</h2>
-    ${n?`<div class="kpigrid" style="margin-bottom:10px">${k.join('')}</div>`:''}
-    ${n?'':`<div class="card" style="display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>No tienes aprobaciones pendientes.</b> Todo lo de tu área está al día.</span></div>`}
-    ${sec.join('')}</section>`;
+  const val=hp('rutas_validar')?rs.filter(r=>r.estado==='PENDIENTE').length:0;
+  const tar=hp('tarifas_crear')?rs.filter(r=>r.estado==='EN_TARIFACION').length:0;
+  const com=hp('rutas_aprobar_comercial')?rs.filter(r=>r.estado==='PENDIENTE_APROBACION'&&!r.aprobacionComercial).length:0;
+  const tra=hp('rutas_aprobar_transporte')?rs.filter(r=>r.estado==='PENDIENTE_APROBACION'&&!r.aprobacionTransporte).length:0;
+  let sin=0;if(hp('comercial_ver')){try{sin=API.viajesSinTarifa(u.id).length;}catch(e){sin=0;}}
+  const liq=hp('liq_aprobar')?vis().filter(t=>t.estado==='LIQUIDADO').length:0;
+  const pl=(n,s,p)=>`${n} ${n===1?s:p}`;
+  const avisos=[];
+  if(val)avisos.push(`<b>${pl(val,'ruta pendiente','rutas pendientes')} de validación.</b> ${val===1?'Revísala':'Revísalas'} en Rutas.`);
+  if(tar)avisos.push(`<b>${pl(tar,'ruta sin tarifa','rutas sin tarifa')}.</b> ${tar===1?'Defínela':'Defínelas'} en Tarifas.`);
+  if(com)avisos.push(`<b>${pl(com,'ruta esperando tu aprobación de Gerencia Comercial','rutas esperando tu aprobación de Gerencia Comercial')}.</b> ${com===1?'Apruébala':'Apruébalas'} en Rutas.`);
+  if(tra)avisos.push(`<b>${pl(tra,'ruta esperando tu aprobación de Gerencia de Transporte','rutas esperando tu aprobación de Gerencia de Transporte')}.</b> ${tra===1?'Apruébala':'Apruébalas'} en Rutas.`);
+  if(sin)avisos.push(`<b>${pl(sin,'viaje sin tarifa','viajes sin tarifa')}</b> (del cliente o del proveedor). ${allowed('tarifas')?(sin===1?'Revísalo en Tarifas.':'Revísalos en Tarifas.'):(sin===1?'Coordínalo con Comercial.':'Coordínalos con Comercial.')}`);
+  if(liq)avisos.push(`<b>${pl(liq,'liquidación por aprobar','liquidaciones por aprobar')}.</b> ${liq===1?'Revísala':'Revísalas'} en Liquidaciones.`);
+  if(!avisos.length)return `<section class="section"><h2>Resumen de pendientes</h2><div class="card" style="display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>No tienes aprobaciones pendientes.</b> Todo lo de tu área está al día.</span></div></section>`;
+  return `<section class="section"><h2>Resumen de pendientes</h2>
+    ${avisos.map(t=>`<div class="alertbox" style="margin-bottom:10px;display:flex;gap:10px;align-items:center">${icon('alert',20)}<span>${t}</span></div>`).join('')}</section>`;
 }
+
 function inicioOperativo(){
   const u=S.user;cargaHistorico();
   const cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean),all=vis(),ts=S.inicioProy?all.filter(t=>t.proyecto===S.inicioProy):all;
@@ -199,7 +181,7 @@ function inicioOperativo(){
 VIEWS.inicio=()=>{
   const u=S.user;
   const gestion=hp('rutas_validar')||hp('rutas_aprobar_comercial')||hp('rutas_aprobar_transporte')||hp('tarifas_crear')||hp('tarifa_registrar')||hp('liq_aprobar');
-  const oper=hp('viajes_crear')||hp('liq_enviar')||hp('viajes_iniciar')||hp('viajes_finalizar')||hp('viajes_ver');
+  const oper=hp('viajes_crear')||hp('liq_enviar')||hp('viajes_iniciar')||hp('viajes_finalizar');
   const hoy=new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   return `<div class="inner">
     <div class="hello"><h1>Hola, ${esc(first(u.nombre))}</h1><div class="projline"><span class="mute">${esc(rolL(u.rol))} · ${esc(hoy)}</span></div></div>
