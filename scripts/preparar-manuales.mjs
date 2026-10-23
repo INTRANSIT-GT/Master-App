@@ -1,6 +1,6 @@
 /* preparar-manuales.mjs · Arma, FUERA del repositorio, la carpeta que se sube al bucket PRIVADO «manuales» de Supabase.
    Uso:  node scripts/preparar-manuales.mjs --fuentes <carpeta Manuales_actualizados_v2.0> --salida <carpeta de salida>
-   - NO regenera ni modifica los PDF: los copia tal cual.
+   - Las guías se leen dentro de la aplicación: NO se sube ningún PDF. Los PDF originales no se tocan ni se copian.
    - Convierte el texto de las fuentes HTML aprobadas en páginas de consulta (JSON) SIN reescribir el contenido, y deja un
      índice de texto plano para el buscador. El HTML se limpia con una lista blanca de etiquetas y clases.
    - Requiere jsdom (devDependency del proyecto: npm install).
@@ -44,16 +44,12 @@ export function limpiar(nodo, imagenes) {      /* devuelve HTML limpio del nodo 
   return copia.innerHTML.replace(/\s{2,}/g, ' ').trim();
 }
 
-fs.mkdirSync(path.join(salida, 'pdf'), { recursive: true });
 fs.mkdirSync(path.join(salida, 'json'), { recursive: true });
 fs.mkdirSync(path.join(salida, 'img'), { recursive: true });
 const resumen = [];
 for (const g of CATALOGO) {
-  const base = path.basename(g.pdf, '.pdf');
-  const pdfOrigen = path.join(fuentes, base + '.pdf'), htmlOrigen = path.join(fuentes, 'fuentes_editables', base + '.html');
-  if (!fs.existsSync(pdfOrigen)) throw new Error('Falta el PDF: ' + pdfOrigen);
+  const htmlOrigen = path.join(fuentes, 'fuentes_editables', g.fuente + '.html');
   if (!fs.existsSync(htmlOrigen)) throw new Error('Falta la fuente: ' + htmlOrigen);
-  fs.copyFileSync(pdfOrigen, path.join(salida, g.pdf));                      /* el PDF se copia byte a byte */
   const doc = new JSDOM(fs.readFileSync(htmlOrigen, 'utf8')).window.document;
   const portada = doc.querySelector('.cover');
   const m = portada ? texto(portada).match(/Versi[oó]n\s*(\d+(?:\.\d+)*)\s*·\s*([^|]*?)(?:$|\s{2,})/i) : null;
@@ -90,7 +86,7 @@ for (const g of CATALOGO) {
     if (!fs.existsSync(o)) throw new Error('Falta la captura ' + n + ' (' + g.id + ')');
     fs.copyFileSync(o, path.join(salida, 'img', n));
   }
-  resumen.push(`${g.id}\t${g.pdf}\t${out.length} secciones\t${imagenes.size} capturas`);
+  resumen.push(`${g.id}\t${g.contenido}\t${out.length} secciones\t${imagenes.size} capturas`);
 }
-fs.writeFileSync(path.join(salida, 'LEEME.txt'), 'Carpeta para el bucket PRIVADO «manuales» de Supabase Storage. Sube las carpetas pdf/, json/ e img/ tal cual (respeta los nombres). NO la pongas en el repositorio ni en GitHub Pages.\n\n' + resumen.join('\n') + '\n');
+fs.writeFileSync(path.join(salida, 'LEEME.txt'), 'Carpeta para el bucket PRIVADO «manuales» de Supabase Storage. Sube las carpetas json/ e img/ tal cual (respeta los nombres). NO la pongas en el repositorio ni en GitHub Pages.\n\n' + resumen.join('\n') + '\n');
 console.log(resumen.join('\n'));

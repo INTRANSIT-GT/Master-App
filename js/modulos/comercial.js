@@ -302,6 +302,15 @@ Object.assign(ACT,{
         data:{cliente:optsClientes().length===1?optsClientes()[0].id:'',proyecto:'',rutaId:'',capacidad:'',importe:'',qDieselPactado:'',combustiblePct:'',importeOpl:'',dieselPactadoOpl:'',combustiblePctOpl:'',vigenteDesde:todayStr(),vigenteHasta:''},rerender:['cliente','proyecto'],ok:'GUARDAR TARIFA',act:'tarifaSave',id:''});
     }
   },
+  /* Desde Rutas: abre la tarifa ya apuntando a la ruta que espera tarifación. */
+  async tarifaRutaOpen(d){
+    const r=DB.rutas.find(x=>x.id===d.id);if(!r){toast('Ruta no encontrada.','err');return;}
+    await ACT.tarifaOpen({});
+    if(!S.modal)return;
+    S.modal.data.cliente=r.cliente;S.modal.data.proyecto=r.proyecto;S.modal.data.rutaId=r.id;
+    if(!S.modal.data.capacidad)S.modal.data.capacidad=capsCat()[0]||'';
+    render();
+  },
   async tarifaSave(d){const m=S.modal.data;const r=await run(()=>d.id?API.editarTarifa(S.user.id,d.id,m):API.crearTarifa(S.user.id,m),t=>d.id?`Tarifa ${t.id} actualizada.`:`Tarifa ${t.id} creada.`,true);if(r.ok)afterWrite();},
   async tarifaEstado(d){const t=DB.tarifas.find(x=>x.id===d.id);if(!t)return;await run(()=>API.cambiarEstadoTarifa(S.user.id,d.id,!t.activa,''),x=>`Tarifa ${x.id} ${x.activa?'activada':'desactivada'}. El historial se conserva.`);render();},
   async cliLimpiar(){S.cliFiltro='';render();},

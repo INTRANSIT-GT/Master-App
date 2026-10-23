@@ -1384,7 +1384,11 @@ const API={
     const r=DB.rutas.find(x=>x.id===v.rutaId);
     const t=Object.assign({id:'TAR-'+pad4(DB.seq.tar++),activa:r&&r.estado==='ACTIVA',creadoPorId:A.id,creadoPor:A.nombre,creadoEn:nowIso(),modificadoPor:'',modificadoEn:''},v);
     DB.tarifas.push(t);
-    if(r&&r.estado==='EN_TARIFACION'){r.estado='PENDIENTE_APROBACION';auditAdd({entidad:'RUTA',accion:'Tarifa definida para ruta',campo:'Estado',anterior:'En tarifación',nuevo:'Pendiente de aprobaciones',por:A,ref:r.id});}
+    if(r&&r.estado==='EN_TARIFACION'){
+      r.estado='PENDIENTE_APROBACION';
+      auditAdd({entidad:'RUTA',accion:'Tarifa definida para ruta',campo:'Estado',anterior:'En tarifación',nuevo:'Pendiente de aprobaciones',por:A,ref:r.id});
+      notificar(A,{tipo:'RUTA_APROBACION',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Ruta pendiente de aprobación: ${r.codigo||r.nombre}`,detalle:{ruta:r.nombre,codigo:r.codigo||'',proyecto:r.proyecto,cliente:r.cliente,tarifa:t.id,importe:t.importe,fecha:nowIso()}});
+    }
     auditAdd({entidad:'TARIFA',accion:'Tarifa creada',campo:'Importe',nuevo:'Q '+t.importe,por:A,ref:`${t.id} · ${t.cliente} · ${t.proyecto} · ${rutaNombre(t.rutaId)} · ${t.capacidad} · desde ${t.vigenteDesde}`});
     return t;
   });},

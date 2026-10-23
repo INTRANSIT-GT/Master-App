@@ -2,16 +2,17 @@
    Es la única fuente de verdad del acceso: el navegador nunca decide qué guía puede ver un perfil.
    - Los roles son los identificadores internos de master.perfiles.rol (no hay equivalencias inventadas).
    - Los archivos se localizan SOLO desde este catálogo (rutas fijas); nunca se acepta una ruta que venga del navegador.
+   - La guía se lee DENTRO de la aplicación (páginas con texto, pasos e imágenes). No se ofrece ni se sube ningún PDF.
    - Los roles sin guía (ANALISTA_COMERCIAL, COBROS, PAGO_OPL) no aparecen en ninguna fila: no ven ninguna.
    - ADMIN consulta las ocho guías. Eso NO le da ni quita permisos funcionales: es solo lectura de documentos.
-   - Los PDF e índices viven en el bucket PRIVADO «manuales» de Supabase Storage (nunca en el repositorio ni en GitHub Pages). */
+   - El contenido (json/) y las capturas (img/) viven en el bucket PRIVADO «manuales» de Supabase Storage (nunca en el repositorio ni en GitHub Pages). */
 export const BUCKET_MANUALES = 'manuales';
-export const TTL_ENLACE_SEG = 300;            /* los enlaces a los PDF y a las capturas caducan a los 5 minutos */
+export const TTL_ENLACE_SEG = 300;            /* los enlaces a las capturas caducan a los 5 minutos */
 
 const TODAS = ['ADMIN'];
 const g = (id, numero, titulo, perfil, rol, base) => ({
   id, numero, titulo, perfil, roles: [...new Set([rol, ...TODAS])],
-  pdf: `pdf/${base}.pdf`, contenido: `json/${id}.json`,
+  fuente: base, contenido: `json/${id}.json`,      /* «fuente»: nombre del manual original (solo lo usa scripts/preparar-manuales.mjs) */
 });
 export const CATALOGO = Object.freeze([
   g('g01', '01', 'Administradora', 'Administradora', 'ADMIN', 'MasterApp-01-Administradora_v2.0'),

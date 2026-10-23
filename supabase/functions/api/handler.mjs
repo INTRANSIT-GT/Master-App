@@ -143,16 +143,10 @@ async function ejecutarGuia(deps, actorId, op, args) {
       }));
       return { ok: true, result: { guias } };
     }
-    /* abrirGuia(id, modo) · modo = 'pdf' (enlace de 5 minutos) | 'contenido' (páginas de consulta + capturas firmadas) */
+    /* abrirGuia(id, 'contenido') · páginas de consulta de UNA guía + enlaces firmados (5 min) de sus capturas. No hay PDF. */
     const [id, modo] = Array.isArray(args) ? args : [];
     const guia = guiaPermitida(rol, id);
     if (!guia) return NO_DISPONIBLE();
-    if (modo === 'pdf') {
-      const urls = await deps.firmarManual([guia.pdf], TTL_ENLACE_SEG);
-      const url = urls.get(guia.pdf);
-      if (!url) return falla('GUIA_NO_CARGADA', 'El documento todavía no está cargado. Avisa a la Administradora.');
-      return { ok: true, result: { url, expiraEnSeg: TTL_ENLACE_SEG } };
-    }
     if (modo === 'contenido') {
       const j = parseJson(await deps.leerManual(guia.contenido));
       if (!j || !Array.isArray(j.secciones)) return falla('GUIA_NO_CARGADA', 'La guía todavía no está cargada. Avisa a la Administradora.');

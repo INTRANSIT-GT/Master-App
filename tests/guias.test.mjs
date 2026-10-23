@@ -21,7 +21,6 @@ const ID = r => [...PERFILES].find(([, v]) => v.rol === r)[0];
 PERFILES.set(U(90), { rol: 'ADMIN', activo: false });                      /* administradora inactiva */
 const bucket = new Map();
 for (const g of CATALOGO) {
-  bucket.set(g.pdf, '%PDF-fake ' + g.id);
   bucket.set(g.contenido, JSON.stringify({ id: g.id, version: '2.0', fecha: '22 de octubre de 2026', imagenes: ['cap_' + g.id + '.png', '../secreto.png', 'a/b.png'],
     secciones: [{ id: 's1', titulo: 'Crear un viaje ' + g.id, html: '<p>Contenido ' + g.id + '</p>', busqueda: 'crear un viaje desvío ' + g.id }] }));
   bucket.set('img/cap_' + g.id + '.png', 'png');
@@ -37,7 +36,7 @@ const op = (uid, o, ...a) => ejecutar(deps, uid, { op: o, args: a });
 
 /* ---------- 1. Catálogo y regla de acceso ---------- */
 T('S1 Las operaciones son de LECTURA y no de escritura', OPS_LECTURA.includes('guiasUso') && OPS_LECTURA.includes('abrirGuia') && !OPS_ESCRITURA.includes('guiasUso') && !OPS_ESCRITURA.includes('abrirGuia'));
-T('S2 El catálogo tiene las ocho guías, sin duplicados', CATALOGO.length === 8 && new Set(CATALOGO.map(g => g.id)).size === 8 && new Set(CATALOGO.map(g => g.pdf)).size === 8);
+T('S2 El catálogo tiene las ocho guías, sin duplicados', CATALOGO.length === 8 && new Set(CATALOGO.map(g => g.id)).size === 8 && new Set(CATALOGO.map(g => g.contenido)).size === 8 && CATALOGO.every(g => !('pdf' in g)));
 const rolesEngine = [...leer('js/engine.js').matchAll(/^\s{2}([A-Z_]+):\{label:/gm)].map(m => m[1]);
 T('S3 Todos los roles del catálogo existen en el motor de la aplicación', CATALOGO.every(g => g.roles.every(r => rolesEngine.includes(r))), rolesEngine);
 T('S4 Los 11 roles del motor están cubiertos por la prueba', ROLES_TODOS.every(r => rolesEngine.includes(r)) && rolesEngine.length === ROLES_TODOS.length, rolesEngine);
@@ -45,50 +44,49 @@ for (const r of ROLES_TODOS) {
   const res = await op(ID(r), 'guiasUso');
   const ids = res.ok ? res.result.guias.map(g => g.id) : null;
   T(`S5 ${r}: lista exacta de guías (${(ESPERADO[r] || []).join(',') || 'ninguna'})`, res.ok && JSON.stringify(ids) === JSON.stringify(ESPERADO[r]), ids || res);
-  T(`S6 ${r}: la lista no filtra rutas internas`, res.ok && !JSON.stringify(res.result).includes('pdf/') && !JSON.stringify(res.result).includes('json/'));
+  T(`S6 ${r}: la lista no filtra rutas internas`, res.ok && !/pdf|json\/|fuente/i.test(JSON.stringify(res.result)));
 }
 T('S7 PROYECTOS ≠ OPERATIVO: cada uno ve solo la suya', (await op(ID('PROYECTOS'), 'guiasUso')).result.guias.map(g => g.id).join() === 'g02' && (await op(ID('OPERATIVO'), 'guiasUso')).result.guias.map(g => g.id).join() === 'g02b');
 T('S8 El índice de búsqueda viaja solo con las guías autorizadas', (await op(ID('TORRE'), 'guiasUso')).result.guias[0].indice.length === 1 && !JSON.stringify((await op(ID('TORRE'), 'guiasUso')).result).includes('g01'));
 
 /* ---------- 2. Ningún perfil abre la guía de otro ---------- */
-const negado = await op(ID('TORRE'), 'abrirGuia', 'g01', 'pdf');
-const inexistente = await op(ID('TORRE'), 'abrirGuia', 'g99', 'pdf');
+const negado = await op(ID('TORRE'), 'abrirGuia', 'g01', 'contenido');
+const inexistente = await op(ID('TORRE'), 'abrirGuia', 'g99', 'contenido');
 T('S9 Guía ajena e inexistente responden IGUAL (no revela cuál existe)', !negado.ok && !inexistente.ok && negado.code === inexistente.code && negado.message === inexistente.message, [negado, inexistente]);
 let fugas = 0, esperadas = 0;
-for (const r of ROLES_TODOS) for (const g of CATALOGO) for (const modo of ['pdf', 'contenido']) {
+for (const r of ROLES_TODOS) for (const g of CATALOGO) for (const modo of ['contenido']) {
   llamadas.firmar.length = 0;
   const res = await op(ID(r), 'abrirGuia', g.id, modo), permitido = ESPERADO[r].includes(g.id);
   if (permitido) { esperadas++; if (!res.ok) fugas += 100; } else if (res.ok || llamadas.firmar.length) fugas++;
 }
-T('S10 Matriz completa rol × guía × (pdf|contenido): solo abre lo autorizado', fugas === 0 && esperadas === 8 * 2 + 7 * 2, { fugas, esperadas });
-const forjados = ['../g01', 'g01/../g02', 'G01', 'g01 ', 'g01\u0000', ' g01', 'pdf/MasterApp-01-Administradora_v2.0.pdf', 'json/g01.json', '*', '', null, undefined, ['g01'], { id: 'g01' }, 1, 'g02b/../../g01'];
+T('S10 Matriz completa rol × guía: solo abre lo autorizado', fugas === 0 && esperadas === 8 + 7, { fugas, esperadas });
+const forjados = ['../g01', 'g01/../g02', 'G01', 'g01 ', 'g01\u0000', ' g01', 'pdf/MasterApp-01-Administradora_v2.0.pdf', 'img/cap_g01.png', 'json/g01.json', '*', '', null, undefined, ['g01'], { id: 'g01' }, 1, 'g02b/../../g01'];
 llamadas.firmar.length = 0; llamadas.leer.length = 0;
-let abiertos = 0; for (const f of forjados) for (const modo of ['pdf', 'contenido']) { const r = await op(ID('TORRE'), 'abrirGuia', f, modo); if (r.ok) abiertos++; }
+let abiertos = 0; for (const f of forjados) for (const modo of ['contenido']) { const r = await op(ID('TORRE'), 'abrirGuia', f, modo); if (r.ok) abiertos++; }
 T('S11 Ids manipulados (rutas, mayúsculas, objetos, nulos) nunca abren nada', abiertos === 0 && llamadas.firmar.length === 0 && llamadas.leer.length === 0, { abiertos, firmar: llamadas.firmar, leer: llamadas.leer });
-T('S12 Un modo desconocido no abre nada', !(await op(ID('ADMIN'), 'abrirGuia', 'g01', 'zip')).ok && !(await op(ID('ADMIN'), 'abrirGuia', 'g01')).ok);
-const conRol = await ejecutar(deps, ID('TORRE'), { op: 'abrirGuia', args: ['g01', 'pdf'], rol: 'ADMIN', actorId: ID('ADMIN') });
+llamadas.firmar.length = 0;
+T('S12 Ya no existe el modo PDF: «pdf», «zip» o sin modo no abren nada ni firman archivos', !(await op(ID('ADMIN'), 'abrirGuia', 'g01', 'pdf')).ok && !(await op(ID('ADMIN'), 'abrirGuia', 'g01', 'zip')).ok && !(await op(ID('ADMIN'), 'abrirGuia', 'g01')).ok && llamadas.firmar.length === 0);
+const conRol = await ejecutar(deps, ID('TORRE'), { op: 'abrirGuia', args: ['g01', 'contenido'], rol: 'ADMIN', actorId: ID('ADMIN') });
 T('S13 El navegador no puede imponer el rol ni el actor', !conRol.ok);
-T('S14 Usuario inactivo: rechazado en lista y en apertura', (await op(U(90), 'guiasUso')).code === 'NO_AUTENTICADO' && (await op(U(90), 'abrirGuia', 'g01', 'pdf')).code === 'NO_AUTENTICADO');
-T('S15 Usuario sin perfil: rechazado', (await op(U(77), 'guiasUso')).code === 'NO_AUTENTICADO' && (await op(U(77), 'abrirGuia', 'g01', 'pdf')).code === 'NO_AUTENTICADO');
+T('S14 Usuario inactivo: rechazado en lista y en apertura', (await op(U(90), 'guiasUso')).code === 'NO_AUTENTICADO' && (await op(U(90), 'abrirGuia', 'g01', 'contenido')).code === 'NO_AUTENTICADO');
+T('S15 Usuario sin perfil: rechazado', (await op(U(77), 'guiasUso')).code === 'NO_AUTENTICADO' && (await op(U(77), 'abrirGuia', 'g01', 'contenido')).code === 'NO_AUTENTICADO');
 T('S16 Sin sesión o id inválido: rechazado antes de consultar nada', (await op(null, 'guiasUso')).code === 'NO_AUTENTICADO' && (await op("x' or '1'='1", 'guiasUso')).code === 'NO_AUTENTICADO');
-const antes = llamadas.q; await op(ID('ADMIN'), 'abrirGuia', 'g01', 'pdf'); await op(ID('ADMIN'), 'abrirGuia', 'g01', 'pdf');
+const antes = llamadas.q; await op(ID('ADMIN'), 'abrirGuia', 'g01', 'contenido'); await op(ID('ADMIN'), 'abrirGuia', 'g01', 'contenido');
 T('S17 El rol se valida en CADA solicitud (nada se guarda en memoria entre llamadas)', llamadas.q === antes + 2);
 const UF = ID('FACTURACION');
 PERFILES.set(UF, { rol: 'FACTURACION', activo: false });
-T('S18 Si se desactiva a un usuario, pierde el acceso en la siguiente solicitud', !(await op(UF, 'abrirGuia', 'g05', 'pdf')).ok);
+T('S18 Si se desactiva a un usuario, pierde el acceso en la siguiente solicitud', !(await op(UF, 'abrirGuia', 'g05', 'contenido')).ok);
 PERFILES.set(UF, { rol: 'TORRE', activo: true });
-T('S19 Si cambia de rol, ve la guía de su rol nuevo y no la anterior', !(await op(UF, 'abrirGuia', 'g05', 'pdf')).ok && (await op(UF, 'abrirGuia', 'g03', 'pdf')).ok);
+T('S19 Si cambia de rol, ve la guía de su rol nuevo y no la anterior', !(await op(UF, 'abrirGuia', 'g05', 'contenido')).ok && (await op(UF, 'abrirGuia', 'g03', 'contenido')).ok);
 PERFILES.set(UF, { rol: 'FACTURACION', activo: true });
 
 /* ---------- 3. Enlaces firmados ---------- */
 llamadas.firmar.length = 0;
-const pdf = await op(ID('GERENTE_COMERCIAL'), 'abrirGuia', 'g06', 'pdf');
-T('S20 El PDF se firma por 5 minutos exactos y solo su archivo', pdf.ok && TTL_ENLACE_SEG === 300 && llamadas.firmar.length === 1 && llamadas.firmar[0].seg === 300 && llamadas.firmar[0].rutas.join() === CATALOGO.find(g => g.id === 'g06').pdf && pdf.result.expiraEnSeg === 300, [pdf, llamadas.firmar]);
-llamadas.firmar.length = 0;
 const cont = await op(ID('GERENTE_COMERCIAL'), 'abrirGuia', 'g06', 'contenido');
+T('S20 El contenido llega completo (secciones y capturas) y caduca a los 5 minutos', cont.ok && TTL_ENLACE_SEG === 300 && cont.result.expiraEnSeg === 300 && cont.result.secciones.length === 1 && cont.result.guia.id === 'g06', cont);
 T('S21 Las capturas se firman 5 min y solo las de nombre válido (se descartan «../» y subcarpetas)', cont.ok && llamadas.firmar.length === 1 && llamadas.firmar[0].seg === 300 && llamadas.firmar[0].rutas.join() === 'img/cap_g06.png' && Object.keys(cont.result.imagenes).join() === 'cap_g06.png', [cont, llamadas.firmar]);
 T('S22 rutaImagen rechaza rutas peligrosas', ['../a.png', 'a/b.png', 'a.exe', '', 'a b.png', null].every(n => rutaImagen(n) === null) && rutaImagen('x_1.png') === 'img/x_1.png');
-T('S23 Una guía aún no cargada en el bucket responde «no cargada» sin romper', await (async () => { const b = bucket.get('json/g08.json'); bucket.delete('json/g08.json'); bucket.delete(CATALOGO.find(g => g.id === 'g08').pdf); const a = await op(ID('GERENTE_TRANSPORTE'), 'abrirGuia', 'g08', 'contenido'), p = await op(ID('GERENTE_TRANSPORTE'), 'abrirGuia', 'g08', 'pdf'), l = await op(ID('GERENTE_TRANSPORTE'), 'guiasUso'); bucket.set('json/g08.json', b); bucket.set(CATALOGO.find(g => g.id === 'g08').pdf, 'x'); return !a.ok && a.code === 'GUIA_NO_CARGADA' && !p.ok && l.ok && l.result.guias[0].disponible === false; })());
+T('S23 Una guía aún no cargada en el bucket responde «no cargada» sin romper', await (async () => { const b = bucket.get('json/g08.json'); bucket.delete('json/g08.json'); const a = await op(ID('GERENTE_TRANSPORTE'), 'abrirGuia', 'g08', 'contenido'), p = a, l = await op(ID('GERENTE_TRANSPORTE'), 'guiasUso'); bucket.set('json/g08.json', b); return !a.ok && a.code === 'GUIA_NO_CARGADA' && !p.ok && l.ok && l.result.guias[0].disponible === false; })());
 const rotura = { ...deps, leerManual: async () => { throw new Error('secreto interno'); } };
 const er = await ejecutar(rotura, ID('ADMIN'), { op: 'guiasUso', args: [] });
 T('S24 Un fallo interno no filtra detalles al navegador', !er.ok && !JSON.stringify(er).includes('secreto'), er);
@@ -98,7 +96,7 @@ T('S26 Las guías no consultan nada distinto de master.perfiles (lectura del rol
 /* ---------- 4. Seguridad de archivos y configuración ---------- */
 const sw = leer('service-worker.js');
 T('S30 El service worker no precarga manuales ni guías', !/manual|\.pdf|guia/i.test(sw.split('const ESTATICOS')[1].split('];')[0]));
-T('S31 Versión del service worker actualizada', /VERSION = 'v1\.0\.70'/.test(sw), sw.match(/VERSION = '[^']+'/));
+T('S31 Versión del service worker actualizada', /VERSION = 'v1\.0\.73'/.test(sw), sw.match(/VERSION = '[^']+'/));
 const gi = leer('.gitignore');
 T('S32 .gitignore excluye manuales-privados/ y Claude outputs/', /^manuales-privados\/\r?$/m.test(gi) && /^Claude outputs\/\r?$/m.test(gi));
 const mig = leer('supabase/migrations/031_bucket_manuales.sql');
@@ -151,7 +149,7 @@ await click(boton('Mi mis'.slice(0, 0) + 'Mis reportes', '[role=tab]'));
 T('U3 «Mis reportes» sigue mostrando su lista', /Aún no has enviado reportes|Reporte/.test(txt(d.querySelector('#main'))), txt(d.querySelector('#main')).slice(0, 200));
 await click(boton('Mi guía de uso', '[role=tab]')); await tick(150);
 T('U4 Torre ve solo su guía (03), con buscador', txt(d.querySelector('#main')).includes('Torre de control') && !txt(d.querySelector('#main')).includes('Administradora') && !!d.querySelector('#gu_q'), txt(d.querySelector('#main')).slice(0, 300));
-T('U5 Hay botón «Leer guía» y «Abrir PDF original»', !!boton('Leer guía') && !!boton('Abrir PDF original'));
+T('U5 Hay botón «Leer guía» y NO hay ningún botón, enlace ni texto de PDF/descarga', !!boton('Leer guía') && !/pdf|descarg/i.test(d.querySelector('#main').innerHTML.replace(/<script[\s\S]*?<\/script>/g, '')) && !d.querySelector('[data-act=guiaPdf],a[download]'));
 const q = d.querySelector('#gu_q'); q.value = 'desvio'; q.dispatchEvent(new w.Event('input', { bubbles: true })); await tick();
 T('U6 El buscador (sin acentos) encuentra por tarea y no redibuja el campo', /Crear un viaje g03/.test(txt(d.querySelector('#gu_res'))) && d.querySelector('#gu_q') === q, txt(d.querySelector('#gu_res')));
 q.value = 'zzzz'; q.dispatchEvent(new w.Event('input', { bubbles: true })); await tick();
@@ -165,8 +163,17 @@ ev(`S.guiaUso.cont.secciones[0].html='<div class="fig"><img data-img="a.png" alt
 T('U10 Las capturas solo usan enlaces https firmados', d.querySelectorAll('.guiauso img').length === 1 && d.querySelector('.guiauso img').getAttribute('src').startsWith('https://'));
 await click(boton('Volver al Centro de ayuda'));
 T('U11 «Volver al Centro de ayuda» regresa al formulario de reporte', !!d.querySelector('#ay_tipo') && !d.querySelector('.guiauso'));
-await como('U-T', 'guia'); await tick(150); await click(boton('Abrir PDF original'));
-T('U12 «Abrir PDF original» abre el enlace firmado (https, noopener) y ofrece alternativa si el navegador bloquea la ventana', w.__abiertos.length === 1 && /^https:\/\/.*\/pdf\/MasterApp-03/.test(w.__abiertos[0][0]) && /noopener/.test(w.__abiertos[0][2]) && /toca aquí/.test(txt(d.querySelector('#main'))), w.__abiertos);
+await como('U-T', 'guia'); await tick(150); await click(boton('Leer guía')); await tick(150);
+T('U12 Lector: «Sección 1 de N», sin «Anterior», con «Siguiente», sin botones de PDF', /Sección 1 de 1/.test(txt(d.querySelector('.gu-meta'))) && !d.querySelector('.gu-nav .btn') && w.__abiertos.length === 0 && !/pdf|descarg/i.test(txt(d.querySelector('#main'))), txt(d.querySelector('.gu-meta')));
+ev(`S.guiaUso.cont.secciones.push({id:'s2',titulo:'Segunda',html:'<div class="step"><div class="n">01</div><div class="x">Paso <b>uno</b></div></div>'},{id:'s3',titulo:'Tercera',html:'<p>fin</p>'});S.guiaUso.guias[0].indice.push({id:'s2',titulo:'Segunda',texto:'paso uno horarios'},{id:'s3',titulo:'Tercera',texto:'fin'});S.guiaUso.sec='s1';render()`); await tick();
+await click(boton('Segunda →', '.gu-nav .btn'));
+T('U12b «Siguiente» avanza a la sección 2 y muestra el paso numerado', /Sección 2 de 3/.test(txt(d.querySelector('.gu-meta'))) && txt(d.querySelector('.gu-art h2')) === 'Segunda' && !!d.querySelector('.guiauso .step .n') && !!d.querySelector('.gu-nav .btn:not(.primary)'));
+await click(d.querySelector('.gu-nav .btn:not(.primary)'));
+T('U12c «Anterior» regresa a la sección 1', /Sección 1 de 3/.test(txt(d.querySelector('.gu-meta'))));
+const ql = d.querySelector('#gu_ql'); ql.value = 'horarios'; ql.dispatchEvent(new w.Event('input', { bubbles: true })); await tick();
+T('U12d «Buscar en esta guía» filtra el índice de secciones sin perder el cursor', [...d.querySelectorAll('#gu_toc button')].map(txt).join() === 'Segunda' && d.querySelector('#gu_ql') === ql);
+ql.value = 'zzz'; ql.dispatchEvent(new w.Event('input', { bubbles: true })); await tick();
+T('U12e Sin coincidencias en la guía se avisa', /Ninguna sección coincide/.test(txt(d.querySelector('#gu_toc'))));
 await como('U-C', 'guia'); await tick(150);
 T('U13 Cobros (sin manual): «Aún no hay una guía para tu perfil», sin buscador', /Aún no hay una guía para tu perfil/.test(txt(d.querySelector('#main'))) && !d.querySelector('#gu_q'), txt(d.querySelector('#main')).slice(0, 200));
 await como('U-O', 'guia'); await tick(150);
@@ -176,6 +183,8 @@ T('U15 La Administradora ve las ocho guías', d.querySelectorAll('.gu-card').len
 T('U16 Ver las ocho guías no le agrega permisos: su matriz de permisos no cambió', ev(`JSON.stringify(DB.permisos.filter(p=>p.rol==='ADMIN').every(p=>p.habilitado===true))`) === 'true');
 ev(`S.guiaUso.guias[0].disponible=false;render()`); await tick();
 T('U17 Una guía no cargada se marca y su botón queda deshabilitado', /Todavía no está cargada/.test(txt(d.querySelector('#main'))) && d.querySelector('.gu-card .btn.primary').disabled);
+const NV = cargar(true); NV.w.eval(`API.guiasUso=async()=>{throw new ApiError('OP_INVALIDA','Operación no reconocida.');};S.user=DB.usuarios.find(u=>u.id==='U-T');S.tab={ayuda:'guia'};go('ayuda')`); await tick(150);
+T('U17b Con una API sin las operaciones nuevas se explica el motivo real (no se oculta ni se inventa contenido)', /no reconoce esta operación/.test(txt(NV.w.document.querySelector('#main'))) && !NV.w.document.querySelector('.gu-card') && !!NV.w.document.querySelector('[data-act=guiaReintentar]'), txt(NV.w.document.querySelector('#main')).slice(0, 300));
 const NS = cargar(false), dd = NS.w.document; NS.w.eval(`S.user=DB.usuarios.find(u=>u.id==='U-T');S.tab={ayuda:'guia'};go('ayuda')`); await tick(100);
 T('U18 En modo demostración (sin servidor) se explica que las guías requieren conexión y nada se rompe', /conectada al servidor/.test(txt(dd.querySelector('#main'))) && NS.errs.length === 0, txt(dd.querySelector('#main')).slice(0, 200));
 const css = leer('css/app.css');
@@ -186,15 +195,15 @@ T('U20 La interfaz no tuvo errores de JavaScript durante todo el recorrido', N.e
 if (process.env.GUIAS_CARPETA) {
   const c = process.env.GUIAS_CARPETA; let bien = true; const det = [];
   for (const g of CATALOGO) {
-    const pdfF = path.join(c, g.pdf), jF = path.join(c, g.contenido);
-    if (!fs.existsSync(pdfF) || !fs.existsSync(jF)) { bien = false; det.push('falta ' + g.id); continue; }
+    const jF = path.join(c, g.contenido);
+    if (!fs.existsSync(jF)) { bien = false; det.push('falta ' + g.id); continue; }
     const j = JSON.parse(fs.readFileSync(jF, 'utf8'));
-    if (!fs.readFileSync(pdfF).subarray(0, 5).toString().startsWith('%PDF')) { bien = false; det.push('no PDF ' + g.id); }
     if (!j.secciones.length || j.secciones.some(s => !s.html || !s.titulo)) { bien = false; det.push('secciones ' + g.id); }
     for (const n of j.imagenes) if (!rutaImagen(n) || !fs.existsSync(path.join(c, 'img', n))) { bien = false; det.push('imagen ' + n); }
     if (/<script|onerror|onclick|javascript:/i.test(JSON.stringify(j))) { bien = false; det.push('html inseguro ' + g.id); }
   }
-  T('R1 Los archivos reales (PDF, JSON, capturas) están completos y limpios', bien, det);
+  T('R0 No se sube ningún PDF al bucket', !fs.existsSync(path.join(c, 'pdf')));
+  T('R1 Los archivos reales (JSON y capturas) están completos y limpios, y no hay PDF en la carpeta a subir', bien, det);
 }
 console.log(filas.join('\n')); if (AVISO.length) console.log('\n' + AVISO.join('\n'));
 console.log(`\n${ok} correctas · ${mal} con fallo`); process.exit(mal ? 1 : 0);
