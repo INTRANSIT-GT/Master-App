@@ -353,6 +353,8 @@ tr.dim td{color:var(--mute)}
 .fmissing input,.fmissing select,.fmissing textarea{border-color:#EC220F;background:color-mix(in srgb,#EC220F 8%,var(--surface))}
 .fmissing>label{color:#EC220F}
 tr.warnrow td{background:color-mix(in srgb,#EC220F 5%,var(--surface))}
+select option.sinTarifa{color:var(--warn);font-weight:600}
+select option.capFalta{color:var(--fix);font-weight:600}
 .dlg .cyc{margin-bottom:8px}
 
 /* Login */

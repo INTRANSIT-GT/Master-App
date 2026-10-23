@@ -142,10 +142,20 @@ function histFiltros(){
 /* ---- Tarifas ---- */
 function tarData(){let t=[];try{t=API.tarifas(S.user.id);}catch(e){}return t;}
 /* Rutas que se pueden tarifar: validadas (en tarifación), con tarifa pendiente de aprobación o activas (otra capacidad). */
+/* Rutas del selector de tarifas. En ámbar las que no tienen ninguna tarifa activa
+   y en naranja las que tienen tarifa pero les falta alguna capacidad de la flota. */
 const optRutaTarifa=(cliente,proyecto)=>{
   if(!cliente||!proyecto)return [];
-  return API.rutasParaTarifa(S.user.id,cliente,proyecto).map(r=>({id:r.id,
-    nombre:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`+(r.estado==='EN_TARIFACION'?' · en tarifación':(r.estado==='PENDIENTE_APROBACION'?' · pendiente de aprobación':''))}));
+  const caps=capsCat();
+  return API.rutasParaTarifa(S.user.id,cliente,proyecto).map(r=>{
+    const tf=DB.tarifas.filter(x=>x.activa&&x.rutaId===r.id);
+    const sin=tf.length===0,faltan=sin?[]:caps.filter(c=>!tf.some(x=>x.capacidad===c));
+    const est=r.estado==='EN_TARIFACION'?' · en tarifación':(r.estado==='PENDIENTE_APROBACION'?' · pendiente de aprobación':'');
+    const nota=sin?' · SIN TARIFA':(faltan.length?` · falta cap. ${faltan.join(', ')}`:'');
+    return {id:r.id,nombre:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}${est}${nota}`,
+      cls:sin?'sinTarifa':(faltan.length?'capFalta':''),
+      title:sin?'Esta ruta todavía no tiene ninguna tarifa activa.':(faltan.length?`Falta tarifa para la capacidad ${faltan.join(', ')} de la flota.`:'')};
+  });
 };
 function rutaTxt(id){const r=DB.rutas.find(x=>x.id===id);return r?`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`:id;}
 BODY.tarifas=()=>{
@@ -296,7 +306,7 @@ Object.assign(ACT,{
     }else{
       formM({title:'Nueva tarifa',text:'La tarifa aplica solo a la combinación cliente, proyecto, ruta y capacidad que elijas. Aparecen las rutas validadas (en tarifación), las que esperan aprobación y las activas (para otra capacidad).',
         fields:[{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},
-          {k:'rutaId',label:'Ruta',type:'select',req:1,optsFn:x=>optRutaTarifa(x.cliente,x.proyecto),ph:'Primero elige el cliente y el proyecto'},
+          {k:'rutaId',label:'Ruta',type:'select',req:1,optsFn:x=>optRutaTarifa(x.cliente,x.proyecto),ph:'Primero elige el cliente y el proyecto',hint:'<span style="color:var(--warn)">Ámbar</span>: ruta sin tarifa · <span style="color:var(--fix)">naranja</span>: le falta tarifa para alguna capacidad de la flota.'},
           {k:'capacidad',label:'Capacidad',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad'},
           {k:'importe',label:'Importe cliente (Q)',type:'number',req:1},{k:'qDieselPactado',label:'Q diésel pactado cliente (opcional · activa el ajuste por combustible)',type:'number'},{k:'combustiblePct',label:'% de combustible cliente (opcional · 0 a 100)',type:'number'},{k:'importeOpl',label:'Importe proveedor / OPL (Q, opcional)',type:'number'},{k:'dieselPactadoOpl',label:'Q diésel pactado proveedor (opcional)',type:'number'},{k:'combustiblePctOpl',label:'% de combustible proveedor (opcional · 0 a 100)',type:'number'},{k:'vigenteDesde',label:'Vigente desde',type:'date',req:1},{k:'vigenteHasta',label:'Vigente hasta (opcional)',type:'date'}],
         data:{cliente:optsClientes().length===1?optsClientes()[0].id:'',proyecto:'',rutaId:'',capacidad:'',importe:'',qDieselPactado:'',combustiblePct:'',importeOpl:'',dieselPactadoOpl:'',combustiblePctOpl:'',vigenteDesde:todayStr(),vigenteHasta:''},rerender:['cliente','proyecto'],ok:'GUARDAR TARIFA',act:'tarifaSave',id:''});
