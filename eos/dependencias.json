@@ -1,0 +1,32 @@
+{
+  "_": "Lo que cada equipo necesita para trabajar. Lo leen EOS (avisa y arma el prompt de sincronización) y el hook de inicio (el recibo dice qué falta). Mantener al día al agregar una dependencia.",
+  "comun": {
+    "herramientas": [
+      {"comando": "node", "para": "Node 22", "obligatoria": true, "winget": "OpenJS.NodeJS.22"},
+      {"comando": "npm", "para": "npm (viene con Node)", "obligatoria": true},
+      {"comando": "git", "para": "Git", "obligatoria": true, "winget": "Git.Git"},
+      {"comando": "gh", "para": "GitHub CLI (sesión de GitHub para git y Claude)", "winget": "GitHub.cli"},
+      {"comando": "code", "para": "VS Code con la extensión Claude Code", "winget": "Microsoft.VisualStudioCode"},
+      {"comando": "supabase", "para": "Supabase CLI", "opcional": true}
+    ],
+    "github": "gh auth login --web y luego gh auth setup-git (git usa la misma sesión)"
+  },
+  "Master-App---OP-": {
+    "npm": ["server", "web", "e2e"],
+    "herramientas": [
+      {"comando": "psql", "para": "PostgreSQL 16 (base local y pruebas del servidor)", "winget": "PostgreSQL.PostgreSQL.16",
+       "rutas": ["C:/Program Files/PostgreSQL/16/bin"]},
+      {"comando": "docker", "para": "Docker (solo para docker compose)", "opcional": true, "winget": "Docker.DockerDesktop"}
+    ],
+    "servicios": [
+      {"puerto": 5432, "para": "PostgreSQL en localhost:5432 (servicio postgresql-x64-16)"}
+    ],
+    "base": "Rol omnia (clave de desarrollo omnia_dev) y bases omnia y omnia_test. En Windows: python scripts/reset-db-windows.py omnia (y omnia_test), luego cd server && npm run seed.",
+    "ver": "cd server && npm run dev (API en http://localhost:3001) y cd web && npm run dev (http://localhost:5173)"
+  },
+  "Master-App": {
+    "npm": ["."],
+    "herramientas": [],
+    "servicios": []
+  }
+}

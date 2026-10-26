@@ -1,0 +1,16 @@
+{
+  "operadores": [
+    {
+      "id": "carmen",
+      "nombre": "Carmen",
+      "trato": "Ing. Carmen",
+      "activo": true
+    },
+    {
+      "id": "nora",
+      "nombre": "NORA",
+      "trato": "NORA",
+      "activo": false
+    }
+  ]
+}
