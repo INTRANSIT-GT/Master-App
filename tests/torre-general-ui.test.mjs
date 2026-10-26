@@ -1,4 +1,4 @@
-/* Pruebas de la INTERFAZ: orden de los 11 horarios, «Salida de bodega» (sin «Fecha y hora de salida») y la vista general de Torre de Control
+/* Pruebas de la INTERFAZ: orden de los 10 horarios, «Salida de bodega» (sin «Fecha y hora de salida») y la vista general de Torre de Control
    (tabla de solo lectura, filtros por fecha del viaje y cambio de estatus). jsdom con el motor local; no usa Supabase real. */
 
 
@@ -54,7 +54,7 @@ const K = ev('window.__K'), C = ev('window.__C'), A = JSON.parse(ev('JSON.string
 const toasts = () => [...d.querySelectorAll('#toasts .toast')].map(txt);
 
 
-const ORDEN = ['Ingreso a planta','Espera en rampa','Ingreso a rampa','Inicio de carga','Fin de carga','Salida de planta','Ingreso a bodega','Espera en rampa bodega','Inicio de descarga','Fin de descarga','Salida de bodega'];
+const ORDEN = ['Ingreso a planta','Espera en rampa','Ingreso a rampa','Inicio de carga','Fin de carga','Salida de planta','Ingreso a bodega','Inicio de descarga','Fin de descarga','Salida de bodega'];
 const CAB = ['Viaje','Cliente','Proyecto','Fecha del viaje','Placa','Tipo de unidad','Piloto','Origen','Destino','Ruta',...ORDEN,'Estatus'];
 const gen = () => [...d.querySelectorAll('#tablaGeneral thead th')].map(txt);
 const filasG = () => [...d.querySelectorAll('#tablaGeneral tbody tr')];
@@ -65,8 +65,8 @@ const setF = async (k, v) => { const el = d.querySelector(`[data-flt="${k}"]`); 
 T('U0 La interfaz carga sin errores de JavaScript', N.errs.length === 0, N.errs);
 
 /* ---------- 1 y 2. Orden de los horarios y «Salida de bodega» ---------- */
-T('H1 El motor define los 11 horarios en el orden pedido', JSON.stringify(JSON.parse(ev('JSON.stringify(CAMPOS_TIEMPO.map(x=>x[1]))'))) === JSON.stringify(ORDEN), ev('JSON.stringify(CAMPOS_TIEMPO.map(x=>x[1]))'));
-T('H2 «Fecha y hora de salida» ya no es un horario (ni en la lista ni en las claves editables)', !ev('CAMPOS_TIEMPO.some(x=>x[1]==="Fecha y hora de salida")') && !ev('TIEMPO_KEYS.includes("tSalida")') && ev('TKEYS.includes("tSalidaBodega")') && ev('TKEYS.indexOf("tSalidaBodega")') === 10);
+T('H1 El motor define los 10 horarios en el orden pedido', JSON.stringify(JSON.parse(ev('JSON.stringify(CAMPOS_TIEMPO.map(x=>x[1]))'))) === JSON.stringify(ORDEN), ev('JSON.stringify(CAMPOS_TIEMPO.map(x=>x[1]))'));
+T('H2 «Fecha y hora de salida» ya no es un horario (ni en la lista ni en las claves editables)', !ev('CAMPOS_TIEMPO.some(x=>x[1]==="Fecha y hora de salida")') && !ev('TIEMPO_KEYS.includes("tSalida")') && ev('TKEYS.includes("tSalidaBodega")') && ev('TKEYS.indexOf("tSalidaBodega")') === 9);
 como('U-1', 'nuevo');
 const etq = [...d.querySelectorAll('.tgrid')][0] ? [...d.querySelectorAll('.tgrid')][0].querySelectorAll('label') : [];
 T('H3 El formulario del viaje muestra los horarios en ese orden (izquierda→derecha, arriba→abajo)', JSON.stringify([...etq].map(txt)) === JSON.stringify(ORDEN), [...etq].map(txt));
@@ -75,10 +75,10 @@ T('H5 No existe ningún campo «Fecha y hora de salida» en el formulario', !/Fe
 
 /* guardar y recuperar */
 const base = { cliente: 'COCACOLA', proyectoCat: 'COCACOLA', pilotoId: 'P-4', rutaId: 'R-0002', shipment: 'H-1', opl: 'INTRANSIT', tipoViaje: 'ONE WAY', tipoCarga: 'KG', noCarga: '1', producto: 'P', placaArrastre: 'PA-1' };
-const t11 = { tIngresoPlanta: '2031-05-01T08:00', tEsperaRampa: '2031-05-01T08:10', tRampa: '2031-05-01T08:20', tInicioCarga: '2031-05-01T08:30', tFinCarga: '2031-05-01T09:00', tSalidaPlanta: '2031-05-01T09:10', tIngresoBodega: '2031-05-01T12:00', tEsperaRampaBodega: '2031-05-01T12:10', tInicioDescarga: '2031-05-01T12:20', tFinDescarga: '2031-05-01T13:00', tSalidaBodega: '2031-05-01T13:15' };
+const t11 = { tIngresoPlanta: '2031-05-01T08:00', tEsperaRampa: '2031-05-01T08:10', tRampa: '2031-05-01T08:20', tInicioCarga: '2031-05-01T08:30', tFinCarga: '2031-05-01T09:00', tSalidaPlanta: '2031-05-01T09:10', tIngresoBodega: '2031-05-01T12:00', tInicioDescarga: '2031-05-01T12:20', tFinDescarga: '2031-05-01T13:00', tSalidaBodega: '2031-05-01T13:15' };
 const hv = JSON.parse(ev(`JSON.stringify(API.crearViaje('U-1',${JSON.stringify({ ...base, fechaPlan: '2031-05-01T07:00', ...t11 })}))`));
 const hg = trip(hv.id);
-T('H6 Al crear, los 11 horarios se guardan y se recuperan tal cual, y «Salida de bodega» no se confunde con «Salida de planta»', Object.entries(t11).every(([k, v]) => hg[k] === v) && hg.tSalidaBodega !== hg.tSalidaPlanta && !hg.tSalida, hg);
+T('H6 Al crear, los 10 horarios se guardan y se recuperan tal cual, y «Salida de bodega» no se confunde con «Salida de planta»', Object.entries(t11).every(([k, v]) => hg[k] === v) && hg.tSalidaBodega !== hg.tSalidaPlanta && !hg.tSalida, hg);
 ev(`API.editarViaje('U-1','${hv.id}',{tSalidaBodega:'2031-05-01T14:00'})`);
 T('H7 Al editar el viaje, «Salida de bodega» se actualiza y los demás horarios no cambian', trip(hv.id).tSalidaBodega === '2031-05-01T14:00' && trip(hv.id).tSalidaPlanta === '2031-05-01T09:10' && trip(hv.id).tFinDescarga === '2031-05-01T13:00');
 como('U-1', 'detalle'); ev(`go('detalle','${hv.id}')`); await tick();
@@ -97,14 +97,18 @@ como('U-1', 'nuevo');
 ev(`(()=>{const f=S.form;Object.assign(f,{proyecto:'COCACOLA',proyectoCat:'COCACOLA',shipment:'F-1',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'P',placaSel:'T-4',pilotoId:'P-4',rutaId:'R-0002',fechaPlanD:'2031-06-01',fechaPlanT:'08:00',placaArrastre:'PA-9'});
   Object.entries(${JSON.stringify(t11)}).forEach(([k,v])=>{f[k]=v;});})()`);
 await ev('ACT.guardar()'); await tick(200);
+T('X3 El formulario de nuevo viaje ya no muestra «Espera en rampa bodega» ni su campo, pero sí «Salida de bodega»', !ev('document.body.innerHTML.includes("Espera en rampa bodega")') && !ev('document.body.innerHTML.includes("tEsperaRampaBodega")') && ev('document.body.innerHTML.includes("Salida de bodega")'));
 const fid = ev('S.form&&S.form.savedId'), ferr = ev('S.form&&S.form.err');
 const fv = fid && trip(fid);
 T('R1 El formulario de nuevo viaje se abre, se llena y se REGISTRA (sin «Campo no permitido»)', !!fid && !ferr, ferr);
-T('R2 El viaje guardado trae los 11 horarios, incluidos «Espera en rampa bodega» y «Salida de bodega»', !!fv && Object.entries(t11).every(([k, v]) => fv[k] === v), fv);
+T('R2 El viaje guardado trae los 10 horarios, incluida «Salida de bodega»', !!fv && Object.entries(t11).every(([k, v]) => fv[k] === v), fv);
 const raro = JSON.parse(ev(`JSON.stringify((()=>{try{API.crearViaje('U-1',{...${JSON.stringify({ ...base, fechaPlan: '2031-06-02T07:00', shipment: 'F-2' })},campoInventado:'x'});return {ok:true}}catch(e){return {ok:false,m:e.message}}})())`));
 T('R3 Un campo realmente desconocido SIGUE rechazándose (la validación de seguridad no se tocó)', raro.ok === false && /Campo no permitido: campoInventado/.test(raro.m), raro);
 const viejo = trip(K);
-T('R4 Los viajes anteriores (sin los horarios nuevos) siguen cargando y mostrándose', !!viejo && viejo.tEsperaRampaBodega === undefined || viejo.tEsperaRampaBodega === '');
+T('R4 Los viajes anteriores (sin los horarios nuevos) siguen cargando y mostrándose', !!viejo && viejo.tEsperaRampaBodega === undefined);
+T('X1 «Espera en rampa bodega» ya no existe: ni como horario, ni en las claves, ni en las etiquetas', !ev('TIEMPO_KEYS.includes("tEsperaRampaBodega")') && !ev('TKEYS.includes("tEsperaRampaBodega")') && !ev('CAMPOS_TIEMPO.some(x=>x[1]==="Espera en rampa bodega")') && ev('CAMPOS_TIEMPO.length') === 10);
+const rech = JSON.parse(ev(`JSON.stringify((()=>{try{API.crearViaje('U-1',{...${JSON.stringify({ ...base, fechaPlan: '2031-06-03T07:00', shipment: 'F-3' })},tEsperaRampaBodega:'2031-06-03T09:00'});return {ok:true}}catch(e){return {ok:false,m:e.message}}})())`));
+T('X2 Si algo enviara el campo eliminado, el servidor lo rechaza como desconocido (validación de seguridad intacta)', rech.ok === false && /Campo no permitido: tEsperaRampaBodega/.test(rech.m), rech);
 
 /* ---------- 3 y 4. Torre: vista general ---------- */
 como('U-T', 'torre');
@@ -114,7 +118,7 @@ T('G2 La vista general es una tabla compacta con las columnas pedidas y los hora
 const total = ev('DB.trips.length');
 T('G3 Muestra TODOS los viajes (no solo los en curso): una fila por viaje', filasG().length === total && total >= 6 && ev("S.tab.torre") === 'todos', [filasG().length, total]);
 T('G4 La fila trae cliente, proyecto, fecha, placa, tipo de unidad, piloto, origen, destino y ruta', (() => { const t = txt(filaG(K)); return /COCA-COLA/i.test(t) && /COCACOLA/.test(t) && /01\/02\/2031/.test(t) && /C-444DDD/.test(t) && /10TON/.test(t) && /Piloto Cuatro/.test(t) && /CP/.test(t) && /Central/.test(t); })(), txt(filaG(K)));
-T('G5 Los horarios que existen se ven y los que faltan aparecen como «—»', /08:10/.test(txt(filaG(K))) && filaG(K).querySelectorAll('td .mute[title="Sin registrar"]').length >= 10);
+T('G5 Los horarios que existen se ven y los que faltan aparecen como «—»', /08:10/.test(txt(filaG(K))) && filaG(K).querySelectorAll('td .mute[title="Sin registrar"]').length >= 9);
 const wrap = d.querySelector('.xlwrap.sheet');
 T('G6 La tabla se desplaza (scroll) y mantiene fija la primera columna', !!wrap && !!d.querySelector('#tablaGeneral td.stk') && parseInt(d.querySelector('#tablaGeneral').style.minWidth) > 2000);
 
