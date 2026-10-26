@@ -15,4 +15,4 @@ Ninguna leída todavía para Transportes. El libro XL-OP-001 corresponde a OP (v
 
 ## Históricas
 - Paquete de inicio v1.0 (25 de octubre de 2026), preparado por Codex. Es una propuesta; ante una contradicción con los Excel oficiales, registrar la diferencia y pedir la decisión de Ing. Carmen.
-- `INFORME-ADMINISTRADOR.md`, `INFORME-FILTRO-CLIENTES.md` y las carpetas `respaldo_antes_*` son referencias históricas del propio repositorio.
+- `INFORME-ADMINISTRADOR.md` e `INFORME-FILTRO-CLIENTES.md` son referencias históricas del propio repositorio.

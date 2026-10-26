@@ -25,6 +25,6 @@ Reglas compartidas para cualquier agente de IA que trabaje en este repositorio. 
 - Repositorio: `INTRANSIT-GT/Master-App` (público). La aplicación hermana es Operaciones / OP (`INTRANSIT-GT/Master-App---OP-`), con otro stack: no reescribir para igualarlos.
 - Los permisos `sec_*` del menú son internos de Transportes; la pertenencia a aplicaciones viene de `app_metadata.modulos`. No confundirlos.
 - `supabase/migrations/` describe el esquema y RLS: leer, no aplicar contra Supabase real sin autorización específica.
-- Las carpetas `respaldo_antes_*` son respaldos históricos: no editarlas ni tomarlas como código vigente.
+- No agregues carpetas de respaldo (`respaldo_*`, `backup_*`) al repositorio: usa git para conservar el historial.
 - Repositorio público: nada de datos de clientes, filas de Excel, rutas privadas ni secretos en archivos versionados. Las fuentes privadas se citan por identificador (ver `docs/ai/FUENTES.md`).
 - Pruebas: `npm test` y los `test:*` de `package.json`. Hallazgos heredados pendientes de revalidar: `docs/ai/ESTADO.md`; no corregirlos sin encargo.

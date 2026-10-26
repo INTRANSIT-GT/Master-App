@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { ejecutar } from '../supabase/functions/api/handler.mjs';
 const raíz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const leer = f => fs.readFileSync(path.join(raíz, f), 'utf8');
-/* Copia de referencia = el ui.js ANTES de los ajustes del Administrador (respaldo_antes_admin/js/ui.js, o la ruta en UI_BASE) */
-const ANT = process.env.UI_BASE ? path.resolve(process.env.UI_BASE) : path.join(raíz, 'respaldo_antes_admin');
+/* Copia de referencia opcional (UI_BASE): los respaldos históricos ya no viven en el repo. */
+const ANT = process.env.UI_BASE ? path.resolve(process.env.UI_BASE) : null;
 let ok = 0, mal = 0; const filas = [];
 const T = (n, c, x) => { c ? ok++ : mal++; filas.push((c ? 'OK   ' : 'FAIL ') + n + (!c && x !== undefined ? '  ← ' + (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, 300) : '')); };
 const uuid = () => crypto.randomUUID(), tick = () => new Promise(r => setTimeout(r, 20));
@@ -184,7 +184,7 @@ for (const r of roles) {
   }
 }
 T(`5.1 Los otros ${roles.length} perfiles (${roles.join(', ')}) abren sus ${comp} pantallas sin errores y su menú las incluye completas`, difs.length === 0 && comp >= 40, difs.slice(0, 6));
-T('5.2 El motor de reglas, permisos, autenticación, SQL y la función del servidor no se modificaron', ['js/engine.js', 'js/backend.js', 'js/utils.js', 'js/catalogos.js', 'js/exportar.js', 'supabase/functions/api/core.mjs', 'supabase/functions/api/handler.mjs', 'supabase/functions/api/store.mjs'].every(f => !fs.existsSync(path.join(ANT, f)) || leer(f) === fs.readFileSync(path.join(ANT, f), 'utf8')));
+T('5.2 El motor de reglas, permisos, autenticación, SQL y la función del servidor no se modificaron', !ANT || [ 'js/engine.js', 'js/backend.js', 'js/utils.js', 'js/catalogos.js', 'js/exportar.js', 'supabase/functions/api/core.mjs', 'supabase/functions/api/handler.mjs', 'supabase/functions/api/store.mjs'].every(f => fs.existsSync(path.join(ANT, f)) && leer(f) === fs.readFileSync(path.join(ANT, f), 'utf8')));
 T('5.3 js/config.js existe, no está vacío y sigue declarando la URL de Supabase (estas pruebas nunca lo modifican)', fs.existsSync(path.join(raíz, 'js/config.js')) && fs.statSync(path.join(raíz, 'js/config.js')).size > 0 && /SUPABASE_URL/.test(leer('js/config.js')));
 
 /* ============ 6. SERVIDOR + BASE DE DATOS (migraciones 001–008, 014, 015 y 016) ============ */

@@ -1,13 +1,11 @@
 /* Menú del ADMINISTRADOR agrupado por módulos (VIAJES · TORRE · COMERCIAL · OPL · FLOTAS).
    Comprueba: los módulos y sus opciones, que cada opción abre la pantalla correcta, que se respetan los permisos,
-   que no se perdió ninguna pantalla y que los DEMÁS perfiles conservan EXACTAMENTE su menú.
-   Referencia: UI_BASE (ruta al ui.js anterior) o respaldo_antes_menu_admin/js/ui.js */
+   que no se perdió ninguna pantalla y que los DEMÁS perfiles conservan EXACTAMENTE su menú. */
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fs from 'node:fs'; import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const raíz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const leer = f => fs.readFileSync(path.join(raíz, f), 'utf8');
-const BASE = process.env.UI_BASE ? path.resolve(process.env.UI_BASE) : path.join(raíz, 'respaldo_antes_menu_admin', 'js', 'ui.js');
 let ok = 0, mal = 0; const filas = [];
 const T = (n, c, x) => { c ? ok++ : mal++; filas.push((c ? 'OK   ' : 'FAIL ') + n + (!c && x !== undefined ? '  ← ' + (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, 400) : '')); };
 const tick = () => new Promise(r => setTimeout(r, 20));
