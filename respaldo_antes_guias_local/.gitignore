@@ -1,0 +1,14 @@
+# Archivos generados o de trabajo que no deben versionarse
+_rebuild/
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/
+
+# Manuales para «Mi guía de uso»: NUNCA al repositorio (viven en el bucket privado de Supabase)
+manuales-privados/
+Claude outputs/
+
+# Claude: configuración personal y recibos privados (nunca al repositorio)
+.claude/settings.local.json
+.claude/privado/

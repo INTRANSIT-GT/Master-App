@@ -588,3 +588,7 @@ body.mob.nav-open .mback{background:rgba(8,18,30,.45)}
   .gu-grid{grid-template-columns:1fr}
   .gu-art{padding:12px}
 }
+.gu-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.gu-chip{background:var(--brand-soft);color:var(--brand);border-radius:999px;font-size:12px;font-weight:600;padding:3px 10px}
+.gu-chip.mute{background:var(--surface2);color:var(--mute)}
+.guiauso img{max-width:100%;height:auto}

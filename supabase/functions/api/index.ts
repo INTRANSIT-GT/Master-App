@@ -22,18 +22,6 @@ const deps = {
     if (r.ok) for (const x of await r.json()) if (x.signedURL) out.set(x.path, `${URL_}/storage/v1${x.signedURL}`);
     return out;
   },
-  /* «Mi guía de uso» · bucket PRIVADO «manuales» (sin ninguna política de lectura para usuarios: solo esta función, con la
-     clave de servicio del servidor, puede leer o firmar). Las rutas llegan siempre del catálogo cerrado de guias.mjs. */
-  async firmarManual(paths: string[], seg: number) {
-    const r = await fetch(`${URL_}/storage/v1/object/sign/manuales`, { method: "POST", headers: adminHeaders, body: JSON.stringify({ expiresIn: seg, paths }) });
-    const out = new Map<string, string>();
-    if (r.ok) for (const x of await r.json()) if (x.signedURL) out.set(x.path, `${URL_}/storage/v1${x.signedURL}`);
-    return out;
-  },
-  async leerManual(path: string) {
-    const r = await fetch(`${URL_}/storage/v1/object/manuales/${path.split("/").map(encodeURIComponent).join("/")}`, { headers: { Authorization: `Bearer ${SERVICE}`, apikey: SERVICE } });
-    return r.ok ? await r.text() : null;
-  },
   async crearUsuarioAuth({ email, password }: { email: string; password: string }) {
     const r = await fetch(`${URL_}/auth/v1/admin/users`, { method: "POST", headers: adminHeaders, body: JSON.stringify({ email, password, email_confirm: true }) });
     const j = await r.json();
