@@ -92,6 +92,20 @@ T('H9 Un viaje histórico conserva su «Fecha y hora de salida» guardada (no se
 const sinEdit = JSON.parse(ev(`JSON.stringify((()=>{try{API.torreEditarHorarios('U-T','${hv.id}',{tSalida:'2031-05-01T10:00'});return {ok:true}}catch(e){return {ok:false,code:e.code}}})())`));
 T('H10 «Fecha y hora de salida» ya no se puede editar como horario', sinEdit.ok === false, sinEdit);
 
+/* Registro completo con el formulario real (el mismo camino que usa el botón «Guardar»): todo el payload llega al motor sin «Campo no permitido» */
+como('U-1', 'nuevo');
+ev(`(()=>{const f=S.form;Object.assign(f,{proyecto:'COCACOLA',proyectoCat:'COCACOLA',shipment:'F-1',opl:'INTRANSIT',tipoViaje:'ONE WAY',tipoCarga:'KG',noCarga:'1',producto:'P',placaSel:'T-4',pilotoId:'P-4',rutaId:'R-0002',fechaPlanD:'2031-06-01',fechaPlanT:'08:00',placaArrastre:'PA-9'});
+  Object.entries(${JSON.stringify(t11)}).forEach(([k,v])=>{f[k]=v;});})()`);
+await ev('ACT.guardar()'); await tick(200);
+const fid = ev('S.form&&S.form.savedId'), ferr = ev('S.form&&S.form.err');
+const fv = fid && trip(fid);
+T('R1 El formulario de nuevo viaje se abre, se llena y se REGISTRA (sin «Campo no permitido»)', !!fid && !ferr, ferr);
+T('R2 El viaje guardado trae los 11 horarios, incluidos «Espera en rampa bodega» y «Salida de bodega»', !!fv && Object.entries(t11).every(([k, v]) => fv[k] === v), fv);
+const raro = JSON.parse(ev(`JSON.stringify((()=>{try{API.crearViaje('U-1',{...${JSON.stringify({ ...base, fechaPlan: '2031-06-02T07:00', shipment: 'F-2' })},campoInventado:'x'});return {ok:true}}catch(e){return {ok:false,m:e.message}}})())`));
+T('R3 Un campo realmente desconocido SIGUE rechazándose (la validación de seguridad no se tocó)', raro.ok === false && /Campo no permitido: campoInventado/.test(raro.m), raro);
+const viejo = trip(K);
+T('R4 Los viajes anteriores (sin los horarios nuevos) siguen cargando y mostrándose', !!viejo && viejo.tEsperaRampaBodega === undefined || viejo.tEsperaRampaBodega === '');
+
 /* ---------- 3 y 4. Torre: vista general ---------- */
 como('U-T', 'torre');
 T('G1 Torre tiene la opción «Vista general» junto a las otras dos', !!boton('Vista general', '.chip') && !!boton('Horarios y fechas', '.chip') && !!boton('Viajes y estado', '.chip'));
@@ -115,7 +129,7 @@ await setF('tDia', '');
 await setF('tDesde', '2031-03-01'); await setF('tHasta', '2031-03-03');
 T('F2 Rango desde–hasta (incluye los extremos)', JSON.stringify(idsG().sort()) === JSON.stringify([...A].sort()), idsG());
 await setF('tHasta', '');
-T('F3 Solo «desde»: todos los viajes de esa fecha en adelante', filasG().length === 5 && !idsG().includes(K) && !idsG().includes(C) && idsG().includes(hv.id), idsG());
+T('F3 Solo «desde»: todos los viajes de esa fecha en adelante', filasG().length === 6 && !idsG().includes(K) && !idsG().includes(C) && idsG().includes(hv.id), idsG());
 await setF('tDesde', ''); await setF('tHasta', '2031-02-09');
 T('F4 Solo «hasta»: todos los viajes hasta esa fecha', JSON.stringify(idsG().sort()) === JSON.stringify([K, C].sort()), idsG());
 await setF('tDesde', '2031-03-01'); await setF('tHasta', '2031-03-31');

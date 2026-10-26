@@ -172,6 +172,13 @@ for (const [quien, rol] of [['ped', 'Operativo'], ['mar', 'Validador'], ['cta', 
 }
 const dp = await api('fel', 'torreEditarHorarios', tk1.result.id, { pilotoId: 'P-1' });
 T('S18 Torre sigue sin poder editar datos generales (piloto, etc.)', dp.ok === false && dp.code === 'CAMPO_NO_EDITABLE', dp);
+/* ---- 5. Registro por la API real: los horarios nuevos pasan; un campo desconocido sigue rechazado ---- */
+const ok1 = await api('ped', 'crearViaje', viaje({ shipment: 'R-1', fechaPlan: '2031-04-01T08:00', pilotoId: 'P-3' }));
+T('S20 Un encargado registra un viaje con los 11 horarios por la API (sin «Campo no permitido»)', ok1.ok, ok1.message);
+const raro = await api('adm', 'crearViaje', viaje({ shipment: 'R-2', fechaPlan: '2031-04-02T08:00', pilotoId: 'P-3', campoInventado: 'x' }));
+T('S21 Un campo realmente desconocido sigue rechazado por el servidor', raro.ok === false && /Campo no permitido: campoInventado/.test(raro.message), raro);
+const raro2 = await api('adm', 'editarViaje', hid, { campoInventado: 'x' });
+T('S22 Y también al editar un viaje', raro2.ok === false && raro2.code === 'CAMPO_NO_EDITABLE', raro2);
 const v = await api('adm', 'verificarAuditoria');
 T('S19 La cadena de auditoría sigue íntegra', v.ok, v);
 
