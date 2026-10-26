@@ -80,7 +80,7 @@ function seedDB(){
     if(o.s&&!o.blank){const s=o.s;
       d.tIngresoPlanta=lm(s+60);d.tEsperaRampa=lm(s+55);d.tRampa=lm(s+40);d.tInicioCarga=lm(s+35);d.tFinCarga=lm(s+15);d.tSalidaPlanta=lm(s+5);d.tSalida=lm(s);
       if(o.arr!==undefined)d.tIngresoBodega=lm(o.arr);
-      if(o.f){d.tIngresoBodega=lm(s-180);d.tInicioDescarga=lm(s-195);d.tFinDescarga=lm(s-250);d.qViaticos=cmi?200:150;if(n%2)d.noDocRetorno='RET-'+String(111+n).padStart(6,'0');}
+      if(o.f){d.tIngresoBodega=lm(s-180);d.tEsperaRampaBodega=lm(s-185);d.tInicioDescarga=lm(s-195);d.tFinDescarga=lm(s-250);d.tSalidaBodega=lm(s-262);d.qViaticos=cmi?200:150;if(n%2)d.noDocRetorno='RET-'+String(111+n).padStart(6,'0');}
     }
     const t=run(o.c,()=>API.crearViaje(enc,d)),id=t.id;
     if(o.s)run(o.s,()=>API.iniciar(enc,id));

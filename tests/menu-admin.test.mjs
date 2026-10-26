@@ -33,7 +33,7 @@ const G = grupos();
 T('M1 Aparecen los cinco módulos, en orden: VIAJES, TORRE, COMERCIAL, OPL, FLOTAS (y «Administración» aparte)', JSON.stringify(G.map(g => g.t)) === JSON.stringify(['VIAJES', 'TORRE', 'COMERCIAL', 'OPL', 'FLOTAS', 'ADMINISTRACIÓN']), G.map(g => g.t));
 const L = t => (G.find(g => g.t === t) || { items: [] }).items.map(i => i.l);
 T('M2 VIAJES agrupa Nuevo viaje, Liquidaciones y Todos los viajes (y la pantalla existente de viajes por estado)', JSON.stringify(L('VIAJES')) === JSON.stringify(['Nuevo viaje', 'Liquidaciones', 'Todos los viajes', 'Viajes por estado']), L('VIAJES'));
-T('M3 TORRE agrupa «Viajes» y «Horarios y fechas» (ambas abren la hoja existente de Torre de control)', JSON.stringify(L('TORRE')) === JSON.stringify(['Viajes', 'Horarios y fechas']), L('TORRE'));
+T('M3 TORRE agrupa «Viajes», «Horarios y fechas» y «Vista general» (todas abren la hoja existente de Torre de control)', JSON.stringify(L('TORRE')) === JSON.stringify(['Viajes', 'Horarios y fechas', 'Vista general']), L('TORRE'));
 T('M4 COMERCIAL agrupa Facturación, Clientes, Tarifas, Finanzas y Catálogos', JSON.stringify(L('COMERCIAL')) === JSON.stringify(['Facturación', 'Clientes', 'Tarifas', 'Finanzas', 'Catálogos']), L('COMERCIAL'));
 T('M5 OPL agrupa Proveedores', JSON.stringify(L('OPL')) === JSON.stringify(['Proveedores']), L('OPL'));
 T('M6 FLOTAS agrupa Pilotos', JSON.stringify(L('FLOTAS')) === JSON.stringify(['Pilotos']), L('FLOTAS'));

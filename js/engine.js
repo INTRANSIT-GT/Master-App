@@ -213,6 +213,12 @@ const ayudaModulosDe=A=>{
 const DATA_KEYS=['estado','proyectoCat','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','unidadId','rutaId','placaArrastre','noDocRetorno','qViaticos','gastosAdicionales'];
 const TIEMPO_KEYS=['fechaPlan',...TKEYS];
 const TIEMPO_DV_KEYS=[...TIEMPO_KEYS,...DVKEYS];   /* + horarios de descarga del desvío (solo viajes con Desvío) */
+/* «Fecha y hora de salida» (tSalida) ya no es un horario visible ni editable. El dato histórico se conserva tal cual y el sistema sigue
+   anotándolo solo al iniciar el viaje; aquí solo se mantiene su formato y su nombre en la bitácora. */
+const TIEMPO_AUD=[...TIEMPO_DV_KEYS,'tSalida'];
+LBL.tSalida='Fecha y hora de salida';
+/* Para marcar Entregado se exigen los mismos horarios de siempre; los dos que ocurren después de la descarga o solo a veces (espera en rampa de bodega y salida de bodega) son opcionales. */
+const TKEYS_ENTREGA=TKEYS.filter(k=>!['tEsperaRampaBodega','tSalidaBodega'].includes(k));
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 /* Estados que se pueden corregir a mano (con el permiso viajes_editar_estado). Los demás los genera el flujo:
    LIQUIDADO (liquidación enviada), RECHAZADO (liquidación devuelta), ACEPTADO (liquidación aprobada),
@@ -386,7 +392,7 @@ function fmtVal(k,v){
   if(k==='estado')return (ESTADOS[v]||{}).l||v;
   if(k==='pilotoId')return (PILOTOS.find(p=>p.id===v)||{}).nombre||v;
   if(k==='origen'||k==='destino'||k==='desvioDestino')return String(v);
-  if(TIEMPO_DV_KEYS.includes(k))return fmtL(v);
+  if(TIEMPO_AUD.includes(k))return fmtL(v);
   if(k==='gastosAdicionales')return Array.isArray(v)&&v.length?v.map(x=>`${x.concepto}: Q ${x.importe}`).join(' · '):'(vacío)';
   return String(v);
 }
@@ -809,7 +815,7 @@ const API={
       if(e.entidad==='AGRUPACION'&&!comercial)continue;
       if(e.entidad==='FINANZAS'&&!verMoney)continue;
       if(MONEY_LBL.includes(e.campo)&&!((e.campo==='Q viáticos'||e.campo==='Gastos adicionales')?verViat:verMoney))continue;
-      if(soloTiempos&&!TIEMPO_DV_KEYS.some(k=>LBL[k]===e.campo))continue;
+      if(soloTiempos&&!TIEMPO_AUD.some(k=>LBL[k]===e.campo))continue;
       let a=porViaje.get(e.viajeId);if(!a){a=[];porViaje.set(e.viajeId,a);}a.push(e);
     }
     return porViaje;
@@ -917,7 +923,7 @@ const API={
         if(nv==='EN_RUTA'){
           requerido(prop,['shipment','opl','tipoViaje','tipoCarga','noCarga','producto','pilotoId','placaArrastre'],'En ruta');
           if(!prop.unidadId)deny('No se puede pasar a En ruta: falta la unidad.','FALTAN_CAMPOS');
-        }else requerido(prop,TKEYS,'Entregado');
+        }else requerido(prop,TKEYS_ENTREGA,'Entregado');
       }else if(TIEMPO_KEYS.includes(k)){
         need(A,'viajes_editar_tiempos','editar fechas y horas');
         if(!todos&&!esAsig)deny('Solo puedes editar viajes de tus clientes asignados.');
@@ -984,7 +990,7 @@ const API={
     need(A,'viajes_finalizar','finalizar viajes');
     const t=getT(id);if(!asignado(A,t))deny('Solo el encargado asignado a este cliente puede finalizar el viaje.');
     if(t.estado!=='EN_RUTA')deny(`Solo un viaje En ruta puede entregarse (estado actual: ${ESTADOS[t.estado].l}).`,'ESTADO_INVALIDO');
-    requerido(t,TKEYS,'Entregado');
+    requerido(t,TKEYS_ENTREGA,'Entregado');
     moveEstado(t,'ENTREGADO',A,'Viaje entregado');
     t.finalizadoPor=A.nombre;t.finalizadoEn=nowIso();
     return t;
@@ -1006,7 +1012,7 @@ const API={
       t.iniciadoPor=A.nombre;t.iniciadoEn=nowIso();
       if(!t.tSalida)setAuto(t,'tSalida',nowLoc(),A,'Automático al iniciar el viaje');
     }else{
-      requerido(t,TKEYS,'Entregado');
+      requerido(t,TKEYS_ENTREGA,'Entregado');
       moveEstado(t,'ENTREGADO',A,'Viaje entregado (Torre de Control)');
       t.finalizadoPor=A.nombre;t.finalizadoEn=nowIso();
     }

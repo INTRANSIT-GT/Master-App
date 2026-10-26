@@ -720,7 +720,7 @@ function aplicarTema(){
    v: pantalla existente · l: etiqueta si difiere de la habitual · k: clave propia cuando dos opciones abren la misma pantalla · tab: pestaña con la que abre */
 const ADM_MODULOS=[
   {t:'VIAJES',    items:[{v:'nuevo'},{v:'liquidaciones'},{v:'todos'},{v:'viajes',l:'Viajes por estado'}]},
-  {t:'TORRE',     items:[{v:'torre',k:'torre',l:'Viajes',tab:['torre','curso']},{v:'torre',k:'horarios',l:'Horarios y fechas',ic:'clock',tab:['torre','todos']}]},
+  {t:'TORRE',     items:[{v:'torre',k:'torre',l:'Viajes',tab:['torre','curso']},{v:'torre',k:'horarios',l:'Horarios y fechas',ic:'clock',tab:['torre','todos']},{v:'torre',k:'general',l:'Vista general',ic:'list',tab:['torre','todos']}]},
   {t:'COMERCIAL', items:[{v:'comercial'},{v:'proyectos'},{v:'tarifas'},{v:'finanzas'},{v:'catalogos'}]},
   {t:'OPL',       items:[{v:'opl',l:'Proveedores'}]},
   {t:'FLOTAS',    items:[{v:'catalogos',k:'pilotos',l:'Pilotos',ic:'users',tab:['cat','pil']}]},
@@ -1051,6 +1051,7 @@ app.addEventListener('change',async e=>{
     else S.sel=[...new Set([...S.sel,...pend.map(x=>x.id)])];
     $('#vb').innerHTML=BODY.comercial();return;
   }
+  if(t.dataset.torreest){ACT.torreEstatusSel(t);return;}
   if(t.dataset.flt){S[t.dataset.flt]=t.value;render();
     if(/^f(Desde|Hasta|Cli|Pcat|Prov)$/.test(t.dataset.flt))cargaGrafica();
     return;}
