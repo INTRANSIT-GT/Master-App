@@ -1,4 +1,4 @@
-/* Servidor (PGlite con las migraciones reales): los 11 horarios y «Salida de bodega» se guardan y se recuperan SIN cambios en la base,
+/* Servidor (PGlite con las migraciones reales): los 10 horarios y «Salida de bodega» se guardan y se recuperan SIN cambios en la base,
    «Fecha y hora de salida» se conserva como dato histórico, y Torre de Control ve todos los viajes y cambia el estatus con las mismas reglas de siempre. */
 import { PGlite } from "@electric-sql/pglite";
 import fs from 'node:fs'; import path from 'node:path'; import crypto from 'node:crypto';
@@ -100,7 +100,7 @@ for (const [r, cli, pr] of [[r1, 'COLGATE', 'COLGATE'], [r2, 'COCACOLA', 'COCACO
 }
 T('00 Preparación: las dos rutas quedan Activas', (await q1("select count(*)::int n from rutas where estado='ACTIVA'"))[0].n === 2);
 
-const T10 = { tIngresoPlanta: '2031-01-01T08:10', tEsperaRampa: '2031-01-01T08:20', tRampa: '2031-01-01T08:30', tInicioCarga: '2031-01-01T08:40', tFinCarga: '2031-01-01T09:00', tSalidaPlanta: '2031-01-01T09:05', tIngresoBodega: '2031-01-01T13:00', tEsperaRampaBodega: '2031-01-01T13:05', tInicioDescarga: '2031-01-01T13:10', tFinDescarga: '2031-01-01T13:40', tSalidaBodega: '2031-01-01T13:55' };
+const T10 = { tIngresoPlanta: '2031-01-01T08:10', tEsperaRampa: '2031-01-01T08:20', tRampa: '2031-01-01T08:30', tInicioCarga: '2031-01-01T08:40', tFinCarga: '2031-01-01T09:00', tSalidaPlanta: '2031-01-01T09:05', tIngresoBodega: '2031-01-01T13:00', tInicioDescarga: '2031-01-01T13:10', tFinDescarga: '2031-01-01T13:40', tSalidaBodega: '2031-01-01T13:55' };
 const viaje = (extra = {}) => ({ cliente: 'COLGATE', pilotoId: 'P-3', rutaId: r1.result.id, fechaPlan: '2031-01-01T08:00', shipment: 'S-1', opl: 'J&J', tipoViaje: 'ONE WAY', tipoCarga: 'TARIMAS', noCarga: '1', producto: 'Producto de prueba', placaArrastre: 'C-ARR-001', ...T10, ...extra });
 /* viaje de Torre (cliente autorizado) con UN solo horario: faltan los demás */
 const vk = await api('adm', 'crearViaje', viaje({ cliente: 'COCACOLA', pilotoId: 'P-4', rutaId: r2.result.id, shipment: 'K-1', fechaPlan: '2031-02-01T08:00', ...Object.fromEntries(Object.keys(T10).map(k => [k, ''])), tIngresoPlanta: '2031-02-01T08:10' }));
@@ -113,15 +113,15 @@ const VACIO = Object.fromEntries(Object.keys(T10).map(k => [k, '']));
 const MIGRACIONES_NUEVAS = fs.readdirSync(path.join(raíz, 'supabase/migrations')).filter(f => /^03[4-9]_/.test(f));
 T('S0 No se necesita ninguna migración nueva (la última migración es la 033, que ya existía) y todas las existentes se aplican', MIGRACIONES_NUEVAS.length === 0 && filas.filter(f => /^FAIL SQL/.test(f)).length === 0, MIGRACIONES_NUEVAS);
 
-/* ---- 1. Guardar y recuperar los 11 horarios ---- */
+/* ---- 1. Guardar y recuperar los 10 horarios ---- */
 const h1 = await api('adm', 'crearViaje', viaje({ shipment: 'H-1', pilotoId: 'P-3' }));
-T('S1 Se crea un viaje con los 11 horarios, incluida la «Salida de bodega»', h1.ok, h1.message);
+T('S1 Se crea un viaje con los 10 horarios, incluida la «Salida de bodega»', h1.ok, h1.message);
 const hid = h1.result?.id;
 const s1 = await trip('fel', hid);
-T('S2 Al consultarlo (otro usuario) los 11 horarios vuelven exactos y en sus campos', Object.entries(T10).every(([k, v]) => s1[k] === v), s1);
+T('S2 Al consultarlo (otro usuario) los 10 horarios vuelven exactos y en sus campos', Object.entries(T10).every(([k, v]) => s1[k] === v), s1);
 const fila1 = (await q1(`select t_salida_planta, t_salida, t_ingreso_bodega, extra from viajes where id=$1`, [hid]))[0];
 const ex = typeof fila1.extra === 'string' ? JSON.parse(fila1.extra) : fila1.extra;
-T('S3 «Salida de bodega» y «Espera en rampa bodega» se guardan en la base (campo flexible del viaje) sin tocar columnas existentes', ex.tSalidaBodega === T10.tSalidaBodega && ex.tEsperaRampaBodega === T10.tEsperaRampaBodega && fila1.t_salida === '' && fila1.t_salida_planta === T10.tSalidaPlanta, fila1);
+T('S3 «Salida de bodega» se guarda en la base (campo flexible del viaje) sin tocar columnas existentes', ex.tSalidaBodega === T10.tSalidaBodega && fila1.t_salida === '' && fila1.t_salida_planta === T10.tSalidaPlanta, fila1);
 const ed = await api('adm', 'editarViaje', hid, { tSalidaBodega: '2031-01-01T14:30' });
 const s2 = await trip('adm', hid);
 T('S4 Editar el viaje actualiza la «Salida de bodega» y no cambia ningún otro horario', ed.ok && s2.tSalidaBodega === '2031-01-01T14:30' && Object.entries(T10).filter(([k]) => k !== 'tSalidaBodega').every(([k, v]) => s2[k] === v), [ed.message, s2]);
@@ -137,11 +137,11 @@ const eds = await api('fel', 'torreEditarHorarios', hid, { tSalida: '2031-01-01T
 T('S7 «Fecha y hora de salida» ya no se puede editar como horario (tampoco por Torre)', eds.ok === false && (await trip('adm', hid)).tSalida === '2031-01-01T09:00', eds);
 
 /* ---- 3. Entrega: los horarios nuevos son opcionales; los de siempre siguen siendo obligatorios ---- */
-const base9 = Object.fromEntries(Object.entries(T10).filter(([k]) => !['tEsperaRampaBodega', 'tSalidaBodega'].includes(k)));
+const base9 = Object.fromEntries(Object.entries(T10).filter(([k]) => k !== 'tSalidaBodega'));
 const e1 = await api('adm', 'crearViaje', viaje({ shipment: 'E-1', fechaPlan: '2031-01-02T08:00', pilotoId: 'P-3', ...VACIO, ...base9 }));
 await api('adm', 'iniciar', e1.result.id);
 const fin1 = await api('adm', 'finalizar', e1.result.id);
-T('S8 Un viaje con los horarios de siempre puede entregarse aunque falten «Espera en rampa bodega» y «Salida de bodega»', fin1.ok && (await trip('adm', e1.result.id)).estado === 'ENTREGADO', fin1.message);
+T('S8 Un viaje con los horarios de siempre puede entregarse aunque falte «Salida de bodega»', fin1.ok && (await trip('adm', e1.result.id)).estado === 'ENTREGADO', fin1.message);
 const e2 = await api('adm', 'crearViaje', viaje({ shipment: 'E-2', fechaPlan: '2031-01-03T08:00', pilotoId: 'P-5', ...VACIO, ...base9, tFinDescarga: '' }));
 await api('adm', 'iniciar', e2.result.id);
 const fin2 = await api('adm', 'finalizar', e2.result.id);
@@ -154,7 +154,7 @@ const enBase = (await q1('select count(*)::int n from viajes'))[0].n;
 const sTorre = (await snap('fel')).trips;
 const estados = new Set(sTorre.map(t => t.estado));
 T('S10 Torre recibe TODOS los viajes registrados (todos los estados y clientes), no solo los activos', sTorre.length === enBase && estados.has('PLANIFICADO') && estados.has('ENTREGADO'), [sTorre.length, enBase, [...estados]]);
-T('S11 Torre recibe los 11 horarios del viaje y ningún importe', (() => { const t = sTorre.find(x => x.id === hid); return !!t && Object.keys(T10).every(k => k in t) && !sTorre.some(x => Number(x.tarifaCliente) > 0 || Number(x.costoProveedor) > 0); })());
+T('S11 Torre recibe los 10 horarios del viaje y ningún importe', (() => { const t = sTorre.find(x => x.id === hid); return !!t && Object.keys(T10).every(k => k in t) && !sTorre.some(x => Number(x.tarifaCliente) > 0 || Number(x.costoProveedor) > 0); })());
 const m1 = await api('fel', 'torreMoverEstado', tk1.result.id, 'EN_RUTA');
 const dbEst = (await q1('select estado from viajes where id=$1', [tk1.result.id]))[0].estado;
 T('S12 Torre cambia el estatus de un cliente autorizado y queda guardado en la base', m1.ok && dbEst === 'EN_RUTA' && (await trip('adm', tk1.result.id)).estado === 'EN_RUTA', [m1.message, dbEst]);
@@ -172,6 +172,13 @@ for (const [quien, rol] of [['ped', 'Operativo'], ['mar', 'Validador'], ['cta', 
 }
 const dp = await api('fel', 'torreEditarHorarios', tk1.result.id, { pilotoId: 'P-1' });
 T('S18 Torre sigue sin poder editar datos generales (piloto, etc.)', dp.ok === false && dp.code === 'CAMPO_NO_EDITABLE', dp);
+/* ---- 5. Registro por la API real: los horarios nuevos pasan; un campo desconocido sigue rechazado ---- */
+const ok1 = await api('ped', 'crearViaje', viaje({ shipment: 'R-1', fechaPlan: '2031-04-01T08:00', pilotoId: 'P-3' }));
+T('S20 Un encargado registra un viaje con los 10 horarios por la API (sin «Campo no permitido»)', ok1.ok, ok1.message);
+const raro = await api('adm', 'crearViaje', viaje({ shipment: 'R-2', fechaPlan: '2031-04-02T08:00', pilotoId: 'P-3', campoInventado: 'x' }));
+T('S21 Un campo realmente desconocido sigue rechazado por el servidor', raro.ok === false && /Campo no permitido: campoInventado/.test(raro.message), raro);
+const raro2 = await api('adm', 'editarViaje', hid, { campoInventado: 'x' });
+T('S22 Y también al editar un viaje', raro2.ok === false && raro2.code === 'CAMPO_NO_EDITABLE', raro2);
 const v = await api('adm', 'verificarAuditoria');
 T('S19 La cadena de auditoría sigue íntegra', v.ok, v);
 

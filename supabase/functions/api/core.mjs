@@ -8,7 +8,7 @@ const dstr=d=>{const x=_sh(d);return x.getUTCFullYear()+'-'+pad(x.getUTCMonth()+
 const toLocal=d=>{const x=_sh(d);return dstr(d)+'T'+pad(x.getUTCHours())+':'+pad(x.getUTCMinutes());};
 const fmtDate=s=>{if(!s)return'—';const [y,m,d]=s.split('-');return `${d}/${m}/${y}`;};
 const fmtL=v=>v?`${fmtDate(v.slice(0,10))} ${v.slice(11,16)}`:'—';
-const CAMPOS_TIEMPO=[['tIngresoPlanta','Ingreso a planta'],['tEsperaRampa','Espera en rampa'],['tRampa','Ingreso a rampa'],['tInicioCarga','Inicio de carga'],['tFinCarga','Fin de carga'],['tSalidaPlanta','Salida de planta'],['tIngresoBodega','Ingreso a bodega'],['tEsperaRampaBodega','Espera en rampa bodega'],['tInicioDescarga','Inicio de descarga'],['tFinDescarga','Fin de descarga'],['tSalidaBodega','Salida de bodega']];
+const CAMPOS_TIEMPO=[['tIngresoPlanta','Ingreso a planta'],['tEsperaRampa','Espera en rampa'],['tRampa','Ingreso a rampa'],['tInicioCarga','Inicio de carga'],['tFinCarga','Fin de carga'],['tSalidaPlanta','Salida de planta'],['tIngresoBodega','Ingreso a bodega'],['tInicioDescarga','Inicio de descarga'],['tFinDescarga','Fin de descarga'],['tSalidaBodega','Salida de bodega']];
 const TKEYS=CAMPOS_TIEMPO.map(x=>x[0]);
 const LBL={proyectoCat:'Proyecto',shipment:'Shipment',noViaje:'No. de viaje',opl:'OPL',tipoViaje:'Tipo de viaje',tipoCarga:'Tipo de carga',noCarga:'Cantidad de carga',producto:'Producto',fechaPlan:'Fecha plan',pilotoId:'Piloto',origen:'Origen',destino:'Destino',noDocRetorno:'No. doc retorno',qViaticos:'Q viáticos'};
 CAMPOS_TIEMPO.forEach(([k,l])=>LBL[k]=l);
@@ -250,8 +250,8 @@ const TIEMPO_DV_KEYS=[...TIEMPO_KEYS,...DVKEYS];   /* + horarios de descarga del
    anotándolo solo al iniciar el viaje; aquí solo se mantiene su formato y su nombre en la bitácora. */
 const TIEMPO_AUD=[...TIEMPO_DV_KEYS,'tSalida'];
 LBL.tSalida='Fecha y hora de salida';
-/* Para marcar Entregado se exigen los mismos horarios de siempre; los dos que ocurren después de la descarga o solo a veces (espera en rampa de bodega y salida de bodega) son opcionales. */
-const TKEYS_ENTREGA=TKEYS.filter(k=>!['tEsperaRampaBodega','tSalidaBodega'].includes(k));
+/* Para marcar Entregado se exigen los mismos horarios de siempre; la salida de bodega ocurre después de la descarga y es opcional. */
+const TKEYS_ENTREGA=TKEYS.filter(k=>k!=='tSalidaBodega');
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 /* Estados que se pueden corregir a mano (con el permiso viajes_editar_estado). Los demás los genera el flujo:
    LIQUIDADO (liquidación enviada), RECHAZADO (liquidación devuelta), ACEPTADO (liquidación aprobada),

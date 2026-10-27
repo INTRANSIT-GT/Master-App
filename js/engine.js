@@ -217,8 +217,8 @@ const TIEMPO_DV_KEYS=[...TIEMPO_KEYS,...DVKEYS];   /* + horarios de descarga del
    anotándolo solo al iniciar el viaje; aquí solo se mantiene su formato y su nombre en la bitácora. */
 const TIEMPO_AUD=[...TIEMPO_DV_KEYS,'tSalida'];
 LBL.tSalida='Fecha y hora de salida';
-/* Para marcar Entregado se exigen los mismos horarios de siempre; los dos que ocurren después de la descarga o solo a veces (espera en rampa de bodega y salida de bodega) son opcionales. */
-const TKEYS_ENTREGA=TKEYS.filter(k=>!['tEsperaRampaBodega','tSalidaBodega'].includes(k));
+/* Para marcar Entregado se exigen los mismos horarios de siempre; la salida de bodega ocurre después de la descarga y es opcional. */
+const TKEYS_ENTREGA=TKEYS.filter(k=>k!=='tSalidaBodega');
 const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 /* Estados que se pueden corregir a mano (con el permiso viajes_editar_estado). Los demás los genera el flujo:
    LIQUIDADO (liquidación enviada), RECHAZADO (liquidación devuelta), ACEPTADO (liquidación aprobada),

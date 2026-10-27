@@ -25,6 +25,10 @@ const J=t=>{
 };
 const rolDe=r=>(ROLES[r]||{label:String(r||'Sistema'),home:'inicio',nav:[]});
 const homeOf=u=>rolDe(u&&u.rol).home;
+/* Perfiles que, sin tener permisos de operación (crear/liquidar viajes), ven en Inicio el mismo panel completo que la Administradora:
+   accesos, resumen de pendientes, gráfica por mes y «Requiere tu atención». Solo cambia lo que se MUESTRA: cada acceso sigue sujeto a los permisos y
+   secciones del perfil, y un botón solo aparece si el perfil puede abrir esa pantalla. */
+const INICIO_COMPLETO=['GERENTE_COMERCIAL'];
 /* Acceso a cada pantalla: lo manda la matriz (secciones «sec_<pantalla>»).
    Los permisos de acción siguen siendo los de siempre y el veto de separación de funciones se conserva. */
 function allowed(v){
@@ -170,10 +174,10 @@ function inicioAcciones(u,ts){
   const cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean);
   const fix=cnt(ts,t=>t.estado==='RECHAZADO');
   const filtro=!hp('viajes_ver_todos')&&cls.length?`<div class="projline" style="margin-bottom:10px">${comboHTML('inicioProy',S.inicioProy||'',[{id:'',nombre:'Todos mis proyectos'},...cls.map(p=>({id:p.id,nombre:p.nombre+' · '+p.cliente}))],'Buscar proyecto')}<span class="mute">Solo ves la información de tu proyecto</span></div>`:'';
-  const b=[];
-  if(hp('viajes_crear'))b.push(`<button class="bigbtn main1" data-act="nav" data-v="nuevo"><span class="ico">${icon('plus',24)}</span><span><b>NUEVO VIAJE</b><br><span class="h">Registrar un viaje</span></span></button>`);
-  if(hp('viajes_ver'))b.push(`<button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta</span></span></button>`);
-  if(hp('liq_ver'))b.push(`<button class="bigbtn" data-act="nav" data-v="liquidaciones"><span class="ico">${icon('receipt',24)}</span><span><b>LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>`);
+  const b=[],ok=v=>!INICIO_COMPLETO.includes(u.rol)||allowed(v);
+  if(hp('viajes_crear')&&ok('nuevo'))b.push(`<button class="bigbtn main1" data-act="nav" data-v="nuevo"><span class="ico">${icon('plus',24)}</span><span><b>NUEVO VIAJE</b><br><span class="h">Registrar un viaje</span></span></button>`);
+  if(hp('viajes_ver')&&ok('viajes'))b.push(`<button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta</span></span></button>`);
+  if(hp('liq_ver')&&ok('liquidaciones'))b.push(`<button class="bigbtn" data-act="nav" data-v="liquidaciones"><span class="ico">${icon('receipt',24)}</span><span><b>LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>`);
   return `${filtro}${b.length?`<div class="bigbtns">${b.join('')}</div>`:''}`;
 }
 function inicioResto(ts){
@@ -185,11 +189,11 @@ function inicioResto(ts){
       <div class="card"><div id="chartMes">${historicoMeses()||(S.finHistCargando?'<div class="mute">Calculando el resumen de tus viajes…</div>':histVacio())}</div>
       <div class="mute" style="font-size:12.5px;margin-top:8px">Tus viajes por <b>fecha plan</b> (todos, no solo los cargados en pantalla), divididos por estado con el color de cada estado. Pasa el cursor por un tramo para ver el número; un mes «todo verde» ya está liquidado, facturado o cobrado.</div></div>
     </section>
-    <section class="section"><h2>Requiere tu atención</h2>${act.length?`<div class="cards">${act.map(tripCard).join('')}</div>${actAll.length>act.length?`<div class="mute" style="margin-top:8px">Se muestran ${act.length} de ${actAll.length}. <button class="linkbtn" data-act="nav" data-v="viajes">Ver todos</button></div>`:''}`:empty('Todo al día','No tienes viajes esperando una acción.')}</section>`;
+    <section class="section"><h2>Requiere tu atención</h2>${act.length?`<div class="cards">${act.map(tripCard).join('')}</div>${actAll.length>act.length&&(!INICIO_COMPLETO.includes(S.user.rol)||allowed('viajes'))?`<div class="mute" style="margin-top:8px">Se muestran ${act.length} de ${actAll.length}. <button class="linkbtn" data-act="nav" data-v="viajes">Ver todos</button></div>`:''}`:empty('Todo al día','No tienes viajes esperando una acción.')}</section>`;
 }
 VIEWS.inicio=()=>{
   const u=S.user,all=vis(),ts=S.inicioProy?all.filter(t=>t.proyecto===S.inicioProy):all;
-  const oper=hp('viajes_crear')||hp('liq_enviar')||hp('viajes_iniciar')||hp('viajes_finalizar');
+  const oper=hp('viajes_crear')||hp('liq_enviar')||hp('viajes_iniciar')||hp('viajes_finalizar')||INICIO_COMPLETO.includes(u.rol);
   const hoy=new Date().toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   return `<div class="inner">
     <div class="hello"><h1>Hola, ${esc(first(u.nombre))}</h1><div class="projline"><span class="mute">${esc(rolL(u.rol))} · ${esc(hoy)}</span></div></div>

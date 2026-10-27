@@ -56,7 +56,7 @@ const since=t=>t.tSalida||t.iniciadoEn;
 const topScroll=()=>{const m=document.querySelector('#main');if(m)m.scrollTop=0;};
 function diff(a,b){if(!a||!b)return'—';const m=Math.round((new Date(b)-new Date(a))/60000);if(m<0)return'Revisar fechas';const h=Math.floor(m/60);return h?`${h} h ${pad(m%60)} min`:`${m} min`;}
 /* Horarios (columnas FECHA_HORA ... de la hoja VIAJES), en orden cronológico */
-const CAMPOS_TIEMPO=[['tIngresoPlanta','Ingreso a planta'],['tEsperaRampa','Espera en rampa'],['tRampa','Ingreso a rampa'],['tInicioCarga','Inicio de carga'],['tFinCarga','Fin de carga'],['tSalidaPlanta','Salida de planta'],['tIngresoBodega','Ingreso a bodega'],['tEsperaRampaBodega','Espera en rampa bodega'],['tInicioDescarga','Inicio de descarga'],['tFinDescarga','Fin de descarga'],['tSalidaBodega','Salida de bodega']];
+const CAMPOS_TIEMPO=[['tIngresoPlanta','Ingreso a planta'],['tEsperaRampa','Espera en rampa'],['tRampa','Ingreso a rampa'],['tInicioCarga','Inicio de carga'],['tFinCarga','Fin de carga'],['tSalidaPlanta','Salida de planta'],['tIngresoBodega','Ingreso a bodega'],['tInicioDescarga','Inicio de descarga'],['tFinDescarga','Fin de descarga'],['tSalidaBodega','Salida de bodega']];
 const TKEYS=CAMPOS_TIEMPO.map(x=>x[0]);
 /* Columnas de tiempo que se calculan solas */
 const DUR=[['Espera de rampa','tEsperaRampa','tRampa'],['En rampa','tRampa','tSalidaPlanta'],['Espera de carga','tIngresoPlanta','tInicioCarga'],['Tiempo de carga','tInicioCarga','tFinCarga'],['Tiempo en tránsito','tSalidaPlanta','tIngresoBodega'],['Espera de descarga','tIngresoBodega','tInicioDescarga'],['Tiempo de descarga','tInicioDescarga','tFinDescarga']];
