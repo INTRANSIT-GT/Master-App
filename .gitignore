@@ -12,3 +12,6 @@ Claude outputs/
 # Claude: configuración personal y recibos privados (nunca al repositorio)
 .claude/settings.local.json
 .claude/privado/
+
+# Archivos temporales del CLI de Supabase
+supabase/.temp/
