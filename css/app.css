@@ -472,6 +472,11 @@ select option.capFalta{color:var(--fix);font-weight:600}
 .cb-list button:hover{background:var(--surface2)}
 .cb-list button[aria-selected="true"]{background:var(--brand-soft);color:var(--brand)}
 .cb-empty{padding:10px;color:var(--mute)}
+/* Formularios: el desplegable con búsqueda (Ruta, Placa…) y las sugerencias de los campos con lista (p. ej. destino del desvío) usan la misma tipografía que los demás campos: Arial 15px, peso normal, mismo color e interlineado */
+.fgroup .cb-btn{font-family:inherit;font-size:inherit;font-weight:400;line-height:inherit;text-align:left}
+.fgroup .cb-list button{font-family:inherit;font-size:inherit;font-weight:400;line-height:inherit}
+.fgroup .cb-q{font-size:inherit;line-height:inherit}
+input[list],datalist,datalist option{font-family:var(--font-body);font-size:15px;font-weight:400;line-height:1.45;color:var(--ink)}
 
 /* Desplegable con búsqueda dentro de formularios (Encargado de proyecto) */
 .fsec .fgroup .cb{display:block;margin-bottom:0;min-width:0}
