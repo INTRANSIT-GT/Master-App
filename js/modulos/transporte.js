@@ -49,7 +49,7 @@ function initForm(){
 function toModel(t){
   const m={proyecto:t.proyecto,fechaPlanD:planD(t),fechaPlanT:planT(t),err:''};
   ['proyectoCat','estado','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','placaArrastreOtro','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
-  m.gastosAdicionales=Array.isArray(t.gastosAdicionales)?t.gastosAdicionales.map(x=>({concepto:x.concepto,importe:x.importe})):[];
+  m.gastosAdicionales=Array.isArray(t.gastosAdicionales)?t.gastosAdicionales.map(x=>({concepto:x.concepto,importe:x.importe,detalle:x.detalle||''})):[];
   m.placaSel=t.unidadId||'';                      /* la unidad del viaje se edita como «placa» */
   return m;
 }
@@ -294,18 +294,19 @@ function gastosFormHTML(M,d){
   return `<h3 style="margin:14px 0 6px;font-size:14px">Gastos adicionales</h3>
     <div class="hint" style="margin-bottom:8px">Parqueo, alimentación, peaje u otros. Son aparte de los viáticos: no los reemplazan ni cambian sus cálculos.</div>
     ${l.map((x,i)=>`<div class="row2" style="align-items:end"><div class="fgroup"><label for="ga_c${i}">Concepto ${i+1}</label><select id="ga_c${i}" data-gasto="${i}|concepto" ${d}><option value="">Selecciona</option>${gastosOpciones(x.concepto).map(o=>`<option value="${esc(o)}" ${o===x.concepto?'selected':''}>${esc(o)}</option>`).join('')}</select></div>
-      <div class="fgroup"><label for="ga_i${i}">Importe (Q)</label><div class="trow"><input type="number" id="ga_i${i}" data-gasto="${i}|importe" value="${esc(x.importe)}" inputmode="decimal" min="0" step="any" placeholder="0.00" ${d}><button type="button" class="btn sm" data-act="gastoDel" data-i="${i}" aria-label="Quitar gasto ${i+1}" ${d}>Quitar</button></div></div></div>`).join('')}
+      <div class="fgroup"><label for="ga_i${i}">Importe (Q)</label><div class="trow"><input type="number" id="ga_i${i}" data-gasto="${i}|importe" value="${esc(x.importe)}" inputmode="decimal" min="0" step="any" placeholder="0.00" ${d}><button type="button" class="btn sm" data-act="gastoDel" data-i="${i}" aria-label="Quitar gasto ${i+1}" ${d}>Quitar</button></div></div></div>${esGastoOtro(x.concepto)?`<div class="fgroup"><label for="ga_d${i}">Especifique el gasto <span class="mute">*</span></label><input type="text" id="ga_d${i}" data-gasto="${i}|detalle" value="${esc(x.detalle||'')}" maxlength="200" autocomplete="off" aria-required="true" ${d}><span class="hint">Describa qué gasto adicional necesita reportar</span></div>`:''}`).join('')}
     <button type="button" class="btn sm" data-act="gastoAdd" ${d}>+ Agregar gasto adicional</button>`;
 }
 function gastosDetalleHTML(t){
   const l=Array.isArray(t.gastosAdicionales)?t.gastosAdicionales:[];
   if(!l.length)return '<span class="mute">Sin registrar</span>';
-  return `<ul style="margin:0;padding-left:18px">${l.map(x=>`<li>${esc(x.concepto)} — <b>Q ${Number(x.importe).toFixed(2)}</b></li>`).join('')}</ul><div class="mute" style="font-size:13px">Total: Q ${gastosTotal(l).toFixed(2)}</div>`;
+  return `<ul style="margin:0;padding-left:18px">${l.map(x=>`<li>${esc(x.concepto)}${x.detalle?` <span class="mute">(${esc(x.detalle)})</span>`:''} — <b>Q ${Number(x.importe).toFixed(2)}</b></li>`).join('')}</ul><div class="mute" style="font-size:13px">Total: Q ${gastosTotal(l).toFixed(2)}</div>`;
 }
 function gastoSet(clave,valor){
   const M=curModel();if(!M)return;
   const [i,campo]=clave.split('|'),l=gastosLista(M);if(!l[i])return;
-  l[i][campo]=valor;if('err' in M)M.err='';
+  const eraOtro=esGastoOtro(l[i].concepto);l[i][campo]=valor;if('err' in M)M.err='';
+  if(campo==='concepto'&&esGastoOtro(valor)!==eraOtro){if(!esGastoOtro(valor))l[i].detalle='';render();}   /* «Otros» muestra u oculta «Especifique el gasto»; con otro concepto la explicación se descarta */
 }
 
 function fieldsHTML(M,groups,dis){

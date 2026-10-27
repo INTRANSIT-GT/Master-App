@@ -393,7 +393,7 @@ function fmtVal(k,v){
   if(k==='pilotoId')return (PILOTOS.find(p=>p.id===v)||{}).nombre||v;
   if(k==='origen'||k==='destino'||k==='desvioDestino')return String(v);
   if(TIEMPO_AUD.includes(k))return fmtL(v);
-  if(k==='gastosAdicionales')return Array.isArray(v)&&v.length?v.map(x=>`${x.concepto}: Q ${x.importe}`).join(' · '):'(vacío)';
+  if(k==='gastosAdicionales')return Array.isArray(v)&&v.length?v.map(x=>`${x.concepto}${x.detalle?' ('+x.detalle+')':''}: Q ${x.importe}`).join(' · '):'(vacío)';
   return String(v);
 }
 const proyectosDe=c=>(DB.clientes.find(x=>x.id===c)||{proyectos:[]}).proyectos;
@@ -406,7 +406,9 @@ function notaPilotoDe(t){
   return String(P.unidad||'')===U?'':NOTA_PILOTO;
 }
 /* Gastos adicionales de un viaje: lista de {concepto, importe}. Las filas totalmente vacías se ignoran; el resto debe estar completo. */
-function normGastos(g){
+/* «Otro/Otros» exige una justificación (campo «detalle», se guarda dentro del mismo gasto, aparte del concepto). Un gasto «Otro» ya guardado sin detalle, que no cambió, se tolera (viajes anteriores a esta regla). */
+const esGastoOtro=c=>/^otros?$/i.test(String(c==null?'':c).trim());
+function normGastos(g,prev){
   if(g===''||g==null)return [];
   if(!Array.isArray(g))return {err:'Gastos adicionales: el formato no es válido.'};
   if(g.length>40)return {err:'Gastos adicionales: máximo 40 gastos por viaje.'};
@@ -416,11 +418,13 @@ function normGastos(g){
     if(!c&&!raw)continue;
     if(!c)return {err:`Gasto adicional ${n}: escribe el concepto (por ejemplo parqueo, alimentación o peaje).`};
     if(c.length>80)return {err:`Gasto adicional ${n}: el concepto admite máximo 80 caracteres.`};
+    const det=String(x.detalle==null?'':x.detalle).trim().replace(/\s+/g,' ');
+    if(esGastoOtro(c)){if(det.length>200)return {err:`Gasto adicional ${n}: la explicación de «Otros» admite máximo 200 caracteres.`};if(!det&&!(Array.isArray(prev)&&prev.some(p=>p&&String(p.concepto).trim()===c&&Number(p.importe)===Number(raw)&&!String(p.detalle||'').trim())))return {err:'Debe especificar a qué se refiere con “Otros”.'};}
     if(raw==='')return {err:`Gasto adicional ${n} («${c}»): escribe el importe.`};
     const v=Number(raw);
     if(!isFinite(v)||v<=0)return {err:`Gasto adicional ${n} («${c}»): el importe debe ser un número mayor que 0.`};
     if(v>9999999.99)return {err:`Gasto adicional ${n} («${c}»): el importe es demasiado grande.`};
-    out.push({concepto:c,importe:Math.round(v*100)/100});
+    out.push(esGastoOtro(c)&&det?{concepto:c,importe:Math.round(v*100)/100,detalle:det}:{concepto:c,importe:Math.round(v*100)/100});
   }
   return out;
 }
@@ -932,7 +936,7 @@ const API={
         if(['FACTURADO','COBRADO'].includes(t.estado))deny('El viaje ya fue facturado: sus fechas y horas ya no se pueden modificar.','ESTADO_BLOQUEADO');
       }else if(DATA_KEYS.includes(k)){
         need(A,'viajes_editar_datos','editar datos distintos de fechas y horas');
-        if(k==='pilotoId'&&String(v)!==String(t.pilotoId)){const Pn=PILOTOS.find(p=>p.id===v);if(Pn&&Pn.activo===false)deny('El piloto está dado de baja: elige otro.','VALIDACION');}
+        if(k==='pilotoId'&&String(cambios[k])!==String(t.pilotoId)){const Pn=PILOTOS.find(p=>p.id===cambios[k]);if(Pn&&Pn.activo===false)deny('El piloto está dado de baja: elige otro.','VALIDACION');}
         if(!esAsig)deny('Solo puedes editar viajes de tus clientes asignados.');
         if(!todos&&!esDueno(A,t))deny('Solo puedes editar los viajes que registraste tú (o los que no tienen responsable asignado).','SIN_PROPIEDAD');
         if(!DATA_EDIT_STATES.includes(t.estado))deny(`El viaje está en "${ESTADOS[t.estado].l}": sus datos ya no se pueden editar.`,'ESTADO_BLOQUEADO');
@@ -943,7 +947,7 @@ const API={
       const nv=typeof cambios[k]==='string'?cambios[k].trim():cambios[k];
       const ov=t[k]==null?'':t[k];
       if(k==='estado'&&(nv===''||nv==null))return;   /* sin estado elegido: se conserva el actual */
-      if(k==='gastosAdicionales'){const g=normGastos(nv);if(g.err)deny(g.err,'VALIDACION');if(JSON.stringify(g)===JSON.stringify(Array.isArray(ov)?ov:[]))return;dif.push([k,Array.isArray(ov)?ov:'',g]);return;}
+      if(k==='gastosAdicionales'){const g=normGastos(nv,ov);if(g.err)deny(g.err,'VALIDACION');if(JSON.stringify(g)===JSON.stringify(Array.isArray(ov)?ov:[]))return;dif.push([k,Array.isArray(ov)?ov:'',g]);return;}
       if(String(nv==null?'':nv)===String(ov))return;
       if(['proyectoCat','fechaPlan','pilotoId','rutaId'].includes(k)&&(nv===''||nv==null))deny(`${LBL[k]} es obligatorio.`,'VALIDACION');
       if(k!=='rutaId'){const m=valKey(t.proyecto,k,nv);if(m)deny(m,'VALIDACION');}
