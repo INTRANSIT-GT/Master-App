@@ -1014,6 +1014,31 @@ app.addEventListener('click',e=>{
   const fn=ACT[el.dataset.act];
   if(fn)Promise.resolve().then(()=>fn(el.dataset,el,e)).catch(err=>{console.error(err);toast('Error inesperado: '+err.message,'err');render();});
 });
+/* ---- Destino del desvío: lista de sugerencias PROPIA (reemplaza la lista nativa del navegador) con la misma apariencia que los demás desplegables.
+   El campo sigue siendo texto libre; al elegir una sugerencia se escribe su nombre exacto en el campo y se avisa al formulario con el mismo evento «input». ---- */
+function ddCerrar(w){if(!w)return;const p=w.querySelector('.cb-panel'),i=w.querySelector('input');if(p)p.hidden=true;if(i)i.setAttribute('aria-expanded','false');}
+function ddFiltrar(w,todas){
+  const i=w.querySelector('input'),p=w.querySelector('.cb-panel');if(!i||!p||i.disabled)return;
+  const q=todas?'':normTxt(i.value),bs=[...p.querySelectorAll('[data-ddpick]')];let n=0;
+  bs.forEach(b=>{const ok=!q||normTxt(b.dataset.ddpick).includes(q);b.hidden=!ok;if(ok)n++;b.setAttribute('aria-selected',String(b.dataset.ddpick===i.value));});
+  p.querySelector('.cb-empty').hidden=n>0||!bs.length;
+  p.hidden=!bs.length;i.setAttribute('aria-expanded',String(!p.hidden));
+}
+app.addEventListener('focusin',e=>{const w=e.target.closest&&e.target.closest('[data-dd]');if(w&&e.target.tagName==='INPUT')ddFiltrar(w,true);});
+app.addEventListener('input',e=>{const w=e.target.closest&&e.target.closest('[data-dd]');if(w&&e.target.tagName==='INPUT'&&!e.ddPick)ddFiltrar(w,false);});
+app.addEventListener('mousedown',e=>{if(e.target.closest&&e.target.closest('[data-ddpick]'))e.preventDefault();});   /* el campo conserva el foco al elegir */
+document.addEventListener('click',e=>{
+  const b=e.target.closest&&e.target.closest('[data-ddpick]');
+  if(b){const w=b.closest('[data-dd]'),i=w.querySelector('input');i.value=b.dataset.ddpick;const ev=new Event('input',{bubbles:true});ev.ddPick=true;i.dispatchEvent(ev);i.dispatchEvent(new Event('change',{bubbles:true}));ddCerrar(w);return;}
+  document.querySelectorAll('[data-dd]').forEach(w=>{if(!w.contains(e.target))ddCerrar(w);});   /* clic fuera: se cierra */
+});
+app.addEventListener('keydown',e=>{
+  const w=e.target.closest&&e.target.closest('[data-dd]');if(!w)return;
+  if(e.key==='Escape'){ddCerrar(w);return;}
+  const vis=[...w.querySelectorAll('[data-ddpick]:not([hidden])')];
+  if(e.key==='ArrowDown'){e.preventDefault();if(w.querySelector('.cb-panel').hidden)ddFiltrar(w,true);const k=vis.indexOf(document.activeElement);(vis[k+1]||vis[0]||{focus(){}}).focus();}
+  else if(e.key==='ArrowUp'&&vis.includes(document.activeElement)){e.preventDefault();const k=vis.indexOf(document.activeElement);(k>0?vis[k-1]:w.querySelector('input')).focus();}
+});
 app.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key===' ')&&e.target.matches('[role=button][data-act]')){e.preventDefault();e.target.click();}
   if(e.key==='Escape'&&(S.modal||S.menu||S.nav)){S.modal=null;S.menu=false;S.nav=false;render();}
