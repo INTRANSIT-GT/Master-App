@@ -26,6 +26,18 @@ El código vive en GitHub; aquí se anota qué se ejecutó en el entorno y cuán
   alternar `sec_oc` y `oc_ver` en Gerencia de Transporte funciona (se revirtió); `oc_preparar` sigue
   prohibido para ese rol; el snapshot devuelve 781 permisos y la lista `ordenesCompra`.
 
+## 2026-10-28 · Flujo comercial: confirmación del cliente y cobro (035)
+
+- **Migración aplicada:** `supabase/migrations/035_agrupaciones_flujo.sql` (después de la 034).
+  - Nuevo permiso `comercial_confirmar` (Administrador, Gerencia Comercial y Analista Comercial).
+  - Gerencia y Analista Comercial pueden agrupar; Facturación deja de agrupar/preparar y pasa a **registrar cobros** (`cobros_registrar`).
+  - Apartados de menú `sec_analista` y `sec_factcom` dentro de COMERCIAL.
+  - Nuevas ramas de almacenamiento en `facturas/` (reportes interno/cliente, autorización, cobro) en `app.puede_subir` y `app.puede_ver_archivo`.
+- **API desplegada:** función `api`, versión **89** (2026-10-28 22:57 UTC).
+- **Front publicado:** service worker **v1.0.97**.
+- **Efecto:** el flujo queda Comercial prepara y confirma con el cliente → Facturación valida/emite y cobra. Los permisos y apartados nuevos ya se pueden asignar desde la matriz.
+- **Verificado:** migración aplicada sin errores; API responde con las nuevas secciones; snapshot incluye los permisos nuevos.
+
 ## Cómo anotar
 
 Una sección por despliegue, con fecha, migración/función, versión, motivo y verificación.
