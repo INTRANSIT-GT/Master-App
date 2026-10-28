@@ -58,7 +58,7 @@ async function montar(migraciones) {
 }
 
 /* ============ Con la migración 034 ============ */
-const S = await montar([...BASE, '034_ordenes_compra.sql']);
+const S = await montar([...BASE, '034_ordenes_compra.sql', '035_agrupaciones_flujo.sql']);
 const { db, U, api, q1, como } = S;
 await db.exec("insert into storage.buckets(id,name,public,file_size_limit) values ('evidencias','evidencias',false,3145728) on conflict do nothing");
 T('M1 La migración 034 se aplica sobre 001–033 sin errores', true);
@@ -167,15 +167,29 @@ T('R3 Gerencia Comercial (permiso por defecto) registra la aceptación con evide
   T('R5 RLS de la base: Facturación lee la OC solo confirmada; Torre y Operativo no leen ninguna; Comercial sí', await rls('fac') === 1 && await rls('gco') === 1 && !(await rls('fel')) && !(await rls('ped')), [await rls('fac'), await rls('gco'), await rls('fel')]); }
 
 /* Facturación */
-const suelta = await api('fac', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [b] });
+const sinPerm = await api('fac', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001', numeroFactura: 'F-1', serieFactura: 'A', fechaFactura: '2031-12-31' });
+T('F0 Facturación NO puede agrupar viajes ni preparar la factura de una OC (servidor)', !sinPerm.ok && sinPerm.code === 'SIN_PERMISO', sinPerm);
+const suelta = await api('ale', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [b] });
 T('F1 Un viaje que está en una orden no se factura suelto (servidor)', !suelta.ok && suelta.code === 'EN_ORDEN_DE_COMPRA', suelta);
-const fa = await api('fac', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001', numeroFactura: 'F-1', serieFactura: 'A', fechaFactura: '2031-12-31' });
+const fa = await api('ale', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001', numeroFactura: 'F-1', serieFactura: 'A', fechaFactura: '2031-12-31' });
 const ag = await q1("select id, extra->>'ocId' as oc, viaje_ids from master.agrupaciones");
-T('F2 Facturación crea UNA factura con los viajes de la orden, vinculada a ella', fa.ok && ag.length === 1 && ag[0].oc === 'OC-0001' && ag[0].viaje_ids.length === 3, [fa, ag]);
-const f2 = await api('fac', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001' });
+T('F2 Comercial (Analista) crea UNA factura con los viajes de la orden, vinculada a ella', fa.ok && ag.length === 1 && ag[0].oc === 'OC-0001' && ag[0].viaje_ids.length === 3, [fa, ag]);
+const f2 = await api('ale', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001' });
 T('F3 Una orden no admite una segunda factura activa (motor)', !f2.ok && f2.code === 'YA_FACTURADO', f2);
 let eUx = ''; try { await db.query(`insert into master.agrupaciones(id,cliente_id,modalidad,fase,viaje_ids,estado,extra) values ('AGR-9','COLGATE','INDIVIDUAL','PREPARADA',array['x'],'ACTIVA','{"ocId":"OC-0001"}')`); } catch (e) { eUx = e.message; }
 T('F4 La base también impide dos facturas activas para la misma orden (índice único)', /ux_agrupacion_por_oc|duplicate key/.test(eUx), eUx);
+const sube2 = async n => db.exec(`insert into storage.objects(bucket_id,name) values ('evidencias','${n}') on conflict do nothing`);
+await sube2(`facturas/${ag[0].id}/cliente-0001aaaa.pdf`); await sube2(`facturas/${ag[0].id}/autorizacion-0001aaaa.png`);
+const pvx = await api('ale', 'agrRegistrarPdf', ag[0].id, { tipo: 'CLIENTE', opcionales: [], huella: 'malahuel', hash: 'abcdef0123456789', archivo: { path: `facturas/${ag[0].id}/cliente-0001aaaa.pdf` } });
+T('F4a Un PDF generado con datos distintos a los vigentes se rechaza (DATOS_CAMBIARON)', !pvx.ok && pvx.code === 'DATOS_CAMBIARON', pvx);
+const pv = { huella: (/ref\. ([0-9a-f]{8})/.exec(pvx.message || '') || [])[1] };
+const sc = await api('fac', 'enviarFactura', ag[0].id);
+T('F4b Sin la confirmación del cliente de Comercial, Facturación no puede facturar la agrupación (servidor)', !sc.ok && sc.code === 'SIN_CONFIRMACION', sc);
+const rp = await api('ale', 'agrRegistrarPdf', ag[0].id, { tipo: 'CLIENTE', opcionales: [], huella: pv.huella, hash: 'abcdef0123456789', archivo: { path: `facturas/${ag[0].id}/cliente-0001aaaa.pdf`, nombre: 'r.pdf' } });
+const re = await api('ale', 'agrAdjuntarEvidencia', ag[0].id, { archivo: { path: `facturas/${ag[0].id}/autorizacion-0001aaaa.png`, nombre: 'correo.png' } });
+const rf = await api('fac', 'confirmarCliente', ag[0].id);
+const rc = await api('ale', 'confirmarCliente', ag[0].id);
+T('F4c Comercial registra PDF, evidencia y «Cliente confirmó»; Facturación NO puede confirmar (servidor)', rp.ok && re.ok && !rf.ok && rf.code === 'SIN_PERMISO' && rc.ok, [rp.message, re.message, rf.code, rc.message]);
 const enviada = await api('fac', 'enviarFactura', ag[0].id);
 T('F5 Enviar la factura sigue marcando los viajes como Facturado (comportamiento actual intacto)', enviada.ok && (await q1("select count(*)::int n from master.viajes where id = any($1) and estado='FACTURADO'", [[a, b, c]]))[0].n === 3, enviada);
 const an = await api('gco', 'ocAnular', 'OC-0001', 'intento de anular con factura');

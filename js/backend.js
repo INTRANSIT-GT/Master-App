@@ -29,7 +29,7 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
   if(!(window.supabase&&window.supabase.createClient)){console.warn('No se cargó supabase-js: modo demostración');return;}
   BACKEND.modo='supabase';
   const sb=BACKEND.sb=window.supabase.createClient(C.SUPABASE_URL.trim(),k,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  const MUT=['crearViaje','editarViaje','iniciar','finalizar','torreMoverEstado','torreEditarHorarios','enviarLiquidacion','aprobar','devolver','aprobarShipmentDuplicado','prepararFactura','ocGenerar','ocRegistrarPdf','ocEnviar','ocResponder','ocAnular','ocCorregir','actualizarFactura','enviarFactura','emitirFactura','registrarCobro','corregirFactura','anularAgrupacion','registrarImportes','registrarPago','anularPago','crearOrdenPago','adjuntarDocumentoOrden','registrarTransferencia','anularOrdenPago','crearTarifa','editarTarifa','cambiarEstadoTarifa','aplicarTarifa','aplicarTarifasPendientes','cargarMem','solicitarRuta','registrarRuta','validarRuta','rechazarRuta','aprobarRutaComercial','aprobarRutaTransporte','marcarNotificacion','setPermiso','setAcceso','guardarUsuario','guardarCliente','guardarReglasTorre','activarUsuario','cambiarClave','guardarCatalogo','guardarPiloto','cambiarEstadoPiloto','crearReporteAyuda','cambiarEstadoReporteAyuda'];
+  const MUT=['crearViaje','editarViaje','iniciar','finalizar','torreMoverEstado','torreEditarHorarios','enviarLiquidacion','aprobar','devolver','aprobarShipmentDuplicado','prepararFactura','ocGenerar','ocRegistrarPdf','ocEnviar','ocResponder','ocAnular','ocCorregir','agrRegistrarPdf','agrAdjuntarEvidencia','confirmarCliente','actualizarFactura','enviarFactura','emitirFactura','registrarCobro','corregirFactura','anularAgrupacion','registrarImportes','registrarPago','anularPago','crearOrdenPago','adjuntarDocumentoOrden','registrarTransferencia','anularOrdenPago','crearTarifa','editarTarifa','cambiarEstadoTarifa','aplicarTarifa','aplicarTarifasPendientes','cargarMem','solicitarRuta','registrarRuta','validarRuta','rechazarRuta','aprobarRutaComercial','aprobarRutaTransporte','marcarNotificacion','setPermiso','setAcceso','guardarUsuario','guardarCliente','guardarReglasTorre','activarUsuario','cambiarClave','guardarCatalogo','guardarPiloto','cambiarEstadoPiloto','crearReporteAyuda','cambiarEstadoReporteAyuda'];
   const err=b=>{const e=new ApiError(b.code||'SERVIDOR',b.message||'Operación rechazada por el servidor.');if(b.faltantes)e.faltantes=b.faltantes;return e;};
   async function llamar(op,args){
     if(!navigator.onLine)throw new ApiError('SIN_CONEXION','Sin conexión con el servidor. La operación NO se guardó.');
@@ -77,10 +77,10 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
     S.user=DB.usuarios.find(u=>u.id===sn.yo)||S.user;
     BACKEND.conectado=true;
   }
-  async function subir(prefijo,dataUrl){
+  async function subir(prefijo,dataUrl,pre){
     const blob=await (await fetch(dataUrl)).blob();
     const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','application/pdf':'pdf','image/svg+xml':'svg'}[blob.type]||'bin';
-    const path=`${prefijo}/${crypto.randomUUID()}.${ext}`;
+    const path=`${prefijo}/${pre||''}${crypto.randomUUID()}.${ext}`;
     const {error}=await sb.storage.from('evidencias').upload(path,blob,{contentType:blob.type,upsert:false});
     if(error)throw new ApiError('ALMACENAMIENTO','No se pudo subir el archivo al almacenamiento protegido. No se guardó nada.');
     return {path};
@@ -88,6 +88,9 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
   MUT.forEach(op=>{API[op]=async(uid,...args)=>{
     if(op==='enviarLiquidacion'&&typeof args[1]==='string'&&args[1].startsWith('data:'))args[1]=await subir('viajes/'+args[0],args[1]);
     if(op==='emitirFactura'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('facturas/'+args[0],args[1].archivo)});
+    if(op==='agrRegistrarPdf'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('facturas/'+args[0],args[1].archivo,(args[1].tipo==='INTERNO'?'interno-':'cliente-'))});
+    if(op==='agrAdjuntarEvidencia'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('facturas/'+args[0],args[1].archivo,'autorizacion-')});
+    if(op==='registrarCobro'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('facturas/'+args[0],args[1].archivo,'cobro-')});
     if(op==='ocRegistrarPdf'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('oc/'+args[0],args[1].archivo)});
     if(op==='ocResponder'&&args[1]&&Array.isArray(args[1].evidencias)){const ev=[];for(const e of args[1].evidencias)ev.push(typeof e==='string'&&e.startsWith('data:')?await subir('oc/'+args[0],e):e);args[1]=Object.assign({},args[1],{evidencias:ev});}
     if(op==='adjuntarDocumentoOrden'&&args[1]&&args[1].data){

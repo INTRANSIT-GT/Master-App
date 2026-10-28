@@ -26,6 +26,12 @@ const V = J('__V');
 const trip = id => J(`DB.trips.find(t=>t.id==='${id}')`);
 const base = (ids, extra) => Object.assign({ cliente: 'COLGATE', proyecto: 'COLGATE', viajeIds: ids, columnas: [] }, extra || {});
 const EVID = 'data:application/pdf;base64,JVBERi0xLjQ=';
+const confirmarAgr = (gid, uid = 'U-N') => {
+  const pv = call(uid, 'agrPrevisualizar', gid, { tipo: 'CLIENTE', opcionales: [] });
+  const p = call(uid, 'agrRegistrarPdf', gid, { tipo: 'CLIENTE', opcionales: [], huella: pv.r.huella, hash: '0123456789abcdef', archivo: EVID });
+  const e = call(uid, 'agrAdjuntarEvidencia', gid, { archivo: EVID, nota: 'correo del cliente' });
+  return call(uid, 'confirmarCliente', gid);
+};
 const PDF = 'data:application/pdf;base64,' + Buffer.from('%PDF-1.4 prueba').toString('base64');
 
 T('O0 El motor carga sin errores de JavaScript', N.errs.length === 0, N.errs);
@@ -64,11 +70,11 @@ T('P4 Cobros y Gerente de Transporte no preparan ni responden', ['COBROS', 'GERE
 { const ESC = ['oc_responder', 'oc_corregir', 'oc_ver_combustible', 'oc_preparar', 'oc_enviar', 'oc_ver'];
   T('P5 Gerencia Comercial, Analista Comercial y Administrador tienen por defecto responder, corregir/anular, combustible, preparar, enviar y ver', ['GERENTE_COMERCIAL', 'ANALISTA_COMERCIAL', 'ADMIN'].every(r => ESC.every(p => tiene(r, p))));
   T('P5b Los demás perfiles NO tienen responder, corregir ni combustible (Facturación solo ve)', J('Object.keys(ROLES)').filter(r => !['GERENTE_COMERCIAL', 'ANALISTA_COMERCIAL', 'ADMIN'].includes(r)).every(r => !tiene(r, 'oc_responder') && !tiene(r, 'oc_corregir') && !tiene(r, 'oc_ver_combustible') && !tiene(r, 'oc_preparar')));
-  T('P5c Los permisos de OC de Comercial no dependen de Liquidaciones, Finanzas ni Facturación (esos permisos no están en su perfil)', ['GERENTE_COMERCIAL', 'ANALISTA_COMERCIAL'].every(r => ['liq_aprobar', 'liq_devolver', 'finanzas_ver', 'facturas_emitir', 'comercial_agrupar', 'cobros_registrar'].every(p => !tiene(r, p))));
+  T('P5c Los permisos de OC de Comercial no dependen de Liquidaciones, Finanzas ni Facturación (esos permisos no están en su perfil)', ['GERENTE_COMERCIAL', 'ANALISTA_COMERCIAL'].every(r => ['liq_aprobar', 'liq_devolver', 'finanzas_ver', 'facturas_emitir', 'cobros_registrar'].every(p => !tiene(r, p))));
   T('P5d Los vetos de OC se mantienen para Facturación, Cobros, Torre, Operativo, Validador, Pago OPL, Proyectos y Gerencia de Transporte (no se pueden conceder ni desde la matriz)', J(`['FACTURACION','COBROS','TORRE','OPERATIVO','VALIDADOR','PAGO_OPL','PROYECTOS','GERENTE_TRANSPORTE'].every(r=>['oc_responder','oc_corregir','oc_ver_combustible','oc_preparar','oc_enviar'].every(p=>PROHIBIDO[r].includes(p)))`));
 }
 T('P6 Los permisos de órdenes están separados de Liquidaciones (Validador aprueba liquidaciones y no tiene oc_*)', tiene('VALIDADOR', 'liq_aprobar') && !OCP.some(p => tiene('VALIDADOR', p)));
-T('P7 Quien prepara órdenes no recibe permisos de Liquidaciones ni de finanzas por ello', !tiene('GERENTE_COMERCIAL', 'liq_aprobar') && !tiene('GERENTE_COMERCIAL', 'finanzas_ver') && !tiene('ANALISTA_COMERCIAL', 'finanzas_ver') && !tiene('ANALISTA_COMERCIAL', 'facturas_emitir') && !tiene('GERENTE_COMERCIAL', 'comercial_agrupar'));
+T('P7 Quien prepara órdenes no recibe permisos de Liquidaciones ni de finanzas por ello', !tiene('GERENTE_COMERCIAL', 'liq_aprobar') && !tiene('GERENTE_COMERCIAL', 'finanzas_ver') && !tiene('ANALISTA_COMERCIAL', 'finanzas_ver') && !tiene('ANALISTA_COMERCIAL', 'facturas_emitir') && !tiene('GERENTE_COMERCIAL', 'facturas_emitir') && !tiene('GERENTE_COMERCIAL', 'cobros_registrar'));
 ['TORRE', 'OPERATIVO', 'VALIDADOR', 'PAGO_OPL'].forEach(r => {
   const x = call('U-1', 'setPermiso', r, 'oc_preparar', true);
   T(`P8 No se puede conceder «oc_preparar» a ${r} aunque el Admin lo intente`, !x.ok && x.code === 'PERMISO_PROHIBIDO', x);
@@ -221,22 +227,27 @@ T('C4 Columnas del PDF = 8 obligatorias + las opcionales elegidas (Semana … Ta
 /* ============ Integración con Facturación ============ */
 let FACT;
 {
-  const suelto = call('U-F', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [V.a] });
+  { const nf = call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001', numeroFactura: 'F-0', serieFactura: 'A', fechaFactura: '2031-12-31' }); T('I0 Facturación NO puede agrupar viajes ni preparar la factura de una OC (permiso de Comercial)', !nf.ok && nf.code === 'SIN_PERMISO' && !tiene('FACTURACION', 'comercial_agrupar'), nf); }
+  const suelto = call('U-N', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [V.a] });
   T('I1 Un viaje que está en una orden NO se factura suelto: se factura desde la orden', !suelto.ok && suelto.code === 'EN_ORDEN_DE_COMPRA', suelto);
   T('I2 Una orden no se convierte sola en factura (aceptar no crea agrupación)', J('DB.agrupaciones.length') === 0);
-  const parcial = call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001', viajeIds: [V.a] });
+  const parcial = call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001', viajeIds: [V.a] });
   T('I3 La factura de una orden incluye exactamente los viajes de la orden', !parcial.ok && parcial.code === 'VALIDACION', parcial);
-  const otroCli = call('U-F', 'prepararFactura', { cliente: 'COCACOLA', ocId: 'OC-0001' });
+  const otroCli = call('U-N', 'prepararFactura', { cliente: 'COCACOLA', ocId: 'OC-0001' });
   T('I4 El cliente de la factura debe coincidir con el de la orden', !otroCli.ok && otroCli.code === 'CLIENTE_DISTINTO', otroCli);
-  const sinPerm = call('U-G', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001' });
-  T('I5 Gerencia Comercial no prepara facturas (permiso de Facturación)', !sinPerm.ok && sinPerm.code === 'SIN_PERMISO', sinPerm);
-  const f = call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001', numeroFactura: 'F-1001', serieFactura: 'A', fechaFactura: '2031-12-31' });
+  const sinPerm = call('U-T', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001' });
+  T('I5 Torre no prepara agrupaciones de cobro (sin permiso)', !call('U-T', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001' }).ok);
+  const f = call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001', numeroFactura: 'F-1001', serieFactura: 'A', fechaFactura: '2031-12-31' });
   FACT = f.r;
   T('I6 Facturación crea UNA factura con los 4 viajes de la orden y queda vinculada (ocId / agrupacionId)', f.ok && f.r.ocId === 'OC-0001' && f.r.viajeIds.length === 4 && J('DB.ordenesCompra[0].agrupacionId') === f.r.id, f);
-  const dos = call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001' });
+  const dos = call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: 'OC-0001' });
   T('I7 Una orden no puede tener dos facturas activas', !dos.ok && dos.code === 'YA_FACTURADO', dos);
   const anul = call('U-G', 'ocAnular', 'OC-0001', 'intento de anulación');
   T('I8 Una orden con factura activa no se puede anular', !anul.ok && (anul.code === 'SIN_PERMISO' || anul.code === 'TIENE_FACTURA'), anul);
+  const sinConf = call('U-F', 'enviarFactura', f.r.id);
+  T('I8b Facturación no puede facturar una agrupación que Comercial aún no confirmó con el cliente', !sinConf.ok && sinConf.code === 'SIN_CONFIRMACION', sinConf);
+  const cf = confirmarAgr(f.r.id);
+  T('I8c Comercial (Analista) registra «Cliente confirmó» con PDF y evidencia', cf.ok && cf.r.confirmacion.porId === 'U-N' && !!cf.r.confirmacion.en && cf.r.confirmacion.pdfVersion === 1, cf);
   const env = call('U-F', 'enviarFactura', f.r.id);
   T('I9 El flujo de Facturación sigue igual: al enviar la factura los viajes pasan a Facturado y el importe sale de las tarifas de la orden', env.ok && env.r.importeEnviado === 5600 && [V.a, V.b, V.c, V.comb].every(id => trip(id).estado === 'FACTURADO'), env);
   ev(`DB.agrupaciones[0].importesViaje['${V.a}']=0`);
@@ -247,14 +258,14 @@ let FACT;
   T('I10b Una factura que viene de una OC no se emite sin la captura o comprobante adjunto', !sinArch.ok && sinArch.code === 'SIN_EVIDENCIA', sinArch);
   const emi = call('U-F', 'emitirFactura', f.r.id, { fechaEmision: '2031-12-31', importe: 5600, evidencia: 'UUID-0001-ABC', archivo: EVID });
   T('I11 Con tarifas válidas la factura se emite y la orden aparece como Facturada (etapa derivada)', emi.ok && J(`ocEtapa(DB.ordenesCompra[0])`) === 'FACTURADA', emi);
-  { const h = J('DB.ordenesCompra[0].historial'); const iAc = h.findIndex(x => /Aceptada por el cliente/.test(x.accion)), iEnv = h.findIndex(x => /enviada a facturación/.test(x.accion)), iEm = h.findIndex(x => /emitida y enviada al cliente/.test(x.accion));
+  { const h = J('DB.ordenesCompra[0].historial'); const iAc = h.findIndex(x => /Aceptada por el cliente/.test(x.accion)), iEnv = h.findIndex(x => /recibida en facturación/.test(x.accion)), iEm = h.findIndex(x => /emitida y enviada al cliente/.test(x.accion));
     T('I12 En el historial de la OC la aceptación del cliente (Comercial) y el envío de la factura (Facturación) son eventos distintos, cada uno con su usuario', iAc >= 0 && iEnv > iAc && iEm > iEnv && h[iAc].porId === 'U-G' && h[iEnv].porId === 'U-F' && h[iEm].porId === 'U-F' && !!h[iEm].en, h.map(x => x.por + ': ' + x.accion)); }
   T('I13 Facturación no ve la OC en otro estado que no sea confirmada; Comercial sí ve todo su historial y evidencias', call('U-F', 'ordenesCompra').r.every(o => o.estado === 'ACEPTADA') && call('U-G', 'ordenesCompra').r.length >= call('U-F', 'ordenesCompra').r.length && call('U-G', 'ordenesCompra').r.find(o => o.id === 'OC-0001').respuesta.evidencias.length === 1);
 }
 {
   /* Compatibilidad: viajes fuera de toda orden se facturan como siempre */
   const libre = ev(`__mk({shipment:'SH-LIBRE',pilotoId:'P-1',fechaPlan:'2031-08-04T08:00'},500)`);
-  const f = call('U-F', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [libre], numeroFactura: 'F-2001', serieFactura: 'A', fechaFactura: '2031-08-05' });
+  const f = call('U-N', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [libre], numeroFactura: 'F-2001', serieFactura: 'A', fechaFactura: '2031-08-05' });
   T('K1 Un viaje fuera de órdenes se factura como antes (facturas sin orden siguen el flujo actual)', f.ok && !f.r.ocId && trip(libre).agrupacionId === f.r.id, f);
   const ya = call('U-G', 'ocGenerar', base([libre])); T('K2 Un viaje ya reservado por una factura no entra en una orden', !ya.ok && ya.code === 'NO_ELEGIBLE', ya);
 }
@@ -284,12 +295,12 @@ let OC2;
   /* Anular la factura de una orden aceptada la deja disponible otra vez */
   const ids = [ev(`__mk({shipment:'SH-F1',pilotoId:'P-1',fechaPlan:'2031-10-01T08:00'},400)`), ev(`__mk({shipment:'SH-F2',pilotoId:'P-2',fechaPlan:'2031-10-02T08:00'},600)`)];
   const o = call('U-G', 'ocGenerar', base(ids)).r; call('U-G', 'ocRegistrarPdf', o.id, { archivo: PDF }); call('U-G', 'ocEnviar', o.id, {});
-  const sinAceptar = call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id });
+  const sinAceptar = call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id });
   T('L1 Una orden NO aceptada no puede facturarse', !sinAceptar.ok && sinAceptar.code === 'ESTADO_INVALIDO', sinAceptar);
   ev(`DB.ordenesCompra.find(x=>x.id==='${o.id}').estado='ACEPTADA'`);
-  const f = call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id });
-  const an = call('U-F', 'anularAgrupacion', f.r.id, 'Factura descartada');
-  T('L2 Si se descarta la factura preparada, la orden queda libre para facturar de nuevo', f.ok && an.ok && J(`DB.ordenesCompra.find(x=>x.id==='${o.id}').agrupacionId`) === '' && call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id }).ok);
+  const f = call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id });
+  const an = call('U-N', 'anularAgrupacion', f.r.id, 'Factura descartada');
+  T('L2 Si se descarta la factura preparada, la orden queda libre para facturar de nuevo', f.ok && an.ok && J(`DB.ordenesCompra.find(x=>x.id==='${o.id}').agrupacionId`) === '' && call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id }).ok);
   /* Rechazada conserva los viajes reservados (decisión pendiente) */
   const o2ids = [ev(`__mk({shipment:'SH-R1',pilotoId:'P-3',fechaPlan:'2031-11-03T08:00'},450)`)];
   const o2 = call('U-G', 'ocGenerar', base(o2ids)).r; call('U-G', 'ocRegistrarPdf', o2.id, { archivo: PDF }); call('U-G', 'ocEnviar', o2.id, {});
@@ -308,7 +319,7 @@ let OC2;
   const o = prep(k);
   const rej = call('U-N', 'ocResponder', o.id, { resultado: 'RECHAZADA', motivo: 'Tarifa distinta a la orden del cliente' });
   T('K0 Comercial (Analista) registra el rechazo del cliente con motivo, usuario y fecha', rej.ok && rej.r.estado === 'RECHAZADA' && rej.r.respuesta.porId === 'U-N' && !!rej.r.respuesta.en && rej.r.respuesta.motivo.length > 5, rej);
-  T('K1 Mientras está rechazada, sus viajes siguen reservados y no entran en otra OC ni se facturan sueltos', k.every(id => trip(id).ocId === o.id && activas(id) === 1) && !call('U-G', 'ocGenerar', base(k)).ok && !call('U-F', 'prepararFactura', { cliente: 'COLGATE', viajeIds: k }).ok);
+  T('K1 Mientras está rechazada, sus viajes siguen reservados y no entran en otra OC ni se facturan sueltos', k.every(id => trip(id).ocId === o.id && activas(id) === 1) && !call('U-G', 'ocGenerar', base(k)).ok && !call('U-N', 'prepararFactura', { cliente: 'COLGATE', viajeIds: k }).ok);
   for (const uid of ['U-F', 'U-V', 'U-O', 'U-T']) { const x = call(uid, 'ocCorregir', o.id, { motivo: 'intento sin permiso' }); T(`K2 ${uid} no puede corregir ni gestionar una OC rechazada`, !x.ok && x.code === 'SIN_PERMISO', x); }
   T('K2b La OC rechazada no cambió tras los intentos sin permiso', J(`DB.ordenesCompra.find(x=>x.id==='${o.id}').estado`) === 'RECHAZADA');
   const sinMot = call('U-N', 'ocCorregir', o.id, { motivo: 'x' });
@@ -324,8 +335,8 @@ let OC2;
   T('K5 La OC rechazada pasa a REEMPLAZADA y conserva documento, envío, respuesta (rechazo), líneas, total e historial', vieja.estado === 'REEMPLAZADA' && vieja.reemplazadaPor === c.r.id && vieja.documentos.length === 1 && !!vieja.envio && vieja.respuesta.resultado === 'RECHAZADA' && vieja.lineas.length === 2 && vieja.total === 1500 && vieja.historial.length >= 4, vieja);
   T('K5b La corrección deja usuario, fecha y hora, motivo y estado anterior', vieja.correccion.porId === 'U-N' && !!vieja.correccion.en && /tarifa solicitada/.test(vieja.correccion.motivo) && vieja.correccion.estadoAlCorregir === 'RECHAZADA', vieja.correccion);
   T('K6 Los viajes pasan a la nueva OC y ningún viaje queda en dos OC activas', k.every(id => trip(id).ocId === c.r.id && activas(id) === 1));
-  T('K7 La nueva versión no puede facturarse (no está aceptada) y el viaje no puede facturarse suelto', !call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: c.r.id }).ok && !call('U-F', 'prepararFactura', { cliente: 'COLGATE', viajeIds: k }).ok);
-  T('K8 La OC reemplazada no se puede facturar, anular ni corregir otra vez (OC cerrada)', !call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id }).ok && call('U-G', 'ocAnular', o.id, 'intento sobre una OC cerrada').code === 'ESTADO_INVALIDO' && call('U-G', 'ocCorregir', o.id, { motivo: 'otra vez, no debe poder' }).code === 'ESTADO_INVALIDO');
+  T('K7 La nueva versión no puede facturarse (no está aceptada) y el viaje no puede facturarse suelto', !call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: c.r.id }).ok && !call('U-N', 'prepararFactura', { cliente: 'COLGATE', viajeIds: k }).ok);
+  T('K8 La OC reemplazada no se puede facturar, anular ni corregir otra vez (OC cerrada)', !call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id }).ok && call('U-G', 'ocAnular', o.id, 'intento sobre una OC cerrada').code === 'ESTADO_INVALIDO' && call('U-G', 'ocCorregir', o.id, { motivo: 'otra vez, no debe poder' }).code === 'ESTADO_INVALIDO');
   const pdf2 = call('U-N', 'ocRegistrarPdf', c.r.id, { archivo: PDF });
   T('K9 La nueva versión genera su propio PDF y el PDF de la rechazada se conserva intacto', pdf2.ok && pdf2.r.documentos.length === 1 && J(`DB.ordenesCompra.find(x=>x.id==='${o.id}').documentos.length`) === 1);
   T('K10 La auditoría registra la corrección con motivo, usuario y las dos órdenes', J('DB.audit').some(a => a.accion === 'Orden de compra corregida (nueva versión)' && a.porId === 'U-N' && /tarifa solicitada/.test(a.motivo) && a.ref === `${o.id} → ${c.r.id}`));
@@ -333,8 +344,8 @@ let OC2;
   /* Se puede seguir el flujo completo con la nueva versión */
   call('U-N', 'ocEnviar', c.r.id, {});
   const acc = call('U-G', 'ocResponder', c.r.id, { resultado: 'ACEPTADA', referencia: 'PO-K-2', evidencias: [EVID] });
-  const fac = call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: c.r.id });
-  T('K11 La nueva versión aceptada se factura una sola vez (la segunda factura se rechaza)', acc.ok && fac.ok && !call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: c.r.id }).ok && !call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id }).ok, fac);
+  const fac = call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: c.r.id });
+  T('K11 La nueva versión aceptada se factura una sola vez (la segunda factura se rechaza)', acc.ok && fac.ok && !call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: c.r.id }).ok && !call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id }).ok, fac);
   const antes = J('DB.ordenesCompra.length');
   const conFac = call('U-G', 'ocCorregir', c.r.id, { motivo: 'con factura activa no debe poder' });
   T('K12 No se puede corregir ni anular una OC con factura activa (hay que anular primero la factura)', !conFac.ok && conFac.code === 'TIENE_FACTURA' && call('U-G', 'ocAnular', c.r.id, 'con factura activa').code === 'TIENE_FACTURA' && J('DB.ordenesCompra.length') === antes);
@@ -346,7 +357,7 @@ let OC2;
   const o3 = prep([m[1]], 'U-G');
   call('U-G', 'ocResponder', o3.id, { resultado: 'ACEPTADA', referencia: 'PO-K3', evidencias: [EVID] });
   const c3 = call('U-G', 'ocCorregir', o3.id, { motivo: 'Gerencia corrige una OC aceptada' });
-  T('K14 Gerencia Comercial corrige una OC aceptada (sin factura): queda reemplazada y la nueva debe aceptarse de nuevo', c3.ok && c3.r.estado === 'PREPARADA' && J(`DB.ordenesCompra.find(x=>x.id==='${o3.id}').estado`) === 'REEMPLAZADA' && !call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: o3.id }).ok, c3);
+  T('K14 Gerencia Comercial corrige una OC aceptada (sin factura): queda reemplazada y la nueva debe aceptarse de nuevo', c3.ok && c3.r.estado === 'PREPARADA' && J(`DB.ordenesCompra.find(x=>x.id==='${o3.id}').estado`) === 'REEMPLAZADA' && !call('U-N', 'prepararFactura', { cliente: 'COLGATE', ocId: o3.id }).ok, c3);
   /* --- una corrección inválida no rompe nada --- */
   const o4 = prep([mkv('SH-K5', 'P-1', '2031-12-05T08:00', 250)], 'U-G');
   const ajeno = mkv('SH-K6', 'P-2', '2031-12-06T08:00', 260);

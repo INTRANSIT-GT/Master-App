@@ -30,10 +30,10 @@ const sinReg='<span class="mute">Sin registrar</span>';
 function agrMap(){let a=[];try{a=API.agrupaciones(S.user.id);}catch(e){}const m={};a.forEach(g=>{m[g.id]=g;});return m;}
 function comFiltered(){
   const q=S.q.trim().toLowerCase();
-  return comTrips().filter(t=>(!S.fCli||t.proyecto===S.fCli)&&(!S.fPcat||t.proyectoCat===S.fPcat)&&(S.fCom===''||(S.fCom==='PEND'?t.estado==='ACEPTADO':t.estado==='FACTURADO'))
+  return comTrips().filter(t=>(!S.fCli||t.proyecto===S.fCli)&&(!S.fPcat||t.proyectoCat===S.fPcat)&&(S.fCom===''||(S.fCom==='PEND'?t.estado==='ACEPTADO':t.estado==='FACTURADO'))&&(!S.fDesde||planD(t)>=S.fDesde)&&(!S.fHasta||planD(t)<=S.fHasta)
     &&(!q||(t.id+' '+(t.noViaje||'')+' '+(J(t).piloto||'')+' '+(J(t).f.placa||'')+' '+(J(t).origen||'')+' '+(J(t).destino||'')+' '+(t.numeroFactura||'')+' '+(t.agrupacionId||'')).toLowerCase().includes(q))).sort((a,b)=>a.id.localeCompare(b.id));
 }
-const etapaCls={PREPARADA:'neutral',ENVIADO_A_FACTURAR:'progress',FACTURADO:'progress',COBRO_PARCIAL:'progress',COBRADO:'done',ANULADA:'alert'};
+const etapaCls={PREPARADA:'neutral',CONFIRMADA:'progress',ENVIADO_A_FACTURAR:'progress',FACTURADO:'progress',COBRO_PARCIAL:'progress',COBRADO:'done',ANULADA:'alert'};
 const etapaBadge=e=>chip(etapaCls[e],ETAPA_L[e]);
 function tarifaCelda(t,pend){
   if(nn(t.tarifaCliente)!=null)return qfmt(t.tarifaCliente);
@@ -60,6 +60,69 @@ BODY.comercial=()=>{
     </tbody></table></div>${paginador('com',pg)}`:empty('No hay viajes con estos filtros','Solo aparecen viajes con la liquidación aprobada.');
   return bar+tbl;
 };
+
+/* =====================================================================
+   AGRUPACIÓN DE COBRO · reportes PDF, autorización del cliente, facturación y cobro (todo dentro de COMERCIAL)
+   ===================================================================== */
+const hsOk=v=>esc(v==null||v===''?'—':v);
+function agrLink(g,k,i,etq){const it=(k==='pdf'?g.pdfs:g.evidenciasAutorizacion)[i];return `<button class="linkbtn" data-act="agrAbrir" data-id="${g.id}" data-k="${k}" data-i="${i}">${esc(etq)}</button>`;}
+function agrPanelHTML(g){
+  const edit=g.estado==='ACTIVA'&&g.fase==='PREPARADA'&&!g.confirmacion;
+  const pdfs=g.pdfs||[],cli=pdfs.filter(p=>p.tipo==='CLIENTE'),ult=cli[cli.length-1];
+  const evs=g.evidenciasAutorizacion||[],evUlt=ult?evs.filter(e=>e.pdfVersion===ult.version):[];
+  const B=(a,l,c,t)=>`<button class="btn sm ${c||''}" data-act="${a}" data-id="${g.id}"${t?` data-t="${t}"`:''}>${l}</button> `;
+  const lstPdf=pdfs.length?pdfs.map((p,i)=>`<li>${agrLink(g,'pdf',i,(p.tipo==='INTERNO'?'Interno':'Cliente')+' · versión '+p.version)} · ${esc(fmtDT(p.en))} · ${esc(p.por)} · ${p.viajes} viaje(s) · ${esc(qfmt(p.total))}${p.motivo?' · '+esc(p.motivo):''}</li>`).join(''):'<li class="mute">Aún no hay reportes generados.</li>';
+  const lstEv=evs.length?evs.map((e,i)=>`<li>${agrLink(g,'ev',i,e.id+' · '+(e.nombre||'evidencia'))} · reporte v${e.pdfVersion} · ${esc(fmtDT(e.en))} · ${esc(e.por)}${e.nota?' · '+esc(e.nota):''}</li>`).join(''):'<li class="mute">Sin evidencia de autorización del cliente.</li>';
+  const conf=g.confirmacion?`<div class="alertbox info" style="margin:8px 0"><b>Cliente confirmó</b> · ${esc(g.confirmacion.por)} · ${esc(fmtDT(g.confirmacion.en))} · reporte v${g.confirmacion.pdfVersion} · evidencia(s): ${esc((g.confirmacion.evidencias||[]).join(', '))}</div>`:'';
+  const acc=[];
+  if(edit&&hp('comercial_agrupar')){acc.push(B('agrPdfOpen','Generar PDF interno','','INTERNO'));acc.push(B('agrPdfOpen','Generar PDF para el cliente','primary','CLIENTE'));}
+  if(edit&&hp('comercial_confirmar')){acc.push(B('agrEvidOpen','Adjuntar evidencia de autorización','',''));acc.push(`<button class="btn sm ok" data-act="agrConfirmarOpen" data-id="${g.id}" ${(ult&&evUlt.length&&g.numeroFactura)?'':'disabled title="Requiere el PDF del cliente, su evidencia de autorización y el número de factura"'}>Cliente confirmó</button> `);}
+  return `<dl class="kv" style="margin-bottom:10px">${kvr('Cliente',esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente))}${kvr('Estado',etapaBadge(etapaAgr(g)))}${kvr('Factura',g.numeroFactura?esc((g.serieFactura?g.serieFactura+'-':'')+g.numeroFactura):'<span class="warnl">pendiente</span>')}${kvr('Viajes',String(g.viajeIds.length))}${kvr('Creada por',esc(g.creadoPor||'—')+' · '+esc(fmtDT(g.creadoEn)))}</dl>${conf}
+    <h3 style="margin:10px 0 4px">Reportes PDF (se conservan todas las versiones)</h3><ul class="feed" style="margin:0 0 8px">${lstPdf}</ul>
+    <h3 style="margin:10px 0 4px">Evidencia de autorización del cliente (no se reemplaza)</h3><ul class="feed" style="margin:0 0 8px">${lstEv}</ul>
+    <div class="acts-wrap">${acc.join('')}${B('agrHistorial','Ver historial','ghost')}</div>`;
+}
+const hsF=()=>({cli:S.hsCli||'',pc:S.hsPcat||'',d:S.hsDesde||'',h:S.hsHasta||'',q:String(S.hsQ||'').trim().toLowerCase()});
+const hsFecha=(f,fe)=>(!f.d||(fe&&fe>=f.d))&&(!f.h||(fe&&fe<=f.h));
+function hsTabla(heads,rows,vacio){
+  if(!rows.length)return empty(vacio,'Prueba otros filtros.');
+  return `<div class="xlwrap"><table class="xl" style="min-width:900px"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function historialesHTML(){
+  const f=hsF(),sub=S.tab.hs||'agr';
+  const subs=[['agr','Agrupaciones y reportes'],['aut','Autorizaciones del cliente'],['viajes','Viajes']].concat(hp('oc_ver')?[['oc','Órdenes de compra']]:[]);
+  const k=subs.some(x=>x[0]===sub)?sub:'agr';
+  const filtros=`<div class="lfilters" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:10px 0">
+    <input type="text" data-flt="hsQ" placeholder="Buscar factura, agrupación, viaje…" value="${esc(S.hsQ||'')}" aria-label="Buscar">
+    <select data-flt="hsCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${f.cli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>
+    <select data-flt="hsPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${f.pc===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
+    <label class="dlab">Desde <input type="date" data-flt="hsDesde" value="${esc(f.d)}"></label><label class="dlab">Hasta <input type="date" data-flt="hsHasta" value="${esc(f.h)}"></label></div>`;
+  let ags=[];try{ags=API.agrupaciones(S.user.id);}catch(e){}
+  const proyDe=g=>[...new Set(g.viajeIds.map(id=>{const t=DB.trips.find(x=>x.id===id);return t?t.proyectoCat:'';}))];
+  const pasaG=(g,fe)=>(!f.cli||g.cliente===f.cli)&&(!f.pc||proyDe(g).includes(f.pc))&&hsFecha(f,fe)&&(!f.q||(g.id+' '+(g.numeroFactura||'')+' '+(g.serieFactura||'')+' '+(g.creadoPor||'')+' '+g.viajeIds.join(' ')).toLowerCase().includes(f.q));
+  let tabla='';
+  if(k==='agr'){
+    const rows=ags.filter(g=>pasaG(g,dLoc(g.creadoEn))).slice().reverse().map(g=>[`<b>${g.id}</b>`,esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente),esc(proyDe(g).join(', ')),esc(g.creadoPor)+'<div class="mute small">'+esc(fmtDT(g.creadoEn))+'</div>',etapaBadge(etapaAgr(g)),hsOk(g.numeroFactura),
+      (g.pdfs||[]).length?(g.pdfs||[]).map((p,i)=>agrLink(g,'pdf',i,(p.tipo==='INTERNO'?'Int.':'Cli.')+' v'+p.version)).join(' · '):'<span class="mute">—</span>',
+      `<button class="btn sm" data-act="agrPanel" data-id="${g.id}">Reportes</button> <button class="btn sm ghost" data-act="agrHistorial" data-id="${g.id}">Historial</button>`]);
+    tabla=hsTabla(['Agrupación','Cliente','Proyecto','Creada por · fecha','Estado','Factura','Reportes PDF',''],rows,'Sin agrupaciones con estos filtros');
+  }else if(k==='aut'){
+    const rows=ags.filter(g=>g.confirmacion&&pasaG(g,dLoc(g.confirmacion.en))).slice().reverse().map(g=>[`<b>${g.id}</b>`,esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente),esc(proyDe(g).join(', ')),esc(g.confirmacion.por)+'<div class="mute small">'+esc(fmtDT(g.confirmacion.en))+'</div>','v'+g.confirmacion.pdfVersion,
+      (g.evidenciasAutorizacion||[]).map((e,i)=>agrLink(g,'ev',i,e.id)).join(' · '),hsOk(g.numeroFactura),etapaBadge(etapaAgr(g))]);
+    tabla=hsTabla(['Agrupación','Cliente','Proyecto','Cliente confirmó (registró · fecha y hora)','PDF autorizado','Evidencias','Factura','Estado'],rows,'Sin autorizaciones con estos filtros');
+  }else if(k==='viajes'){
+    const AG={};ags.forEach(g=>{if(g.estado==='ACTIVA')g.viajeIds.forEach(id=>{AG[id]=g;});});
+    const rows=comTrips().filter(t=>(!f.cli||t.proyecto===f.cli)&&(!f.pc||t.proyectoCat===f.pc)&&hsFecha(f,planD(t))&&(!f.q||(t.id+' '+(t.noViaje||'')+' '+(AG[t.id]?AG[t.id].id+' '+(AG[t.id].numeroFactura||''):'')+' '+(t.ocId||'')).toLowerCase().includes(f.q)))
+      .sort((a,b)=>b.id.localeCompare(a.id)).slice(0,300).map(t=>{const g=AG[t.id];return [`<b>#${esc(t.id)}</b>`,esc(cliNombre(t.proyecto)),esc(t.proyectoCat||''),esc(fmtDate(planD(t))),badge(t.estado),hsOk(t.ocId),g?esc(g.id):'<span class="mute">—</span>',g?hsOk(g.numeroFactura):'<span class="mute">—</span>',`<button class="btn sm ghost" data-act="detalle" data-id="${esc(t.id)}">Ver</button>`];});
+    tabla=hsTabla(['Viaje','Cliente','Proyecto','Fecha','Estado','OC','Agrupación','Factura',''],rows,'Sin viajes con estos filtros');
+  }else{
+    let ocs=[];try{ocs=API.ordenesCompra(S.user.id);}catch(e){}
+    const rows=ocs.filter(o=>(!f.cli||o.cliente===f.cli)&&(!f.pc||o.proyecto===f.pc)&&hsFecha(f,dLoc(o.preparadoEn))&&(!f.q||(o.id+' '+(o.agrupacionId||'')+' '+((DB.agrupaciones||[]).find(g=>g.id===o.agrupacionId)||{}).numeroFactura).toLowerCase().includes(f.q)))
+      .slice().reverse().map(o=>{const g=(DB.agrupaciones||[]).find(x=>x.id===o.agrupacionId);return [`<b>${esc(o.id)}</b>${o.version>1?' <span class="mute">v'+o.version+'</span>':''}`,esc(o.clienteNombre),esc(o.proyecto),ocEstadoChip(o),esc(o.preparadoPor)+'<div class="mute small">'+esc(fmtDT(o.preparadoEn))+'</div>',o.respuesta?esc(o.respuesta.por)+'<div class="mute small">'+esc(fmtDT(o.respuesta.en))+'</div>':'<span class="mute">—</span>',g?esc(g.id+(g.numeroFactura?' · '+g.numeroFactura:'')):'<span class="mute">—</span>',`<button class="btn sm ghost" data-act="ocDetalle" data-id="${esc(o.id)}">Ver historial</button>`];});
+    tabla=hsTabla(['Orden','Cliente','Proyecto','Estado','Preparó · fecha','Respuesta del cliente','Agrupación · factura',''],rows,'Sin órdenes de compra con estos filtros');
+  }
+  return `<div class="chips">${subs.map(x=>`<button class="chip" aria-pressed="${x[0]===k}" data-act="hsSub" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>${filtros}${tabla}`;
+}
 function agrTable(list,acts){
   if(!list.length)return empty('Sin facturas','Cuando se prepare una factura aparecerá aquí.');
   const pg=paginar('agr',list);
@@ -79,13 +142,14 @@ function agrTable(list,acts){
     if(partes.length)reas=`<div class="mute" style="font-size:11px;margin-top:3px">Ahora: ${partes.join(' · ')}</div>`;
   }
   if(okA){
-    if(g.fase==='PREPARADA'&&hp('comercial_agrupar'))ac+=B('facturaEditar','Completar / enviar','primary');
-    if(g.fase==='ENVIADA'&&hp('facturas_emitir'))ac+=B('emitirOpen','Marcar emitida','primary');
-    if(g.fase==='EMITIDA'){ac+=B('evidenciaVer','Ver evidencia','');if(fa!=null&&fa-cob>0.004&&hp('cobros_registrar'))ac+=B('cobroOpen','Registrar cobro','ok');}
+    ac+=B('agrHistorial','Historial','ghost');
+    if(g.fase==='PREPARADA'){ac+=B('agrPanel','Reportes y autorización',g.confirmacion?'':'primary');if(!g.confirmacion&&hp('comercial_agrupar'))ac+=B('facturaEditar','Número de factura','');if(g.confirmacion&&hp('facturas_emitir'))ac+=B('agrRecibir','Iniciar facturación','primary');}
+    if(g.fase==='ENVIADA'&&hp('facturas_emitir'))ac+=B('emitirOpen','Registrar envío de la factura','primary');
+    if(g.fase==='EMITIDA'){ac+=B('evidenciaVer','Ver comprobante','');if(fa!=null&&fa-cob>0.004&&hp('cobros_registrar'))ac+=B('cobroOpen','Cobrado','ok');}
     if(g.numeroFactura&&g.fase!=='PREPARADA'&&hp('comercial_corregir'))ac+=B('corregirOpen','Corregir nº','');
     /* Descartar una preparada lo puede hacer quien la arma (Facturación/Comercial); anular una ya
        enviada o emitida exige el permiso restringido de anulación. */
-    if(g.fase==='PREPARADA'?hp('comercial_agrupar'):hp('comercial_anular'))ac+=B('anularOpen',g.fase==='PREPARADA'?'Descartar':'Anular','fix');
+    if(g.fase==='PREPARADA'?(g.confirmacion?hp('comercial_confirmar'):hp('comercial_agrupar')):hp('comercial_anular'))ac+=B('anularOpen',g.fase==='PREPARADA'?'Descartar':'Anular','fix');
   }
   return `<tr class="${okA?'':'dim'}"><td><b>${g.id}</b></td><td>${g.modalidad==='AGRUPADA'?'Agrupada':'Individual'}</td><td>${esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente)}</td><td title="Viajes: ${g.viajeIds.join(', ')}">${g.viajeIds.slice(0,8).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${g.viajeIds.length>8?' <span class="mute">…</span>':''} <b class="mute">[${g.viajeIds.length}]</b>${reas}</td>
   <td>${g.numeroFactura?`<b>${esc(g.numeroFactura)}</b>`:'<span class="warnl">pendiente</span>'}</td><td>${g.fechaFactura?fmtDate(g.fechaFactura):'—'}</td>
@@ -203,18 +267,20 @@ function tarifasVista(){
 VIEWS.tarifas=()=>`<div class="inner" style="max-width:1500px">${pageHead('TARIFAS','Tarifa de cobro al cliente por ruta, capacidad y vigencia',hp('tarifas_crear')?`<button class="btn primary" data-act="tarifaOpen" data-id="">${icon('plus',18)} Nueva tarifa</button>`:'')}${tarifasVista()}</div>`;
 VIEWS.comercial=()=>{
   const verOc=hp('oc_ver')&&allowed('oc');   /* pestaña de OC dentro de este mismo espacio (no es otro módulo) */
-  const tabsV=verOc?COMTABS.flatMap(t=>t.k==='bandeja'?[t,{k:'oc',l:'Órdenes de compra'}]:[t]):COMTABS;
+  const tabsV=COMTABS.flatMap(t=>t.k==='bandeja'?(verOc?[t,{k:'oc',l:'Órdenes de compra'}]:[t]):t.k==='reg'?[{k:'historial',l:'Historiales'},t]:[t]);
   const canAct=hp('comercial_agrupar');
-  const k=tabsV.some(t=>t.k===S.tab.com)?S.tab.com:((verOc&&hp('oc_preparar')&&!canAct)?'oc':'bandeja');
+  const k=tabsV.some(t=>t.k===S.tab.com)?S.tab.com:((verOc&&hp('oc_preparar')&&!canAct)?'oc':((hp('facturas_emitir')&&!hp('comercial_confirmar'))?'fact':'bandeja'));
   const acts=canAct||hp('facturas_emitir')||hp('comercial_corregir')||hp('comercial_anular')||hp('cobros_registrar');
   let ags=[];try{ags=API.agrupaciones(S.user.id);}catch(e){}
   let body;
   if(k==='bandeja'){
-    body=`<div class="row2" style="margin:0 0 12px;grid-template-columns:1.4fr 1fr 1fr 1fr"><input type="text" id="q" placeholder="Buscar viaje, piloto, placa, destino, factura…" value="${esc(S.q)}" aria-label="Buscar"><select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select><select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select><select data-flt="fCom" aria-label="Estado comercial"><option value="PEND" ${S.fCom==='PEND'?'selected':''}>Pendientes de gestión</option><option value="REG" ${S.fCom==='REG'?'selected':''}>Ya enviados a facturar</option><option value="" ${S.fCom===''?'selected':''}>Todos</option></select></div><div id="vb">${BODY.comercial()}</div>`;
+    body=`<div class="row2" style="margin:0 0 12px;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr 1fr"><input type="text" id="q" placeholder="Buscar viaje, piloto, placa, destino, factura…" value="${esc(S.q)}" aria-label="Buscar"><select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select><select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select><select data-flt="fCom" aria-label="Estado comercial"><option value="PEND" ${S.fCom==='PEND'?'selected':''}>Pendientes de gestión</option><option value="REG" ${S.fCom==='REG'?'selected':''}>Ya enviados a facturar</option><option value="" ${S.fCom===''?'selected':''}>Todos</option></select><label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde||'')}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta||'')}"></label></div><div id="vb">${BODY.comercial()}</div>`;
   }else if(k==='fact'){
-    const fase=S.tab.factFase||'VIG';
-    const lista=ags.filter(g=>fase==='VIG'?g.estado==='ACTIVA':fase==='PREP'?(g.estado==='ACTIVA'&&g.fase==='PREPARADA'):g.estado==='ANULADA').slice().reverse();
-    body=`<div class="chips"><button class="chip" aria-pressed="${fase==='VIG'}" data-act="factFase" data-v="VIG">Vigentes</button><button class="chip" aria-pressed="${fase==='PREP'}" data-act="factFase" data-v="PREP">Solo preparadas</button><button class="chip" aria-pressed="${fase==='ANU'}" data-act="factFase" data-v="ANU">Anuladas</button></div>${agrTable(lista,acts)}`;
+    const fase=S.tab.factFase||((hp('facturas_emitir')&&!hp('comercial_confirmar'))?'CONF':'VIG');
+    const lista=ags.filter(g=>fase==='VIG'?g.estado==='ACTIVA':fase==='CONF'?(g.estado==='ACTIVA'&&g.fase==='PREPARADA'&&!!g.confirmacion):fase==='PREP'?(g.estado==='ACTIVA'&&g.fase==='PREPARADA'):g.estado==='ANULADA').slice().reverse();
+    body=`<div class="chips"><button class="chip" aria-pressed="${fase==='CONF'}" data-act="factFase" data-v="CONF">Confirmadas por el cliente</button><button class="chip" aria-pressed="${fase==='VIG'}" data-act="factFase" data-v="VIG">Vigentes</button><button class="chip" aria-pressed="${fase==='PREP'}" data-act="factFase" data-v="PREP">Solo preparadas</button><button class="chip" aria-pressed="${fase==='ANU'}" data-act="factFase" data-v="ANU">Anuladas</button></div>${agrTable(lista,acts)}`;
+  }else if(k==='historial'){
+    body=historialesHTML();
   }else if(k==='oc'){
     body=ocPanelHTML();
   }else if(k==='hist'){
@@ -243,43 +309,26 @@ Object.assign(ACT,{
       summary:miniTable(['Viaje','Ruta','Piloto','Tarifa'],ts.map(t=>[`<b>#${t.id}</b>`,rutaHTML(t),esc(J(t).piloto),nn(t.tarifaCliente)==null?'<span class="warnl">⚠ sin tarifa</span>':qfmt(t.tarifaCliente)]),['Total','','',qfmt(tot)]),
       fields:[{k:'serieFactura',label:'Serie de factura',req:1},{k:'numeroFactura',label:'Número de factura',req:1},{k:'fechaFactura',label:'Fecha de la factura',type:'date',req:1}],
       live:d=>faltantesEnvio(cli,ids,d.numeroFactura,d.fechaFactura,null,d.serieFactura),
-      buttons:[{label:'GUARDAR COMO PREPARADA',act:'facturaPrep',cls:''},{label:'ENVIAR A FACTURACIÓN',act:'facturaEnviar',cls:'primary',needsComplete:true}],
+      buttons:[{label:'CREAR AGRUPACIÓN',act:'facturaPrep',cls:'primary'}],
       id:cli,data:{serieFactura:'',numeroFactura:'',fechaFactura:''}});
   },
-  async facturaPrep(d){const m=S.modal.data;const r=await run(()=>API.prepararFactura(S.user.id,{cliente:d.id,viajeIds:S.sel.slice(),serieFactura:m.serieFactura,numeroFactura:m.numeroFactura,fechaFactura:m.fechaFactura}),g=>`Factura ${g.id} preparada. Aún NO se ha enviado a facturación.`,true);if(r.ok){S.sel=[];afterWrite();}},
-  async facturaEnviar(d){
-    const m=S.modal.data;let g;
-    const falt=S.modal.live?S.modal.live(m):[];
-    if(falt.length){S.modal.err='No se envió nada. Falta: '+falt.map(x=>x.msg).join('; ')+'.';S.modal.missing=falt.map(x=>x.campo);render();return;}
-    try{g=await API.prepararFactura(S.user.id,{cliente:d.id,viajeIds:S.sel.slice(),serieFactura:m.serieFactura,numeroFactura:m.numeroFactura,fechaFactura:m.fechaFactura});}
-    catch(e){S.modal.err=e.message;render();return;}
-    S.sel=[];
-    try{await API.enviarFactura(S.user.id,g.id);afterWrite();toast(`Factura ${g.numeroFactura} enviada a facturación (${g.id}). Aún no está emitida.`);}
-    catch(e){S.modal.err=e.message+' La factura quedó preparada (NO enviada).';S.modal.missing=(e.faltantes||[]).map(x=>x.campo);render();}
-  },
+  async facturaPrep(d){const m=S.modal.data;const r=await run(()=>API.prepararFactura(S.user.id,{cliente:d.id,viajeIds:S.sel.slice(),serieFactura:m.serieFactura,numeroFactura:m.numeroFactura,fechaFactura:m.fechaFactura}),g=>`Agrupación ${g.id} creada. Genera sus reportes PDF y registra la autorización del cliente desde «Facturas».`,true);if(r.ok){S.sel=[];afterWrite();}},
   async facturaEditar(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
-    formM({title:`Completar factura ${g.id}`,text:`${g.viajeIds.length} ${g.viajeIds.length===1?'viaje':'viajes'} · ${g.modalidad==='AGRUPADA'?'agrupados':'factura individual'}. Faltan datos antes de poder enviarla.`,
+    formM({title:`Completar factura ${g.id}`,text:`${g.viajeIds.length} ${g.viajeIds.length===1?'viaje':'viajes'} · ${g.modalidad==='AGRUPADA'?'agrupados':'factura individual'}. Completa el número de factura antes de generar el reporte del cliente.`,
       fields:[{k:'serieFactura',label:'Serie de factura',req:1},{k:'numeroFactura',label:'Número de factura',req:1},{k:'fechaFactura',label:'Fecha de la factura',type:'date',req:1}],
       live:x=>faltantesEnvio(g.cliente,g.viajeIds,x.numeroFactura,x.fechaFactura,g.id,x.serieFactura),
-      buttons:[{label:'GUARDAR',act:'facturaEditarGuardar',cls:''},{label:'GUARDAR Y ENVIAR A FACTURACIÓN',act:'facturaEditarEnviar',cls:'primary',needsComplete:true}],
+      buttons:[{label:'GUARDAR',act:'facturaEditarGuardar',cls:'primary'}],
       id:g.id,data:{serieFactura:g.serieFactura||'',numeroFactura:g.numeroFactura||'',fechaFactura:g.fechaFactura||''}});
   },
   async facturaEditarGuardar(d){const m=S.modal.data;const r=await run(()=>API.actualizarFactura(S.user.id,d.id,m),`Factura ${d.id} actualizada (sigue preparada).`,true);if(r.ok)afterWrite();},
-  async facturaEditarEnviar(d){
-    const m=S.modal.data;
-    const falt=S.modal.live?S.modal.live(m):[];
-    if(falt.length){S.modal.err='No se envió nada. Falta: '+falt.map(x=>x.msg).join('; ')+'.';S.modal.missing=falt.map(x=>x.campo);render();return;}
-    try{await API.actualizarFactura(S.user.id,d.id,m);await API.enviarFactura(S.user.id,d.id);afterWrite();toast(`Factura ${m.numeroFactura} enviada a facturación. Aún no está emitida.`);}
-    catch(e){S.modal.err=e.message;S.modal.missing=(e.faltantes||[]).map(x=>x.campo);render();}
-  },
   async emitirOpen(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
-    formM({title:`Marcar como emitida · ${g.numeroFactura}`,text:`Hazlo solo si ya existe la factura oficial. Se exige evidencia (UUID, serie y número o autorización) y, si puedes, el archivo. Enviado a facturar: <b>${qfmt(g.importeEnviado)}</b>.`,
-      fields:[{k:'fechaEmision',label:'Fecha de emisión',type:'date',req:1},{k:'importe',label:'Importe emitido (Q)',type:'number',req:1},{k:'evidencia',label:'Evidencia de emisión (UUID, serie/número o autorización)',req:1},{k:'archivo',label:'Archivo de la factura (imagen o PDF, opcional)',type:'file'},{k:'motivoDiferencia',label:'Motivo si el importe difiere de lo enviado',type:'textarea'}],
-      data:{fechaEmision:todayStr(),importe:g.importeEnviado,evidencia:'',archivo:'',motivoDiferencia:''},ok:'MARCAR COMO EMITIDA',act:'emitirOk',id:g.id});
+    formM({title:`Registrar envío de la factura · ${g.numeroFactura}`,text:`Hazlo después de enviar la factura al cliente por correo. Se exige la captura o comprobante del envío y la referencia de la factura. Enviado a facturar: <b>${qfmt(g.importeEnviado)}</b>.`,
+      fields:[{k:'fechaEmision',label:'Fecha de emisión',type:'date',req:1},{k:'importe',label:'Importe emitido (Q)',type:'number',req:1},{k:'evidencia',label:'Evidencia de emisión (UUID, serie/número o autorización)',req:1},{k:'archivo',label:'Captura de pantalla o comprobante del envío de la factura al cliente (imagen o PDF)',type:'file',req:1},{k:'motivoDiferencia',label:'Motivo si el importe difiere de lo enviado',type:'textarea'}],
+      data:{fechaEmision:todayStr(),importe:g.importeEnviado,evidencia:'',archivo:'',motivoDiferencia:''},ok:'REGISTRAR ENVÍO',act:'emitirOk',id:g.id});
   },
-  async emitirOk(d){const m=S.modal.data;const r=await run(()=>API.emitirFactura(S.user.id,d.id,{fechaEmision:m.fechaEmision,importe:m.importe,evidencia:m.evidencia,archivo:m.archivo,motivoDiferencia:m.motivoDiferencia}),`Factura ${d.id} marcada como emitida con su evidencia.`,true);if(r.ok)afterWrite();},
+  async emitirOk(d){const m=S.modal.data;const r=await run(()=>API.emitirFactura(S.user.id,d.id,{fechaEmision:m.fechaEmision,importe:m.importe,evidencia:m.evidencia,archivo:m.archivo,motivoDiferencia:m.motivoDiferencia}),`Envío de la factura ${d.id} registrado con su comprobante.`,true);if(r.ok)afterWrite();},
   async evidenciaVer(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g||!g.emision)return;
     const e=g.emision;
@@ -291,6 +340,54 @@ Object.assign(ACT,{
   async anularOpen(d){let g=null;try{g=API.agrupaciones(S.user.id).find(x=>x.id===d.id);}catch(e){}const prep=!!g&&g.fase==='PREPARADA';
     formM({title:`${prep?'Descartar':'Anular'} factura ${d.id}`,text:prep?'Se descarta la factura preparada y sus viajes quedan libres para agruparlos en otra factura. No llegó a enviarse a facturación.':'Los viajes quedan libres para facturarse de nuevo. La factura se conserva marcada como anulada.',fields:[{k:'motivo',label:prep?'Motivo del descarte':'Motivo de la anulación',type:'textarea',req:1}],ok:prep?'DESCARTAR FACTURA':'ANULAR FACTURA',okCls:'fix',act:'anularOk',id:d.id});},
   async anularOk(d){const r=await run(()=>API.anularAgrupacion(S.user.id,d.id,S.modal.data.motivo),`Factura ${d.id} anulada.`,true);if(r.ok)afterWrite();},
+  async hsSub(d){S.tab.hs=d.v;render();},
+  async agrAbrir(d){
+    const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
+    const it=(d.k==='pdf'?g.pdfs:g.evidenciasAutorizacion||[])[Number(d.i)];if(!it)return;
+    if(it.url){const u=urlSegura(it.url);if(u)window.open(u,'_blank','noopener');else toast('El archivo no tiene un enlace válido.','err');return;}
+    if(it.data){try{expDescargar(await (await fetch(it.data)).blob(),it.nombre||(g.id+'.pdf'));}catch(e){toast('No se pudo abrir el archivo.','err');}return;}
+    toast('El archivo no está disponible por ahora: vuelve a abrir la pantalla.','err');
+  },
+  async agrPanel(d){
+    const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
+    let gg=g;try{gg=API.agrupaciones(S.user.id).find(x=>x.id===d.id)||g;}catch(e){}
+    formM({title:`Agrupación ${gg.id} · reportes y autorización del cliente`,summary:agrPanelHTML(gg),ancho:'900px',noCancel:true,ok:'Cerrar',act:'closeModal'});
+  },
+  async agrHistorial(d){
+    const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
+    const h=(g.historial||[]).slice().reverse();
+    formM({title:`Historial · ${g.id}${g.numeroFactura?' · '+g.numeroFactura:''}`,summary:h.length?`<ul class="feed">${h.map(x=>`<li><span class="avatar" style="width:30px;height:30px;font-size:12px">${initials(x.por)}</span><div><b>${esc(x.por)}</b> · ${esc(fmtDT(x.en))}<br>${esc(x.accion)}${x.de||x.a?`<div class="mute small">${esc(x.de||'—')} → ${esc(x.a||'—')}</div>`:''}</div></li>`).join('')}</ul>`:'<div class="mute">Esta agrupación aún no tiene movimientos registrados.</div>',ancho:'760px',noCancel:true,ok:'Cerrar',act:'closeModal'});
+  },
+  async agrPdfOpen(d){
+    const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;const tipo=d.t;
+    const ver=(g.pdfs||[]).filter(p=>p.tipo===tipo).length+1,fields=[],data={};
+    if(tipo==='CLIENTE'){
+      [['capacidad','Capacidad'],['ruta','Ruta'],['origen','Origen']].concat((hp('oc_ver_combustible')||hp('finanzas_ver'))?[['combustible','Tarifa de combustible']]:[]).forEach(([k,l])=>{fields.push({k,label:l,type:'check'});data[k]=false;});
+    }
+    if(ver>1){fields.push({k:'motivo',label:'Motivo de la nueva versión',type:'textarea',req:1});data.motivo='';}
+    formM({title:`Reporte ${tipo==='INTERNO'?'interno':'para el cliente'} · ${g.id} · versión ${ver}`,text:tipo==='CLIENTE'?'Columnas obligatorias: Fecha, No. de viaje, Placa, Tipo de unidad, Estado, Tarifa y Cobro. Activa las opcionales que quieras incluir. No incluye datos internos.':'Detalle completo disponible para tu perfil, solo para revisión interna. No se envía al cliente.',fields,data,ok:'GENERAR PDF',act:'agrPdfOk',id:g.id,tipo});
+  },
+  async agrPdfOk(d){
+    const m=S.modal.data||{},tipo=S.modal.tipo;
+    const opc=['capacidad','ruta','origen','combustible'].filter(k=>m[k]);
+    let pv;try{pv=API.agrPrevisualizar(S.user.id,d.id,{tipo,opcionales:opc});}catch(e){S.modal.err=e.message;render();return;}
+    if(!pv.ok){const p=pv.pendientes[0];S.modal.err=p?`${OC_TARIFA_MSG}: #${p.noViaje||p.viajeId} (No. de Transporte ${p.shipment||'—'}). ${p.motivo} No se genera un reporte de cobro con datos incompletos.`:'La agrupación no tiene viajes.';render();return;}
+    const g=DB.agrupaciones.find(x=>x.id===d.id),ver=((g&&g.pdfs)||[]).filter(p=>p.tipo===tipo).length+1;
+    try{
+      const pdf=await expAgrPdf(pv,ver);
+      const r=await run(()=>API.agrRegistrarPdf(S.user.id,d.id,{tipo,opcionales:opc,huella:pv.huella,hash:pdf.hash,archivo:pdf.dataUrl,nombre:pdf.nombre,motivo:m.motivo||''}),`Reporte ${tipo==='INTERNO'?'interno':'del cliente'} de ${d.id} guardado (versión ${ver}).`,true);
+      if(r.ok){afterWrite();ACT.agrPanel({id:d.id});}
+    }catch(e){if(S.modal){S.modal.err=e.message;render();}else toast('No se pudo generar el PDF: '+e.message,'err');}
+  },
+  async agrEvidOpen(d){
+    formM({title:`Evidencia de autorización del cliente · ${d.id}`,text:'Adjunta la captura del correo o mensaje con que el cliente autorizó el reporte. Queda con tu usuario, fecha y hora; no se puede reemplazar ni borrar.',fields:[{k:'archivo',label:'Captura o archivo (imagen o PDF)',type:'file',req:1},{k:'nota',label:'Nota (opcional)'}],data:{archivo:'',nota:''},ok:'ADJUNTAR EVIDENCIA',act:'agrEvidOk',id:d.id});
+  },
+  async agrEvidOk(d){const m=S.modal.data;const r=await run(()=>API.agrAdjuntarEvidencia(S.user.id,d.id,{archivo:m.archivo,nota:m.nota}),'Evidencia de autorización adjuntada.',true);if(r.ok){afterWrite();ACT.agrPanel({id:d.id});}},
+  async agrConfirmarOpen(d){
+    formM({title:`Cliente confirmó · ${d.id}`,text:'Registra que el cliente autorizó el reporte vigente. Quedan tu usuario, la fecha y la hora, la evidencia y la versión del PDF. Facturación recibirá la agrupación para continuar.',ok:'CLIENTE CONFIRMÓ',okCls:'ok',act:'agrConfirmarOk',id:d.id});
+  },
+  async agrConfirmarOk(d){const r=await run(()=>API.confirmarCliente(S.user.id,d.id),`Agrupación ${d.id}: el cliente confirmó. Facturación ya puede continuar.`,true);if(r.ok){afterWrite();}},
+  async agrRecibir(d){const r=await run(()=>API.enviarFactura(S.user.id,d.id),g=>`Agrupación ${g.id} en facturación (factura ${g.numeroFactura}). Registra el envío de la factura con su comprobante cuando la envíes.`);if(r.ok)afterWrite();},
   async agrDetalle(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
     const rows=g.viajeIds.map(i=>{const t=DB.trips.find(x=>x.id===i),j=J(t);return [`<b>#${i}</b>`,rutaHTML(t),esc(j.piloto),g.importesViaje&&g.importesViaje[i]!=null?qfmt(g.importesViaje[i]):(nn(t.tarifaCliente)!=null?qfmt(t.tarifaCliente):sinReg)];});
