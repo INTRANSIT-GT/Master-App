@@ -6,7 +6,8 @@
    facturas de siempre (una factura por orden). Las reglas viven en el motor (engine.js): aquí solo se muestran.
    ===================================================================== */
 
-const OC_TABS=[{k:'prep',l:'Preparar orden'},{k:'PREPARADA',l:'Preparadas'},{k:'ENVIADA',l:'Enviadas'},{k:'ACEPTADA',l:'Aceptadas'},{k:'RECHAZADA',l:'Rechazadas'},{k:'ANULADA',l:'Anuladas'},{k:'REEMPLAZADA',l:'Reemplazadas'}];
+const OC_GESTION=['oc_preparar','oc_enviar','oc_responder','oc_corregir'];
+const OC_TABS=[{k:'prep',l:'Preparar orden'},{k:'PREPARADA',l:'Preparadas'},{k:'ENVIADA',l:'Enviadas'},{k:'ACEPTADA',l:'Confirmadas'},{k:'RECHAZADA',l:'Rechazadas'},{k:'ANULADA',l:'Anuladas'},{k:'REEMPLAZADA',l:'Reemplazadas'}];
 const OC_TONO={PREPARADA:'neutral',ENVIADA:'progress',ACEPTADA:'done',RECHAZADA:'alert',ANULADA:'neutral',REEMPLAZADA:'neutral'};
 const OC_ETAPA_L={EN_FACTURACION:'Factura en preparación',FACTURADA:'Facturada',COBRADA:'Cobrada'};
 function ocLista(){try{return API.ordenesCompra(S.user.id);}catch(e){return [];}}
@@ -60,7 +61,7 @@ function ocListaHTML(est){
     if((o.documentos||[]).length)acc.push(`<button class="btn sm" data-act="ocPdf" data-id="${o.id}">PDF</button>`);
     if(o.estado==='PREPARADA'&&hp('oc_preparar'))acc.push(`<button class="btn sm" data-act="ocPdfGen" data-id="${o.id}">${(o.documentos||[]).length?'Nueva versión del PDF':'Generar PDF'}</button>`);
     if(o.estado==='PREPARADA'&&hp('oc_enviar')&&(o.documentos||[]).length)acc.push(`<button class="btn sm primary" data-act="ocEnviarOpen" data-id="${o.id}">Registrar envío</button>`);
-    if(o.estado==='ENVIADA'&&hp('oc_responder'))acc.push(`<button class="btn sm primary" data-act="ocResponderOpen" data-id="${o.id}">Respuesta del cliente</button>`);
+    if(o.estado==='ENVIADA'&&hp('oc_responder'))acc.push(`<button class="btn sm primary" data-act="ocConfirmarOpen" data-id="${o.id}">Confirmado</button><button class="btn sm" data-act="ocRechazarOpen" data-id="${o.id}">Rechazado</button>`);
     if(o.estado==='ACEPTADA'&&hp('comercial_agrupar')&&!g)acc.push(`<button class="btn sm primary" data-act="ocFacturar" data-id="${o.id}">Preparar factura</button>`);
     if(['ENVIADA','ACEPTADA','RECHAZADA'].includes(o.estado)&&!g&&hp('oc_corregir')&&hp('oc_preparar'))acc.push(`<button class="btn sm" data-act="ocCorregirOpen" data-id="${o.id}">${o.estado==='RECHAZADA'?'Gestionar rechazo / nueva versión':'Corregir / nueva versión'}</button>`);
     if(o.estado!=='ANULADA'&&o.estado!=='REEMPLAZADA'&&!g&&((o.estado==='PREPARADA'&&hp('oc_preparar'))||(o.estado!=='PREPARADA'&&hp('oc_corregir'))))acc.push(`<button class="btn sm" data-act="ocAnularOpen" data-id="${o.id}">Anular</button>`);
@@ -79,13 +80,16 @@ function ocTabKey(){
 }
 function ocTabsVisibles(){
   const n=ocLista(),cnt=e=>n.filter(o=>o.estado===e).length;
-  return OC_TABS.filter(t=>t.k!=='prep'||hp('oc_preparar')).map(t=>t.k==='prep'?t:Object.assign({},t,{l:`${t.l} (${cnt(t.k)})`}));
+  /* Quien solo consulta (Facturación) ve únicamente las confirmadas; el ciclo completo es de Comercial. */
+  const solo=!OC_GESTION.some(hp);
+  return OC_TABS.filter(t=>(t.k!=='prep'||hp('oc_preparar'))&&(!solo||t.k==='ACEPTADA')).map(t=>t.k==='prep'?t:Object.assign({},t,{l:`${t.l} (${cnt(t.k)})`}));
 }
-VIEWS.oc=()=>{
+/* Las órdenes de compra NO son un módulo aparte: son una pestaña del espacio COMERCIAL (ver VIEWS.comercial). */
+function ocPanelHTML(){
   const L=ocTabsVisibles(),k=ocTabKey();
-  return `<div class="inner" style="max-width:1500px">${pageHead('ÓRDENES DE COMPRA',hp('oc_preparar')?'Agrupa viajes aceptados con tarifa válida, genera la orden en PDF y registra su envío al cliente.':'Consulta de órdenes de compra. Las aceptadas pasan a Facturación.')}
-    ${tabs('oc',L,k,null)}<div style="height:14px"></div><div id="vb">${BODY.oc()}</div></div>`;
-};
+  const nota=hp('oc_preparar')?'Agrupa viajes aceptados con tarifa válida, genera la orden en PDF, regístrala como enviada y marca «Confirmado» cuando el cliente la acepte (con su evidencia).':'Órdenes de compra confirmadas por Comercial: continúa desde aquí con «Preparar factura» y el flujo de Facturación.';
+  return `<div class="mute" style="margin:0 0 10px">${nota}</div>${tabs('oc',L,k,null)}<div style="height:14px"></div><div id="vb">${BODY.oc()}</div>`;
+}
 
 /* ---- Detalle ---- */
 function ocDetalleHTML(o){
@@ -150,13 +154,18 @@ Object.assign(ACT,{
     formM({title:`Registrar envío · ${d.id}`,text:'Confirma que la orden de compra ya se envió al cliente. Se guarda quién y cuándo, y se avisa a Facturación que queda pendiente la confirmación del cliente.',fields:[{k:'destinatario',label:'Enviada a (contacto del cliente)'},{k:'medio',label:'Medio (correo, portal, entrega…)'}],ok:'CONFIRMAR ENVÍO',act:'ocEnviarOk',id:d.id});
   },
   async ocEnviarOk(d){const r=await run(()=>API.ocEnviar(S.user.id,d.id,{destinatario:S.modal.data.destinatario,medio:S.modal.data.medio}),`Envío de ${d.id} registrado. Facturación fue notificada.`,true);if(r.ok){S.tab.oc='ENVIADA';afterWrite();}},
-  async ocResponderOpen(d){
-    formM({title:`Respuesta del cliente · ${d.id}`,text:'Registra lo que respondió el cliente.',fields:[{k:'resultado',label:'Respuesta',type:'select',req:1,opts:[{id:'ACEPTADA',nombre:'Aceptada'},{id:'RECHAZADA',nombre:'Rechazada'}]},{k:'referencia',label:'Referencia del cliente (obligatoria si acepta)'},{k:'motivo',label:'Motivo (obligatorio si rechaza)',type:'textarea'},{k:'evidencia',label:'Evidencia (opcional)',type:'file'}],ok:'REGISTRAR',act:'ocResponderOk',id:d.id});
+  async ocConfirmarOpen(d){
+    formM({title:`Confirmado por el cliente · ${d.id}`,text:'Registra que el cliente aceptó la orden de compra. La evidencia es obligatoria; quedan tu usuario, la fecha y la hora. El envío de la factura es un evento distinto, de Facturación.',fields:[{k:'referencia',label:'Referencia del cliente (No. de orden, correo…)',req:1},{k:'evidencia',label:'Evidencia de la aceptación (correo, orden firmada o captura)',type:'file',req:1}],ok:'CONFIRMADO',act:'ocConfirmarOk',id:d.id});
   },
+  async ocRechazarOpen(d){
+    formM({title:`Rechazada por el cliente · ${d.id}`,text:'Registra el rechazo con su motivo. La orden y su PDF se conservan; después puedes corregirla y preparar una nueva versión.',fields:[{k:'motivo',label:'Motivo del rechazo',type:'textarea',req:1},{k:'evidencia',label:'Evidencia (opcional)',type:'file'}],ok:'REGISTRAR RECHAZO',act:'ocRechazarOk',id:d.id});
+  },
+  async ocConfirmarOk(d){return ACT.ocResponderOk(Object.assign({},d,{res:'ACEPTADA'}));},
+  async ocRechazarOk(d){return ACT.ocResponderOk(Object.assign({},d,{res:'RECHAZADA'}));},
   async ocResponderOk(d){
-    const m=S.modal.data,ev=m.evidencia?[m.evidencia]:[];
-    const r=await run(()=>API.ocResponder(S.user.id,d.id,{resultado:m.resultado,referencia:m.referencia,motivo:m.motivo,evidencias:ev}),`Respuesta de ${d.id} registrada.`,true);
-    if(r.ok){S.tab.oc=m.resultado==='ACEPTADA'?'ACEPTADA':'RECHAZADA';afterWrite();}
+    const m=S.modal.data,ev=m.evidencia?[m.evidencia]:[],res=d.res||m.resultado;
+    const r=await run(()=>API.ocResponder(S.user.id,d.id,{resultado:res,referencia:m.referencia,motivo:m.motivo,evidencias:ev}),`Respuesta de ${d.id} registrada.`,true);
+    if(r.ok){S.tab.oc=res==='ACEPTADA'?'ACEPTADA':'RECHAZADA';afterWrite();}
   },
   async ocCorregirOpen(d){
     formM({title:`Nueva versión de ${d.id}`,text:'La orden actual (con sus PDF, respuesta e historial) se conserva como «Reemplazada» y se prepara una nueva versión con los mismos viajes y la tarifa vigente. Genera luego su PDF y regístrala de nuevo.',fields:[{k:'motivo',label:'Motivo de la corrección',type:'textarea',req:1}],ok:'CREAR NUEVA VERSIÓN',act:'ocCorregirOk',id:d.id,okCls:'ok'});

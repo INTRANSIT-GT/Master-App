@@ -202,8 +202,10 @@ function tarifasVista(){
 /* TARIFAS es una sección del módulo COMERCIAL (antes era una pestaña dentro de Facturación). */
 VIEWS.tarifas=()=>`<div class="inner" style="max-width:1500px">${pageHead('TARIFAS','Tarifa de cobro al cliente por ruta, capacidad y vigencia',hp('tarifas_crear')?`<button class="btn primary" data-act="tarifaOpen" data-id="">${icon('plus',18)} Nueva tarifa</button>`:'')}${tarifasVista()}</div>`;
 VIEWS.comercial=()=>{
-  const tabsV=COMTABS;
-  const k=tabsV.some(t=>t.k===S.tab.com)?S.tab.com:'bandeja',canAct=hp('comercial_agrupar');
+  const verOc=hp('oc_ver')&&allowed('oc');   /* pestaña de OC dentro de este mismo espacio (no es otro módulo) */
+  const tabsV=verOc?COMTABS.flatMap(t=>t.k==='bandeja'?[t,{k:'oc',l:'Órdenes de compra'}]:[t]):COMTABS;
+  const canAct=hp('comercial_agrupar');
+  const k=tabsV.some(t=>t.k===S.tab.com)?S.tab.com:((verOc&&hp('oc_preparar')&&!canAct)?'oc':'bandeja');
   const acts=canAct||hp('facturas_emitir')||hp('comercial_corregir')||hp('comercial_anular')||hp('cobros_registrar');
   let ags=[];try{ags=API.agrupaciones(S.user.id);}catch(e){}
   let body;
@@ -213,6 +215,8 @@ VIEWS.comercial=()=>{
     const fase=S.tab.factFase||'VIG';
     const lista=ags.filter(g=>fase==='VIG'?g.estado==='ACTIVA':fase==='PREP'?(g.estado==='ACTIVA'&&g.fase==='PREPARADA'):g.estado==='ANULADA').slice().reverse();
     body=`<div class="chips"><button class="chip" aria-pressed="${fase==='VIG'}" data-act="factFase" data-v="VIG">Vigentes</button><button class="chip" aria-pressed="${fase==='PREP'}" data-act="factFase" data-v="PREP">Solo preparadas</button><button class="chip" aria-pressed="${fase==='ANU'}" data-act="factFase" data-v="ANU">Anuladas</button></div>${agrTable(lista,acts)}`;
+  }else if(k==='oc'){
+    body=ocPanelHTML();
   }else if(k==='hist'){
     body=`${histFiltros()}${esAdm()?viajeDetalleFact():''}<div id="vb">${BODY.hist()}</div>`;
   }else{

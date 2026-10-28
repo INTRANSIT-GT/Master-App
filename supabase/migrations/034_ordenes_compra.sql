@@ -115,6 +115,13 @@ select r.rol, p.permiso
  cross join (values ('oc_preparar'),('oc_enviar'),('oc_responder'),('oc_corregir'),('oc_ver_combustible')) as p(permiso)
 on conflict do nothing;
 
+-- Las OC son una pestaña del espacio COMERCIAL (no un módulo aparte): Gerencia Comercial y Analista Comercial entran
+-- a ese espacio con su propio usuario. La migración 033 los sembró en «No»; aquí pasan a «Sí» (solo esos dos perfiles).
+insert into master.permisos (rol, permiso, habilitado) values
+  ('GERENTE_COMERCIAL', 'sec_comercial', true),
+  ('ANALISTA_COMERCIAL', 'sec_comercial', true)
+on conflict (rol, permiso) do update set habilitado = true;
+
 -- Acceso a la sección «Órdenes de compra» (modelo de la migración 033).
 insert into master.permisos (rol, permiso, habilitado) values
   ('ADMIN', 'sec_oc', true),
@@ -150,14 +157,21 @@ create or replace function app.puede_subir(nombre text) returns boolean language
   and split_part(nombre,'/',3)<>'' and split_part(nombre,'/',4)=''
   and split_part(nombre,'/',3) ~ '^[A-Za-z0-9._-]{8,90}$'
 $$;
--- puede_ver_archivo: conserva las ramas de la migración 016 y suma «oc» (solo quien puede ver órdenes).
+-- Visibilidad de una OC: quien gestiona el ciclo (Comercial, Gerencia, Administrador) ve todas; quien solo consulta
+-- (Facturación) ve únicamente las ya confirmadas por Comercial (ACEPTADA).
+create or replace function app.oc_visible(p_estado text) returns boolean language sql stable security definer set search_path=master,pg_temp as $$
+  select app.perm('oc_ver') and (p_estado='ACEPTADA' or app.perm('oc_preparar') or app.perm('oc_enviar') or app.perm('oc_responder') or app.perm('oc_corregir'))
+$$;
+revoke all on function app.oc_visible(text) from public, anon;
+grant execute on function app.oc_visible(text) to authenticated;
+-- puede_ver_archivo: conserva las ramas de la migración 016 y suma «oc» (según app.oc_visible).
 create or replace function app.puede_ver_archivo(nombre text) returns boolean language sql stable security definer set search_path=master,pg_temp as $$
   select coalesce(
     case split_part(nombre,'/',1)
       when 'viajes' then app.viaje_visible(split_part(nombre,'/',2)) and (app.perm('liq_ver') or app.perm('liq_enviar'))
       when 'facturas' then app.perm('comercial_ver') or app.perm('finanzas_ver')
       when 'pagos' then app.perm('finanzas_ver') or app.perm('pagos_registrar')
-      when 'oc' then app.perm('oc_ver')
+      when 'oc' then exists (select 1 from master.ordenes_compra o where o.id=split_part(nombre,'/',2) and app.oc_visible(o.estado))
       else false end, false)
 $$;
 revoke all on function app.puede_subir(text), app.puede_ver_archivo(text) from public, anon;
@@ -166,7 +180,7 @@ grant execute on function app.puede_subir(text), app.puede_ver_archivo(text) to 
 -- ---------- 5) Seguridad (RLS) ----------
 alter table master.ordenes_compra enable row level security;
 drop policy if exists p_ordenes_compra on master.ordenes_compra;
-create policy p_ordenes_compra on master.ordenes_compra for select to authenticated using (app.perm('oc_ver'));
+create policy p_ordenes_compra on master.ordenes_compra for select to authenticated using (app.oc_visible(estado));
 -- Lectura por columnas: «combustible» y «extra» no se entregan por la API directa de Postgres; la función api (rol de servicio)
 -- las lee y solo devuelve el ajuste a quien tiene oc_ver_combustible.
 revoke all on master.ordenes_compra from authenticated, anon;

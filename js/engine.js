@@ -125,13 +125,13 @@ function refrescarSugerencias(){
   ORIGENES.sort(ord);DESTINOS.sort(ord);
 }
 const ROLES={
-  ADMIN:{label:'ADMIN',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','oc','tarifas','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
+  ADMIN:{label:'ADMIN',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','tarifas','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
   GERENTE_TRANSPORTE:{label:'Gerente de Transporte',home:'inicio',nav:['inicio','nuevo','todos','viajes','rutas','opl','liquidaciones','finanzas','catalogos'],alcance:'Ver todo y registrar viajes; asignar unidades/pilotos y autorizar/crear tarifas OPL; control financiero en modo consulta'},
   VALIDADOR:{label:'Validador',home:'viajes',nav:['viajes','liquidaciones'],alcance:'Revisar/aprobar liquidaciones de clientes asignados'},
   OPERATIVO:{label:'Operativo',home:'inicio',nav:['inicio','nuevo','viajes','rutas','liquidaciones'],alcance:'Registrar, editar y liquidar viajes de clientes asignados. Ve y solicita rutas de su proyecto.'},
-  ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','oc','tarifas','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
-  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','oc','tarifas','rutas','opl','finanzas','catalogos'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
-  FACTURACION:{label:'Facturación',home:'comercial',nav:['todos','comercial','oc'],alcance:'Cargar facturas, revisar viajes por facturar'},
+  ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','comercial','tarifas','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
+  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','comercial','tarifas','rutas','opl','finanzas','catalogos'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
+  FACTURACION:{label:'Facturación',home:'comercial',nav:['todos','comercial'],alcance:'Cargar facturas, revisar viajes por facturar'},
   COBROS:{label:'Cobros / Contabilidad',home:'comercial',nav:['comercial'],alcance:'Registrar cobros y pagos'},
   PAGO_OPL:{label:'Pago OPL',home:'opl',nav:['opl'],alcance:'Registrar OPL y tarifas a proveedores (requieren autorización)'},
   TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Editar horas y marcar Completado para viajes en ruta'},
@@ -189,7 +189,7 @@ const SECCIONES=[
   ['liquidaciones','Liquidaciones','liq_ver','VIAJES'],
   ['torre','Torre de control','viajes_ver_todos','TORRE'],
   ['comercial','Facturación','comercial_ver','COMERCIAL'],
-  ['oc','Órdenes de compra','oc_ver','COMERCIAL'],
+  ['oc','Órdenes de compra (pestaña de Comercial)','oc_ver','COMERCIAL'],
   ['proyectos','Clientes','clientes_gestionar','COMERCIAL'],
   ['tarifas','Tarifas','tarifas_ver','COMERCIAL'],
   ['finanzas','Finanzas','finanzas_ver','COMERCIAL'],
@@ -920,6 +920,8 @@ function ocCrear(A,r,ex){
   auditAdd({entidad:'OC',accion:ex.reemplazaA?'Orden de compra preparada (nueva versión)':'Orden de compra preparada',campo:'Estado',nuevo:'Preparada',por:A,ref:`${id} · ${r.clienteNombre} · ${r.proyecto} · ${r.lineas.length} viaje(s) · Q ${r.total}`});
   return o;
 }
+/* Movimiento de factura en el historial de la OC de origen (evento distinto de la confirmación del cliente). */
+function ocHistFactura(g,A,en,accion){if(!g.ocId)return;const o=(DB.ordenesCompra||[]).find(x=>x.id===g.ocId);if(o)o.historial.push({en,por:A.nombre,porId:A.id,accion});}
 function ocErrorArmado(r){
   const pa=r.pendientes.slice(0,5).map(p=>`#${p.noViaje} (No. de Transporte ${p.shipment||'—'}) · ${p.cliente} · ${p.proyecto}: ${p.motivo}`);
   const ea=r.errores.slice(0,5).map(e=>`${e.viajeId}: ${e.motivo}`);
@@ -1372,6 +1374,7 @@ const API={
     g.viajeIds.forEach(id=>{const v=nn(getT(id).tarifaCliente);importesViaje[id]=v;tot+=v;});
     const en=nowIso();
     g.importesViaje=importesViaje;g.importeEnviado=r2(tot);g.viajesSinImporte=[];g.fase='ENVIADA';g.envio={porId:A.id,por:A.nombre,en,resultado:'OK'};
+    ocHistFactura(g,A,en,`Factura ${g.id} (${g.numeroFactura}) enviada a facturación`);
     auditAdd({entidad:'AGRUPACION',accion:'Factura enviada a facturación',campo:'Fase',anterior:'Preparada',nuevo:'Enviada a facturación',por:A,ref:`${g.id} · ${g.numeroFactura} · Q ${g.importeEnviado}`});
     g.viajeIds.forEach(id=>{const t=getT(id);t.numeroFactura=g.numeroFactura;moveEstado(t,'FACTURADO',A,'Factura asignada','',`${g.id} · ${g.numeroFactura}`);});
     return g;
@@ -1393,10 +1396,12 @@ const API={
     }else if(d.archivo){if(typeof d.archivo!=='string'||!/^data:(image\/|application\/pdf)/.test(d.archivo))deny('El archivo de evidencia debe ser imagen o PDF.','VALIDACION');if(d.archivo.length>3000000)deny('El archivo de evidencia es demasiado grande (máx. 2 MB).','VALIDACION');arch=d.archivo;}
     const sinTarifa=g.viajeIds.filter(id=>!(nn((g.importesViaje||{})[id])>0));
     if(sinTarifa.length)deny(`${OC_TARIFA_MSG}: no se puede emitir la factura porque el viaje ${sinTarifa[0]} no tiene tarifa de cobro válida.`,'TARIFA_PENDIENTE');
+    if(g.ocId&&!arch&&!archPath)deny('Esta factura viene de una orden de compra: adjunta la captura o el comprobante de la factura enviada al cliente.','SIN_EVIDENCIA');
     const dif=Math.abs(imp-g.importeEnviado)>0.005,mot=String(d.motivoDiferencia||'').trim();
     if(dif&&mot.length<5)deny(`El importe emitido (Q ${r2(imp)}) difiere de lo enviado a facturar (Q ${g.importeEnviado}): explica el motivo.`,'VALIDACION');
     g.fase='EMITIDA';g.importeFacturado=r2(imp);
     g.emision={porId:A.id,por:A.nombre,en:nowIso(),fecha:d.fechaEmision,importe:r2(imp),evidencia:ev,archivo:arch,archivoPath:archPath,motivoDiferencia:dif?mot:''};
+    ocHistFactura(g,A,g.emision.en,`Factura ${g.id} (${g.numeroFactura}) emitida y enviada al cliente · Q ${g.importeFacturado} · ${ev} · comprobante adjunto`);
     auditAdd({entidad:'AGRUPACION',accion:'Factura emitida oficialmente (con evidencia)',campo:'Fase',anterior:'Enviada a facturación',nuevo:'Emitida',por:A,motivo:dif?mot:'',ref:`${g.id} · ${g.numeroFactura} · Q ${g.importeFacturado} · ${ev}`});
     return g;
   });},
@@ -1459,7 +1464,10 @@ const API={
 
   /* ----- órdenes de compra ----- */
   /* Lectura: lista de OC (sin el ajuste de combustible si el perfil no tiene su permiso propio). */
-  ordenesCompra(uid){const A=actor(uid);need(A,'oc_ver','ver las órdenes de compra');ocGuardar();return DB.ordenesCompra.map(o=>redactOC(A,o));},
+  ordenesCompra(uid){const A=actor(uid);need(A,'oc_ver','ver las órdenes de compra');ocGuardar();
+    /* Quien solo consulta (Facturación) ve únicamente las OC que Comercial ya confirmó (ACEPTADA); el resto del ciclo es de Comercial. */
+    const gestiona=OC_ESCRIBE.some(p=>hasPerm(A,p));
+    return DB.ordenesCompra.filter(o=>gestiona||o.estado==='ACEPTADA').map(o=>redactOC(A,o));},
   /* Lectura: viajes de un cliente/proyecto clasificados para armar una OC (elegibles, pendientes de tarifa, no disponibles). */
   ocDisponibles(uid,d){const A=actor(uid);need(A,'oc_preparar','preparar órdenes de compra');
     d=d||{};const out=[];
@@ -1544,6 +1552,7 @@ const API={
     const ref=String((d&&d.referencia)||'').trim(),mot=String((d&&d.motivo)||'').trim();
     if(res==='ACEPTADA'&&ref.length<3)deny('Registra la referencia con la que el cliente aceptó (mínimo 3 caracteres).','VALIDACION');
     if(res==='RECHAZADA'&&mot.length<5)deny('Registra el motivo del rechazo (mínimo 5 caracteres).','VALIDACION');
+    if(res==='ACEPTADA'&&!(Array.isArray(d.evidencias)&&d.evidencias.length))deny('Adjunta la evidencia de la confirmación del cliente (correo, orden firmada o captura).','SIN_EVIDENCIA');
     const evid=[];
     (Array.isArray(d.evidencias)?d.evidencias:[]).slice(0,5).forEach(a=>{
       if(a&&typeof a==='object'&&typeof a.path==='string'){

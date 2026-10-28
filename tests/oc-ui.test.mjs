@@ -26,7 +26,7 @@ const J = c => JSON.parse(ev(`JSON.stringify(${c})`));
 const click = async el => { el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true })); await tick(); };
 const cambia = async (el, v) => { if (v !== undefined) { if (el.type === 'checkbox') el.checked = v; else el.value = v; } el.dispatchEvent(new w.Event('change', { bubbles: true })); await tick(); };
 const txt = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
-const como = (uid, vista) => { ev(`S.user=DB.usuarios.find(u=>u.id==='${uid}');S.form=null;S.edit=null;S.modal=null;S.cb=null;S.menu=false;S.navK='';S.tab={};S.sel=[];S.ocCli='';S.ocPcat='';S.ocSel=[];S.ocCols=[];S.ocPrevOn=false;go('${vista}')`); };
+const como = (uid, vista) => { ev(`S.user=DB.usuarios.find(u=>u.id==='${uid}');S.form=null;S.edit=null;S.modal=null;S.cb=null;S.menu=false;S.navK='';S.tab={};S.sel=[];S.ocCli='';S.ocPcat='';S.ocSel=[];S.ocCols=[];S.ocPrevOn=false;go('${vista === 'oc' ? 'comercial' : vista}');${vista === 'oc' ? "S.tab.com='oc';render()" : ''}`); };
 const boton = (t, sel = 'button') => [...d.querySelectorAll(sel)].find(b => txt(b) === t || txt(b).startsWith(t));
 const toasts = () => [...d.querySelectorAll('#toasts .toast')].map(txt);
 const V = J('__V');
@@ -36,17 +36,18 @@ T('U0 La interfaz carga sin errores de JavaScript', N.errs.length === 0, N.errs)
 
 /* ---- Acceso por perfil ---- */
 como('U-G', 'inicio');
-T('U1 Gerencia Comercial ve «Órdenes de compra» en el menú (módulo Comercial)', menuTxt().some(t => /Órdenes de compra/.test(t)), menuTxt());
+T('U1 «Órdenes de compra» NO es un ítem del menú: es una pestaña dentro de COMERCIAL (Facturación, Clientes, Tarifas, Finanzas, Catálogos siguen igual)', !menuTxt().some(t => /Órdenes de compra/.test(t)), menuTxt());
+T('U1b Gerencia Comercial entra al espacio COMERCIAL y ve las pestañas existentes más «Órdenes de compra»', (como('U-G', 'comercial'), ['Pendientes de gestión', 'Órdenes de compra', 'Facturas', 'Facturación', 'Registros anteriores'].every(n => !!boton(n, '[role=tab]'))), [...d.querySelectorAll('[role=tab]')].map(txt));
 for (const [uid, rol] of [['U-T', 'Torre'], ['U-O', 'Operativo'], ['U-V', 'Validador'], ['U-P', 'Pago OPL']]) {
   como(uid, 'oc');
-  T(`U2 ${rol} no entra a la sección (go('oc') lo devuelve a su inicio) y no la ve en el menú`, ev('S.view') !== 'oc' && !menuTxt().some(t => /Órdenes de compra/.test(t)), [ev('S.view'), menuTxt()]);
+  T(`U2 ${rol} no ve la pestaña de órdenes de compra (ni puede abrirla)`, !boton('Órdenes de compra', '[role=tab]') && !/Preparar orden/.test(txt(d.querySelector('#main'))), [ev('S.view'), [...d.querySelectorAll('[role=tab]')].map(txt)]);
 }
 como('U-F', 'oc');
-T('U3 Facturación entra a la sección en modo consulta: sin la pestaña «Preparar orden»', ev('S.view') === 'oc' && !boton('Preparar orden', '[role=tab]') && !!boton('Aceptadas', '[role=tab]'), [...d.querySelectorAll('[role=tab]')].map(txt));
+T('U3 Facturación entra al MISMO espacio Comercial, en la pestaña de OC solo ve «Confirmadas» (sin «Preparar orden» ni el resto del ciclo)', ev('S.view') === 'comercial' && !boton('Preparar orden', '[role=tab]') && !!boton('Confirmadas', '[role=tab]') && !boton('Enviadas', '[role=tab]') && !boton('Rechazadas', '[role=tab]'), [...d.querySelectorAll('[role=tab]')].map(txt));
 
 /* ---- Preparar ---- */
 como('U-G', 'oc');
-T('P1 Gerencia Comercial abre la sección con la pestaña «Preparar orden» y el título ÓRDENES DE COMPRA', ev('S.view') === 'oc' && txt(d.querySelector('.pagehead h1')) === 'ÓRDENES DE COMPRA' && !!boton('Preparar orden', '[role=tab]'));
+T('P1 Gerencia Comercial abre la pestaña de OC dentro de COMERCIAL con «Preparar orden»', ev('S.view') === 'comercial' && txt(d.querySelector('.pagehead h1')) === 'COMERCIAL' && !!boton('Preparar orden', '[role=tab]'));
 T('P2 Antes de elegir cliente y proyecto solo se pide elegirlos', /Elige el cliente y el proyecto/.test(txt(d.querySelector('#vb'))));
 await cambia(d.querySelector('select[data-flt="ocCli"]'), 'COLGATE');
 T('P3 Al elegir cliente aparecen solo sus proyectos', [...d.querySelectorAll('select[data-flt="ocPcat"] option')].map(o => o.textContent).join() === 'Selecciona el proyecto,COLGATE,COLGATE-B');
@@ -98,18 +99,24 @@ T('E1 «Registrar envío» abre la confirmación', /Registrar envío · OC-0001/
 await click(boton('CONFIRMAR ENVÍO', '.dlg button'));
 T('E2 El envío queda registrado (estado Enviada, usuario, notificación a Facturación)', J('DB.ordenesCompra[0].estado') === 'ENVIADA' && J('DB.ordenesCompra[0].envio.porId') === 'U-G' && J('DB.notificaciones').some(n => n.tipo === 'OC_ENVIADA' && n.destinatarios.includes('FACTURACION')), toasts());
 await click(boton('Enviadas', '[role=tab]'));
-T('E3 En «Enviadas» Comercial ve «Respuesta del cliente», «Corregir / nueva versión» y «Anular»; ya no hay aviso de función deshabilitada', !/todavía no está habilitado/.test(txt(d.querySelector('#vb'))) && !!boton('Respuesta del cliente') && !!boton('Corregir / nueva versión') && !!boton('Anular'));
+T('E3 En «Enviadas» Comercial ve «Confirmado», «Rechazado», «Corregir / nueva versión» y «Anular»; ya no hay aviso de función deshabilitada', !/todavía no está habilitado/.test(txt(d.querySelector('#vb'))) && !!boton('Confirmado') && !!boton('Rechazado') && !!boton('Corregir / nueva versión') && !!boton('Anular'));
 await click(boton('Corregir / nueva versión'));
 T('E3b «Corregir / nueva versión» pide el motivo obligatorio y explica que la orden se conserva', /Nueva versión de OC-0001/.test(txt(d.querySelector('.dlg'))) && /Reemplazada/.test(txt(d.querySelector('.dlg'))));
 await click(boton('Cancelar', '.dlg button'));
 
 /* ---- Facturación ---- */
 como('U-F', 'oc');
-await click(boton('Enviadas', '[role=tab]'));
-T('F1 Facturación ve la orden enviada pero sin acciones de preparación', /OC-0001/.test(txt(d.querySelector('#vb'))) && !boton('Registrar envío') && !boton('Anular') && !boton('Preparar factura'));
-ev("DB.ordenesCompra[0].estado='ACEPTADA'");      /* la respuesta del cliente aún no tiene responsable: se simula aquí */
-como('U-F', 'oc'); await click(boton('Aceptadas', '[role=tab]'));
-T('F2 Una orden aceptada muestra «Preparar factura» a Facturación', !!boton('Preparar factura'));
+T('F1 Mientras Comercial no confirma, Facturación NO ve la orden enviada (ni en la lista ni en el servidor)', !/OC-0001/.test(txt(d.querySelector('#vb'))) && J("__try(()=>API.ordenesCompra('U-F'))").r.length === 0);
+await click(boton('Enviadas', '[role=tab]')).catch(() => {});
+/* Comercial registra «Confirmado» con su evidencia desde la pantalla */
+como('U-G', 'oc'); await click(boton('Enviadas', '[role=tab]'));
+await click(boton('Confirmado'));
+T('F1b «Confirmado» exige referencia y evidencia', /Evidencia de la aceptación/.test(txt(d.querySelector('.dlg'))) && /Referencia del cliente/.test(txt(d.querySelector('.dlg'))));
+await click(boton('Cancelar', '.dlg button'));
+ev("__try(()=>API.ocResponder('U-G','OC-0001',{resultado:'ACEPTADA',referencia:'PO-UI-1',evidencias:['data:application/pdf;base64,JVBERi0xLjQ=']}))");
+T('F1c Confirmada por Comercial: queda con usuario, fecha y evidencia', J('DB.ordenesCompra[0].estado') === 'ACEPTADA' && J('DB.ordenesCompra[0].respuesta.porId') === 'U-G' && J('DB.ordenesCompra[0].respuesta.evidencias.length') === 1);
+como('U-F', 'oc'); await click(boton('Confirmadas', '[role=tab]'));
+T('F2 Una orden confirmada muestra «Preparar factura» a Facturación', !!boton('Preparar factura'));
 await click(boton('Preparar factura'));
 await click(boton('PREPARAR FACTURA', '.dlg button'));
 T('F3 Se prepara UNA factura vinculada a la orden con sus 4 viajes (flujo de Facturación existente)', J('DB.agrupaciones.length') === 1 && J('DB.agrupaciones[0].ocId') === 'OC-0001' && J('DB.agrupaciones[0].viajeIds.length') === 4 && J('DB.ordenesCompra[0].agrupacionId') === 'AGR-0001', toasts());

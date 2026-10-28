@@ -25,6 +25,7 @@ const call = (uid, op, ...args) => J(`__try(()=>API.${op}(${[JSON.stringify(uid)
 const V = J('__V');
 const trip = id => J(`DB.trips.find(t=>t.id==='${id}')`);
 const base = (ids, extra) => Object.assign({ cliente: 'COLGATE', proyecto: 'COLGATE', viajeIds: ids, columnas: [] }, extra || {});
+const EVID = 'data:application/pdf;base64,JVBERi0xLjQ=';
 const PDF = 'data:application/pdf;base64,' + Buffer.from('%PDF-1.4 prueba').toString('base64');
 
 T('O0 El motor carga sin errores de JavaScript', N.errs.length === 0, N.errs);
@@ -74,7 +75,7 @@ T('P7 Quien prepara órdenes no recibe permisos de Liquidaciones ni de finanzas 
 });
 { const x = call('U-1', 'setPermiso', 'FACTURACION', 'oc_responder', true); T('P9 Facturación no puede recibir «oc_responder» (separación de funciones)', !x.ok && x.code === 'PERMISO_PROHIBIDO', x); }
 T('P10 La sección «Órdenes de compra» existe en el módulo Comercial y exige oc_ver', J('SEC_DE.oc').base === 'oc_ver' && J('SEC_DE.oc').mod === 'COMERCIAL' && J('MODULOS_SEC').find(m => m[0] === 'COMERCIAL')[1].includes('oc') && J('VIEW_PERM.oc') === 'oc_ver');
-T('P11 El menú de Torre, Operativo y Validador no incluye la sección', ['TORRE', 'OPERATIVO', 'VALIDADOR'].every(r => !J(`ROLES.${r}.nav`).includes('oc')) && ['GERENTE_COMERCIAL', 'ANALISTA_COMERCIAL', 'FACTURACION', 'ADMIN'].every(r => J(`ROLES.${r}.nav`).includes('oc')));
+T('P11 OC no es un módulo ni un ítem de menú: ningún perfil lo lista; Comercial, Gerencia, Facturación y Admin entran por el espacio «comercial»; Torre, Operativo y Validador no', Object.keys(J('ROLES')).every(r => !J(`ROLES.${r}.nav`).includes('oc')) && ['GERENTE_COMERCIAL', 'ANALISTA_COMERCIAL', 'FACTURACION', 'ADMIN'].every(r => J(`ROLES.${r}.nav`).includes('comercial')) && ['TORRE', 'OPERATIVO', 'VALIDADOR'].every(r => !J(`ROLES.${r}.nav`).includes('comercial')));
 for (const [uid, rol] of [['U-T', 'Torre'], ['U-O', 'Operativo'], ['U-V', 'Validador'], ['U-F', 'Facturación'], ['U-C', 'Cobros'], ['U-P', 'Pago OPL']]) {
   const x = call(uid, 'ocGenerar', base([V.a]));
   T(`P12 ${rol} no puede generar una orden por API directa`, !x.ok && x.code === 'SIN_PERMISO', x);
@@ -203,14 +204,14 @@ T('C4 Columnas del PDF = 8 obligatorias + las opcionales elegidas (Semana … Ta
 
 /* ============ Respuesta del cliente ============ */
 {
-  for (const uid of ['U-V', 'U-O', 'U-T', 'U-F']) { const g = call(uid, 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123' }); T(`R1 ${uid} (sin oc_responder) no puede registrar la respuesta`, !g.ok && g.code === 'SIN_PERMISO', g); }
+  for (const uid of ['U-V', 'U-O', 'U-T', 'U-F']) { const g = call(uid, 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123', evidencias: [EVID] }); T(`R1 ${uid} (sin oc_responder) no puede registrar la respuesta`, !g.ok && g.code === 'SIN_PERMISO', g); }
   call('U-1', 'setPermiso', 'GERENTE_COMERCIAL', 'oc_responder', false);
-  { const g = call('U-G', 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123' }); T('R2 El motor valida el permiso: si se le retira a Gerencia Comercial, no puede responder', !g.ok && g.code === 'SIN_PERMISO' && J('DB.ordenesCompra[0].estado') === 'ENVIADA', g); }
-  T('R3 Validador (aprueba liquidaciones) sigue sin poder responder órdenes aunque tenga liq_aprobar', tiene('VALIDADOR', 'liq_aprobar') && !call('U-V', 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123' }).ok);
+  { const g = call('U-G', 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123', evidencias: [EVID] }); T('R2 El motor valida el permiso: si se le retira a Gerencia Comercial, no puede responder', !g.ok && g.code === 'SIN_PERMISO' && J('DB.ordenesCompra[0].estado') === 'ENVIADA', g); }
+  T('R3 Validador (aprueba liquidaciones) sigue sin poder responder órdenes aunque tenga liq_aprobar', tiene('VALIDADOR', 'liq_aprobar') && !call('U-V', 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123', evidencias: [EVID] }).ok);
   call('U-1', 'setPermiso', 'GERENTE_COMERCIAL', 'oc_responder', true);
   const sinMotivo = call('U-G', 'ocResponder', 'OC-0001', { resultado: 'RECHAZADA' });
   T('R4 Rechazar exige motivo; aceptar exige la referencia del cliente', !sinMotivo.ok && !call('U-G', 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA' }).ok && !call('U-G', 'ocResponder', 'OC-0001', { resultado: 'TAL VEZ' }).ok);
-  const okR = call('U-G', 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123' });
+  const okR = call('U-G', 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123', evidencias: [EVID] });
   T('R5 Con el permiso concedido, se registra la aceptación (usuario, fecha y referencia)', okR.ok && okR.r.estado === 'ACEPTADA' && okR.r.respuesta.porId === 'U-G' && okR.r.respuesta.referencia === 'PO-123' && !!okR.r.respuesta.en, okR);
   const n = J('DB.notificaciones').find(z => z.tipo === 'OC_ACEPTADA');
   T('R6 Facturación recibe la notificación «aceptada: disponible para facturar»', !!n && n.destinatarios.includes('FACTURACION'), n);
@@ -242,8 +243,13 @@ let FACT;
   const emi0 = call('U-F', 'emitirFactura', f.r.id, { fechaEmision: '2031-12-31', importe: 5600, evidencia: 'UUID-0001-ABC' });
   T('I10 No se emite una factura con un viaje sin tarifa válida (también en backend)', !emi0.ok && emi0.code === 'TARIFA_PENDIENTE' && /Viaje pendiente de asignación de tarifa/.test(emi0.msg), emi0);
   ev(`DB.agrupaciones[0].importesViaje['${V.a}']=1000`);
-  const emi = call('U-F', 'emitirFactura', f.r.id, { fechaEmision: '2031-12-31', importe: 5600, evidencia: 'UUID-0001-ABC' });
+  const sinArch = call('U-F', 'emitirFactura', f.r.id, { fechaEmision: '2031-12-31', importe: 5600, evidencia: 'UUID-0001-ABC' });
+  T('I10b Una factura que viene de una OC no se emite sin la captura o comprobante adjunto', !sinArch.ok && sinArch.code === 'SIN_EVIDENCIA', sinArch);
+  const emi = call('U-F', 'emitirFactura', f.r.id, { fechaEmision: '2031-12-31', importe: 5600, evidencia: 'UUID-0001-ABC', archivo: EVID });
   T('I11 Con tarifas válidas la factura se emite y la orden aparece como Facturada (etapa derivada)', emi.ok && J(`ocEtapa(DB.ordenesCompra[0])`) === 'FACTURADA', emi);
+  { const h = J('DB.ordenesCompra[0].historial'); const iAc = h.findIndex(x => /Aceptada por el cliente/.test(x.accion)), iEnv = h.findIndex(x => /enviada a facturación/.test(x.accion)), iEm = h.findIndex(x => /emitida y enviada al cliente/.test(x.accion));
+    T('I12 En el historial de la OC la aceptación del cliente (Comercial) y el envío de la factura (Facturación) son eventos distintos, cada uno con su usuario', iAc >= 0 && iEnv > iAc && iEm > iEnv && h[iAc].porId === 'U-G' && h[iEnv].porId === 'U-F' && h[iEm].porId === 'U-F' && !!h[iEm].en, h.map(x => x.por + ': ' + x.accion)); }
+  T('I13 Facturación no ve la OC en otro estado que no sea confirmada; Comercial sí ve todo su historial y evidencias', call('U-F', 'ordenesCompra').r.every(o => o.estado === 'ACEPTADA') && call('U-G', 'ordenesCompra').r.length >= call('U-F', 'ordenesCompra').r.length && call('U-G', 'ordenesCompra').r.find(o => o.id === 'OC-0001').respuesta.evidencias.length === 1);
 }
 {
   /* Compatibilidad: viajes fuera de toda orden se facturan como siempre */
@@ -326,7 +332,7 @@ let OC2;
   T('K10b Notifica a Comercial/Gerencia de la corrección', J('DB.notificaciones').some(n => n.tipo === 'OC_CORREGIDA' && n.destinatarios.includes('GERENTE_COMERCIAL')));
   /* Se puede seguir el flujo completo con la nueva versión */
   call('U-N', 'ocEnviar', c.r.id, {});
-  const acc = call('U-G', 'ocResponder', c.r.id, { resultado: 'ACEPTADA', referencia: 'PO-K-2' });
+  const acc = call('U-G', 'ocResponder', c.r.id, { resultado: 'ACEPTADA', referencia: 'PO-K-2', evidencias: [EVID] });
   const fac = call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: c.r.id });
   T('K11 La nueva versión aceptada se factura una sola vez (la segunda factura se rechaza)', acc.ok && fac.ok && !call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: c.r.id }).ok && !call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: o.id }).ok, fac);
   const antes = J('DB.ordenesCompra.length');
@@ -338,7 +344,7 @@ let OC2;
   const sub = call('U-1', 'ocCorregir', o2.id, { motivo: 'Administrador quita un viaje', viajeIds: [m[0]] });
   T('K13 El Administrador corrige una OC enviada; el viaje retirado queda libre y el otro pasa a la nueva', sub.ok && sub.r.lineas.length === 1 && trip(m[1]).ocId === '' && trip(m[0]).ocId === sub.r.id && activas(m[1]) === 0 && activas(m[0]) === 1, sub);
   const o3 = prep([m[1]], 'U-G');
-  call('U-G', 'ocResponder', o3.id, { resultado: 'ACEPTADA', referencia: 'PO-K3' });
+  call('U-G', 'ocResponder', o3.id, { resultado: 'ACEPTADA', referencia: 'PO-K3', evidencias: [EVID] });
   const c3 = call('U-G', 'ocCorregir', o3.id, { motivo: 'Gerencia corrige una OC aceptada' });
   T('K14 Gerencia Comercial corrige una OC aceptada (sin factura): queda reemplazada y la nueva debe aceptarse de nuevo', c3.ok && c3.r.estado === 'PREPARADA' && J(`DB.ordenesCompra.find(x=>x.id==='${o3.id}').estado`) === 'REEMPLAZADA' && !call('U-F', 'prepararFactura', { cliente: 'COLGATE', ocId: o3.id }).ok, c3);
   /* --- una corrección inválida no rompe nada --- */
@@ -355,6 +361,8 @@ let OC2;
   const rej5 = (() => { call('U-G', 'ocRegistrarPdf', o5.id, { archivo: PDF }); call('U-G', 'ocEnviar', o5.id, {}); call('U-G', 'ocResponder', o5.id, { resultado: 'RECHAZADA', motivo: 'No coincide con el pedido' }); return call('U-1', 'ocAnular', o5.id, 'Administrador descarta la rechazada'); })();
   T('K18 Una OC rechazada puede anularse con motivo: libera los viajes y quedan disponibles para otra OC', rej5.ok && rej5.r.estado === 'ANULADA' && trip(ajeno).ocId === '' && call('U-G', 'ocGenerar', base([ajeno])).ok, rej5);
   T('K19 Ningún viaje del conjunto quedó en dos OC activas ni en una OC y una factura a la vez', J(`DB.trips.every(t=>DB.ordenesCompra.filter(o=>OC_RESERVA.includes(o.estado)&&o.viajeIds.includes(t.id)).length<=1)`) && J(`DB.ordenesCompra.filter(o=>o.estado==='ACEPTADA'&&o.agrupacionId).every(o=>DB.agrupaciones.filter(g=>g.estado==='ACTIVA'&&g.ocId===o.id).length<=1)`));
+  T('K21 Con OC en todos los estados, Facturación ve solo las confirmadas mientras Comercial, Gerencia y Admin ven todas', (() => { const est = new Set(call('U-G', 'ordenesCompra').r.map(o => o.estado)); const f = call('U-F', 'ordenesCompra').r; return est.size >= 4 && f.length > 0 && f.every(o => o.estado === 'ACEPTADA') && call('U-1', 'ordenesCompra').r.length === call('U-G', 'ordenesCompra').r.length; })());
+  T('K20 Aceptar sin evidencia se rechaza en el motor (SIN_EVIDENCIA)', (() => { const ids = [ev(`__mk({shipment:'SH-NEV',pilotoId:'P-1',fechaPlan:'2031-09-20T08:00'},120)`)]; const o = call('U-G', 'ocGenerar', base(ids)).r; call('U-G', 'ocRegistrarPdf', o.id, { archivo: PDF }); call('U-G', 'ocEnviar', o.id, {}); const x = call('U-G', 'ocResponder', o.id, { resultado: 'ACEPTADA', referencia: 'PO-X' }); call('U-G', 'ocAnular', o.id, 'prueba sin evidencia'); return !x.ok && x.code === 'SIN_EVIDENCIA'; })());
 }
 
 /* ============ Seguridad de datos viejos ============ */

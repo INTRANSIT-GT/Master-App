@@ -123,7 +123,7 @@ T('P5 Facturación no puede registrar PDF', !(await api('fac', 'ocRegistrarPdf',
 
 /* Almacenamiento y RLS */
 const ver = async (q, n) => (await como(q, `select app.puede_ver_archivo('${n}') v`)).rows?.[0]?.v;
-T('A1 Ver el archivo oc/…: sí Gerencia Comercial, Analista y Facturación; no Torre, Validador ni Operativo', await ver('gco', 'oc/OC-0001/archivo-v1.pdf') === true && await ver('ale', 'oc/OC-0001/archivo-v1.pdf') === true && await ver('fac', 'oc/OC-0001/archivo-v1.pdf') === true && await ver('fel', 'oc/OC-0001/archivo-v1.pdf') === false && await ver('mar', 'oc/OC-0001/archivo-v1.pdf') === false && await ver('ped', 'oc/OC-0001/archivo-v1.pdf') === false);
+T('A1 Ver el archivo oc/… mientras la OC no está confirmada: sí Gerencia Comercial y Analista; no Facturación, Torre, Validador ni Operativo', await ver('gco', 'oc/OC-0001/archivo-v1.pdf') === true && await ver('ale', 'oc/OC-0001/archivo-v1.pdf') === true && await ver('fac', 'oc/OC-0001/archivo-v1.pdf') === false && await ver('fel', 'oc/OC-0001/archivo-v1.pdf') === false && await ver('mar', 'oc/OC-0001/archivo-v1.pdf') === false && await ver('ped', 'oc/OC-0001/archivo-v1.pdf') === false);
 const sube = async (q, n) => (await como(q, `select app.puede_subir('${n}') v`)).rows?.[0]?.v;
 T('A2 Subir a oc/<orden>/…: solo quien prepara, mientras está Preparada; rutas mal formadas, no', await sube('gco', 'oc/OC-0001/nuevo-archivo.pdf') === true && await sube('fac', 'oc/OC-0001/nuevo-archivo.pdf') === false && await sube('fel', 'oc/OC-0001/nuevo-archivo.pdf') === false && await sube('gco', 'oc/OC-0001/a/b.pdf') === false && await sube('gco', 'oc/OC-9999/nuevo-archivo.pdf') === false);
 const oc1 = await como('gco', 'select id, estado, total from master.ordenes_compra');
@@ -149,7 +149,7 @@ T('E4 Con la orden Enviada solo quien responde (Comercial) puede subir archivos;
 /* Snapshot */
 const snG = await api('gco', 'snapshot'), snF = await api('fac', 'snapshot'), snT = await api('fel', 'snapshot'), snA = await api('ale', 'snapshot');
 const ocG = snG.snapshot?.ordenesCompra || [], ocF = snF.snapshot?.ordenesCompra || [];
-T('N1 El snapshot trae la orden con URLs firmadas del bucket privado (no rutas públicas) para quien tiene oc_ver', ocG.length === 1 && ocG[0].documentos.length === 2 && /^https:\/\/firmado\.test\/oc\/OC-0001\//.test(ocG[0].documentos[1].url) && ocF.length === 1, snG.message);
+T('N1 El snapshot trae la orden con URLs firmadas del bucket privado (no rutas públicas) para Comercial; Facturación no la recibe hasta que esté confirmada', ocG.length === 1 && ocG[0].documentos.length === 2 && /^https:\/\/firmado\.test\/oc\/OC-0001\//.test(ocG[0].documentos[1].url) && ocF.length === 0, snG.message);
 T('N2 El snapshot de Torre no incluye órdenes de compra', (snT.snapshot?.ordenesCompra || []).length === 0 && snT.ok);
 T('N3 Sin oc_ver_combustible (Facturación) el snapshot no trae combustible (ni en líneas ni aparte)', !JSON.stringify(ocF).includes('combustible') && !JSON.stringify(ocF).includes('"tarifaBase"'));
 
@@ -160,6 +160,11 @@ T('R2 El Administrador no puede dársela a Facturación (separación de funcione
 await db.exec("insert into storage.objects(bucket_id,name) values ('evidencias','oc/OC-0001/respuesta-cliente.pdf')");
 const resp = await api('gco', 'ocResponder', 'OC-0001', { resultado: 'ACEPTADA', referencia: 'PO-123', evidencias: [{ path: 'oc/OC-0001/respuesta-cliente.pdf' }] });
 T('R3 Gerencia Comercial (permiso por defecto) registra la aceptación con evidencia privada', resp.ok && resp.result.estado === 'ACEPTADA' && (await q1("select respuesta from master.ordenes_compra where id='OC-0001'"))[0].respuesta.evidencias[0].path === 'oc/OC-0001/respuesta-cliente.pdf', resp);
+
+{ const fSnap = await api('fac', 'snapshot');
+  T('R4 Una vez confirmada por Comercial, Facturación la recibe en el snapshot (con la evidencia de aceptación) y puede ver sus archivos', (fSnap.snapshot?.ordenesCompra || []).length === 1 && (fSnap.snapshot.ordenesCompra[0].respuesta?.evidencias || []).length === 1 && await ver('fac', 'oc/OC-0001/archivo-v1.pdf') === true, fSnap.message);
+  const rls = async who => (await como(who, 'select id from master.ordenes_compra')).rows?.length;
+  T('R5 RLS de la base: Facturación lee la OC solo confirmada; Torre y Operativo no leen ninguna; Comercial sí', await rls('fac') === 1 && await rls('gco') === 1 && !(await rls('fel')) && !(await rls('ped')), [await rls('fac'), await rls('gco'), await rls('fel')]); }
 
 /* Facturación */
 const suelta = await api('fac', 'prepararFactura', { cliente: 'COLGATE', viajeIds: [b] });
