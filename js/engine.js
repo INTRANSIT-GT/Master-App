@@ -126,16 +126,16 @@ function refrescarSugerencias(){
   ORIGENES.sort(ord);DESTINOS.sort(ord);
 }
 const ROLES={
-  ADMIN:{label:'ADMIN',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','analista','factcom','tarifas','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
+  ADMIN:{label:'ADMIN',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','analista','factcom','tarifas','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
   GERENTE_TRANSPORTE:{label:'Gerente de Transporte',home:'inicio',nav:['inicio','nuevo','todos','viajes','rutas','opl','liquidaciones','finanzas','catalogos'],alcance:'Ver todo y registrar viajes; asignar unidades/pilotos y autorizar/crear tarifas OPL; control financiero en modo consulta'},
   VALIDADOR:{label:'Validador',home:'viajes',nav:['viajes','liquidaciones'],alcance:'Revisar/aprobar liquidaciones de clientes asignados'},
   OPERATIVO:{label:'Operativo',home:'inicio',nav:['inicio','nuevo','viajes','rutas','liquidaciones'],alcance:'Registrar, editar y liquidar viajes de clientes asignados. Ve y solicita rutas de su proyecto.'},
   ANALISTA_COMERCIAL:{label:'Asistente Comercial',home:'analista',nav:['proyectos','analista','tarifas','rutas'],alcance:'Agrupar viajes, generar el reporte para el cliente y registrar la OT; administrar clientes y tarifas con auditoría obligatoria'},
-  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','comercial','analista','tarifas','rutas','opl','finanzas','catalogos'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
+  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','analista','factcom','tarifas','rutas','opl','finanzas','catalogos'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
   FACTURACION:{label:'Facturación',home:'factcom',nav:['todos','factcom','tarifas'],alcance:'Recibir agrupaciones con OT, registrar número y fecha de factura, subir la foto de la factura y validar el cobro; consulta de tarifas'},
   PAGO_OPL:{label:'Pago OPL',home:'opl',nav:['opl'],alcance:'Registrar OPL y tarifas a proveedores (requieren autorización)'},
   TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Editar horas y marcar Completado para viajes en ruta'},
-  PROYECTOS:{label:'Proyectos',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','analista','factcom','tarifas','rutas','opl','finanzas','catalogos','auditoria','modelo'],alcance:'Revisar todos los módulos y datos. Las acciones las habilita la administradora según se necesiten.'}
+  PROYECTOS:{label:'Proyectos',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','analista','factcom','tarifas','rutas','opl','finanzas','catalogos','auditoria','modelo'],alcance:'Revisar todos los módulos y datos. Las acciones las habilita la administradora según se necesiten.'}
 };
 /* Ayuda es para todos los perfiles: no es un módulo restringido ni requiere un permiso de la matriz. */
 Object.values(ROLES).forEach(r=>{if(!r.nav.includes('ayuda'))r.nav.push('ayuda');});
@@ -187,9 +187,8 @@ const SECCIONES=[
   ['todos','Todos los viajes','viajes_ver_todos','VIAJES'],
   ['liquidaciones','Liquidaciones','liq_ver','VIAJES'],
   ['torre','Torre de control','viajes_ver_todos','TORRE'],
-  ['comercial','Facturación','comercial_ver','COMERCIAL'],
   ['analista','Asistente Comercial','comercial_ver','COMERCIAL'],
-  ['factcom','Facturación Comercial','comercial_ver','COMERCIAL'],
+  ['factcom','Facturación','comercial_ver','COMERCIAL'],
   ['oc','Órdenes de compra (pestaña de Comercial)','oc_ver','COMERCIAL'],
   ['proyectos','Clientes','clientes_gestionar','COMERCIAL'],
   ['tarifas','Tarifas','tarifas_ver','COMERCIAL'],
@@ -202,9 +201,9 @@ const SECCIONES=[
   ['modelo','Modelo de datos','catalogos_ver','ADMINISTRACIÓN'],
   ['ayuda','Ayuda',null,'AYUDA']
 ];
-const MODULOS_SEC=[['VIAJES',['inicio','nuevo','viajes','todos','liquidaciones']],['TORRE',['torre']],['COMERCIAL',['comercial','analista','factcom','oc','proyectos','tarifas','finanzas','catalogos']],['OPL',['opl']],['FLOTAS',['catalogos']],['ADMINISTRACIÓN',['rutas','usuarios','auditoria','modelo']],['AYUDA',['ayuda']]];
+const MODULOS_SEC=[['VIAJES',['inicio','nuevo','viajes','todos','liquidaciones']],['TORRE',['torre']],['COMERCIAL',['analista','factcom','oc','proyectos','tarifas','finanzas','catalogos']],['OPL',['opl']],['FLOTAS',['catalogos']],['ADMINISTRACIÓN',['rutas','usuarios','auditoria','modelo']],['AYUDA',['ayuda']]];
 const SEC_DE={};SECCIONES.forEach(x=>{SEC_DE[x[0]]={l:x[1],base:x[2],mod:x[3],perm:'sec_'+x[0]};});
-const NAVLBL={oc:['Órdenes de compra','receipt'],tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],analista:['Analista Comercial','list'],factcom:['Facturación Comercial','receipt'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck'],ayuda:['Ayuda','help']};
+const NAVLBL={oc:['Órdenes de compra','receipt'],tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación (histórico)','dollar'],analista:['Asistente Comercial','list'],factcom:['Facturación','receipt'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck'],ayuda:['Ayuda','help']};
 /* ---------- Ayuda: reportes de fallas (todos los perfiles pueden reportar; solo el Administrador gestiona) ---------- */
 const AYUDA_TIPOS=['No puedo guardar información','No puedo ingresar a una sección','Error en un formulario','La información no aparece o no se actualiza','Problema con un botón o una función','Otro'];
 const AYUDA_ESTADOS={PENDIENTE:'Pendiente',EN_REVISION:'En revisión',RESUELTO:'Resuelto'};

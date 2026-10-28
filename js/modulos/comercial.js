@@ -191,7 +191,15 @@ function agrTable(list,acts){
   }
   if(okA){
     ac+=B('agrHistorial','Historial','ghost')+B('agrImportes','Importes','ghost');
-    if(g.fase==='PREPARADA'){ac+=B('agrPanel','Reportes y OT',g.confirmacion?'':'primary');if(g.confirmacion&&hp('facturas_emitir')){if(!g.numeroFactura||!g.fechaFactura)ac+=B('facturaEditar','Datos de factura','primary');else ac+=B('agrRecibir','Enviar a facturación','primary');}}
+    if(g.fase==='PREPARADA'){
+      ac+=B('agrPanel','Reportes y OT',g.confirmacion?'':'primary');
+      if(hp('comercial_ot')&&!g.confirmacion){
+        const cli=(g.pdfs||[]).filter(p=>p.tipo==='CLIENTE'),ult=cli[cli.length-1];
+        const evs=ult?(g.evidenciasAutorizacion||[]).filter(e=>e.pdfVersion===ult.version):[];
+        if(ult&&evs.length)ac+=B('agrConfirmarOpen','Registrar OT','primary');
+      }
+      if(g.confirmacion&&hp('facturas_emitir')){if(!g.numeroFactura||!g.fechaFactura)ac+=B('facturaEditar','Datos de factura','primary');else ac+=B('agrRecibir','Enviar a facturación','primary');}
+    }
     if(g.fase==='ENVIADA'&&hp('facturas_emitir'))ac+=B('emitirOpen','Registrar envío de la factura','primary');
     if(g.fase==='EMITIDA'){ac+=B('evidenciaVer','Ver comprobante','');if(fa!=null&&fa-cob>0.004&&hp('cobros_registrar'))ac+=B('cobroOpen','Registrar cobro','ok');}
     if(g.numeroFactura&&g.fase!=='PREPARADA'&&hp('comercial_corregir'))ac+=B('corregirOpen','Corregir nº','');
@@ -343,6 +351,7 @@ function comView(modo){
   const tit=modo==='analista'?'ASISTENTE COMERCIAL':modo==='factcom'?'FACTURACIÓN COMERCIAL':'COMERCIAL';
   const sub=modo==='analista'?'Viajes ya liquidados: agrúpalos por cliente, genera el reporte, envíalo al cliente y registra el número de OT.':modo==='factcom'?'Agrupaciones con OT: registra número y fecha de factura, sube la foto de la factura y valida el cobro.':(canAct?'Selecciona uno o varios viajes del mismo cliente y factúralos. Agrupar es opcional.':'Consulta de gestión comercial.');
   return `<div class="inner" style="max-width:1500px">${pageHead(tit,sub)}
+    ${modo==='factcom'?'<div class="alertbox info" style="margin-bottom:12px">La <b>OT</b> la registra el Asistente Comercial. Aquí solo aparecen las agrupaciones que ya tienen OT; si falta alguna, pídesela al Asistente.</div>':''}
     ${tabs(TK,tabsV,k,null)}<div style="height:14px"></div>${body}</div>`;
 }
 VIEWS.comercial=()=>comView('');

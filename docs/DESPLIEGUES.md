@@ -50,6 +50,13 @@ El código vive en GitHub; aquí se anota qué se ejecutó en el entorno y cuán
 - **Verificado:** motor de punta a punta (agrupar → OT → datos de factura → envío → emisión con foto → cobro), permisos cruzados (Facturación no registra OT; Asistente no factura) y matriz sin el perfil Cobros.
 - **Migración 037 aplicada:** las políticas de Storage (`app.puede_subir` y `app.puede_ver_archivo`) ahora usan `comercial_ot`; sin esto el Asistente no podía subir la evidencia de la OT.
 
+## 2026-10-28 · Una sola pantalla de Facturación (038)
+
+- **Migración aplicada:** `038_consolidar_facturacion.sql`; Gerencia Comercial recibe acceso a la pantalla nueva de Facturación.
+- **Menú:** se retira la sección vieja «Facturación» (`comercial`); quedan **Asistente Comercial** (agrupa, reporte y OT) y **Facturación** (factura y cobro). Ya no hay tres accesos parecidos.
+- **OT visible:** en la lista del Asistente aparece el botón directo **Registrar OT** cuando el reporte y la evidencia ya están cargados.
+- **API desplegada:** versión **91**; **front v1.0.99**.
+
 ## Cómo anotar
 
 Una sección por despliegue, con fecha, migración/función, versión, motivo y verificación.
