@@ -34,7 +34,7 @@ T('M1 Aparecen los cinco módulos, en orden: VIAJES, TORRE, COMERCIAL, OPL, FLOT
 const L = t => (G.find(g => g.t === t) || { items: [] }).items.map(i => i.l);
 T('M2 VIAJES agrupa Nuevo viaje, Liquidaciones y Todos los viajes (y la pantalla existente de viajes por estado)', JSON.stringify(L('VIAJES')) === JSON.stringify(['Nuevo viaje', 'Liquidaciones', 'Todos los viajes', 'Viajes por estado']), L('VIAJES'));
 T('M3 TORRE agrupa «Viajes», «Horarios y fechas» y «Vista general» (todas abren la hoja existente de Torre de control)', JSON.stringify(L('TORRE')) === JSON.stringify(['Viajes', 'Horarios y fechas', 'Vista general']), L('TORRE'));
-T('M4 COMERCIAL agrupa Facturación, Clientes, Tarifas, Finanzas y Catálogos (las OC son una pestaña de Facturación/Comercial)', JSON.stringify(L('COMERCIAL')) === JSON.stringify(['Facturación', 'Clientes', 'Tarifas', 'Finanzas', 'Catálogos']), L('COMERCIAL'));
+T('M4 COMERCIAL agrupa Facturación, Analista Comercial, Facturación Comercial, Clientes, Tarifas, Finanzas y Catálogos (las OC son una pestaña)', JSON.stringify(L('COMERCIAL')) === JSON.stringify(['Facturación', 'Analista Comercial', 'Facturación Comercial', 'Clientes', 'Tarifas', 'Finanzas', 'Catálogos']), L('COMERCIAL'));
 T('M5 OPL agrupa Proveedores', JSON.stringify(L('OPL')) === JSON.stringify(['Proveedores']), L('OPL'));
 T('M6 FLOTAS agrupa Pilotos', JSON.stringify(L('FLOTAS')) === JSON.stringify(['Pilotos']), L('FLOTAS'));
 T('M7 Ninguna opción se repite dentro de un mismo módulo', G.every(g => new Set(g.items.map(i => i.l)).size === g.items.length));

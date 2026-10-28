@@ -4,7 +4,7 @@
 import { createEngine } from './core.mjs';
 import { loadState, saveState, fotografia } from './store.mjs';
 
-export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'ocGenerar', 'ocRegistrarPdf', 'ocEnviar', 'ocResponder', 'ocAnular','ocCorregir','agrRegistrarPdf','agrAdjuntarEvidencia','confirmarCliente', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
+export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'ocGenerar', 'ocRegistrarPdf', 'ocEnviar', 'ocResponder', 'ocAnular','ocCorregir','agrRegistrarPdf','agrAdjuntarEvidencia', 'agrRechazarCliente','confirmarCliente', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
   'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'setAcceso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'activarUsuario', 'cambiarClave', 'guardarCatalogo', 'guardarPiloto', 'cambiarEstadoPiloto', 'crearReporteAyuda', 'cambiarEstadoReporteAyuda'];
 export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores', 'buscarViajes'];
@@ -316,7 +316,7 @@ async function armarSnapshot(E, uid, deps, ventana) {
   ocs.forEach(o => { (o.documentos || []).forEach(d => d.path && ocPaths.push(d.path)); ((o.respuesta && o.respuesta.evidencias) || []).forEach(e => e.path && ocPaths.push(e.path)); });
   /* Agrupaciones de cobro: PDF interno/cliente por versiones, evidencias de autorización y comprobantes de cobro, todo privado. */
   const agrPaths = [];
-  agr.forEach(g => { (g.pdfs || []).forEach(p => p.path && agrPaths.push(p.path)); (g.evidenciasAutorizacion || []).forEach(e => e.path && agrPaths.push(e.path)); (g.cobros || []).forEach(c => c.archivoPath && agrPaths.push(c.archivoPath)); });
+  agr.forEach(g => { (g.pdfs || []).forEach(p => p.path && agrPaths.push(p.path)); (g.evidenciasAutorizacion || []).forEach(e => e.path && agrPaths.push(e.path)); (g.rechazos || []).forEach(e => e.path && agrPaths.push(e.path)); (g.cobros || []).forEach(c => c.archivoPath && agrPaths.push(c.archivoPath)); });
   const paths = [...evs.map(e => e.path), ...agr.map(g => g.emision && g.emision.archivoPath), ...agrPaths, ...ordPaths, ...ocPaths].filter(Boolean).slice(-600);
   const urls = paths.length ? await deps.firmar(paths) : new Map();
   evs.forEach(e => evidencias.push({ id: e.id, viajeId: e.viajeId, liqId: e.liqId, dataUrl: urls.get(e.path) || '', path: '', porId: e.porId, por: e.por, en: e.en }));
@@ -324,6 +324,7 @@ async function armarSnapshot(E, uid, deps, ventana) {
     const x = g.emision && g.emision.archivoPath ? { ...g, emision: { ...g.emision, archivo: urls.get(g.emision.archivoPath) || '', archivoPath: '' } } : { ...g };
     if (g.pdfs) x.pdfs = g.pdfs.map(p => ({ ...p, url: p.path ? (urls.get(p.path) || '') : '' }));
     if (g.evidenciasAutorizacion) x.evidenciasAutorizacion = g.evidenciasAutorizacion.map(e => ({ ...e, url: e.path ? (urls.get(e.path) || '') : '' }));
+    if (g.rechazos) x.rechazos = g.rechazos.map(e => ({ ...e, url: e.path ? (urls.get(e.path) || '') : '' }));
     if (g.cobros) x.cobros = g.cobros.map(c => c.archivoPath ? { ...c, url: urls.get(c.archivoPath) || '' } : c);
     return x;
   });

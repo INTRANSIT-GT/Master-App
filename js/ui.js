@@ -725,7 +725,7 @@ function aplicarTema(){
 const ADM_MODULOS=[
   {t:'VIAJES',    items:[{v:'nuevo'},{v:'liquidaciones'},{v:'todos'},{v:'viajes',l:'Viajes por estado'}]},
   {t:'TORRE',     items:[{v:'torre',k:'torre',l:'Viajes',tab:['torre','curso']},{v:'torre',k:'horarios',l:'Horarios y fechas',ic:'clock',tab:['torre','todos']},{v:'torre',k:'general',l:'Vista general',ic:'list',tab:['torre','todos']}]},
-  {t:'COMERCIAL', items:[{v:'comercial'},{v:'proyectos'},{v:'tarifas'},{v:'finanzas'},{v:'catalogos'}]},
+  {t:'COMERCIAL', items:[{v:'comercial'},{v:'analista'},{v:'factcom'},{v:'proyectos'},{v:'tarifas'},{v:'finanzas'},{v:'catalogos'}]},
   {t:'OPL',       items:[{v:'opl',l:'Proveedores'}]},
   {t:'FLOTAS',    items:[{v:'catalogos',k:'pilotos',l:'Pilotos',ic:'users',tab:['cat','pil']}]},
   {t:'ADMINISTRACIÓN', items:[{v:'rutas'},{v:'usuarios'},{v:'auditoria'},{v:'modelo'}]}   /* pantallas que existen y no pertenecen a los otros módulos: siguen accesibles */
@@ -1115,7 +1115,7 @@ app.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.cbq){S.cbq=t.value;const l=document.querySelector('.cb[data-cb="'+t.dataset.cbq+'"] .cb-list');if(l)l.innerHTML=cbListHTML(t.dataset.cbq);return;}
   if(t.dataset.mf&&S.modal&&t.type!=='checkbox'&&t.tagName!=='SELECT'){S.modal.data[t.dataset.mf]=t.value;updateLive();}
-  if(t.dataset.live){S[t.dataset.live]=t.value;const fn=S.view==='comercial'?(S.tab.com==='hist'?BODY.hist:S.tab.com==='tar'?BODY.tarifas:BODY.comercial):BODY[S.view];const vb=document.getElementById('vb');if(fn&&vb)vb.innerHTML=fn();}
+  if(t.dataset.live){S[t.dataset.live]=t.value;const tk=S.view==='analista'?S.tab.comA:S.view==='factcom'?S.tab.comF:S.tab.com;const fn=/^(comercial|analista|factcom)$/.test(S.view)?(tk==='hist'?BODY.hist:tk==='tar'?BODY.tarifas:BODY.comercial):BODY[S.view];const vb=document.getElementById('vb');if(fn&&vb)vb.innerHTML=fn();}
   if(t.dataset.motivo&&S.edit)S.edit.motivo=t.value;
   if(t.id==='qCli'){S.qCli=t.value;render();const el=document.getElementById('qCli');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}return;}
   if(t.id==='qPil'){S.pilQ=t.value;render();const el=document.getElementById('qPil');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}return;}
