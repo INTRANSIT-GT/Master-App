@@ -3,6 +3,8 @@
   const U=(id,usuario,nombre,rol,pr)=>({id,usuario,clave:'x',nombre,rol,activo:true,proyectos:pr||[]});
   DB.usuarios.push(U('U-1','admin','Admin Master','ADMIN'),U('U-2','pedro','Pedro Chaperon','OPERATIVO'),U('U-3','sinp','Encargado Sin Proyectos','OPERATIVO'));
   Object.keys(ROLES).forEach(r=>PERM_KEYS.forEach(p=>{DB.permisos.push({rol:r,permiso:p,habilitado:r==='ADMIN'?true:((PERM_DEFAULT[r]||[]).includes(p)&&!((PROHIBIDO[r]||[]).includes(p)))});}));
+  /* Acceso por sección (modelo «sec_<pantalla>»): cada perfil entra a las pantallas de su menú; el Administrador, a todas */
+  SECCIONES.forEach(x=>Object.keys(ROLES).forEach(r=>DB.permisos.push({rol:r,permiso:'sec_'+x[0],habilitado:r==='ADMIN'||ROLES[r].nav.includes(x[0])})));
   const cl=(id,n,pr)=>({id,nombre:n,cliente:n.toUpperCase(),proyectos:pr,torreEstatus:false,activo:true,nit:'',direccionFiscal:'',correoFacturacion:'',contacto:'',telefono:'',creditoDias:'',observaciones:''});
   DB.clientes.push(cl('COLGATE','Colgate',['COLGATE','LV']),cl('SINPROY','Cliente sin proyectos',[]));
   DB.acceso.push({userId:'U-2',cliente:'COLGATE'},{userId:'U-3',cliente:'SINPROY'});

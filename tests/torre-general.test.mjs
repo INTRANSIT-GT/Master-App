@@ -111,7 +111,7 @@ const vkid = vk.result?.id, vcid = vc.result?.id;
 
 const VACIO = Object.fromEntries(Object.keys(T10).map(k => [k, '']));
 const MIGRACIONES_NUEVAS = fs.readdirSync(path.join(raíz, 'supabase/migrations')).filter(f => /^03[4-9]_/.test(f));
-T('S0 No se necesita ninguna migración nueva (la última migración es la 033, que ya existía) y todas las existentes se aplican', MIGRACIONES_NUEVAS.length === 0 && filas.filter(f => /^FAIL SQL/.test(f)).length === 0, MIGRACIONES_NUEVAS);
+T('S0 Torre no necesita ninguna migración nueva: la única posterior a la 033 es la 034 de Órdenes de Compra (preparada, aún sin aplicar) y todas las existentes se aplican', MIGRACIONES_NUEVAS.every(f => /^034_ordenes_compra\.sql$/.test(f)) && filas.filter(f => /^FAIL SQL/.test(f)).length === 0, MIGRACIONES_NUEVAS);
 
 /* ---- 1. Guardar y recuperar los 10 horarios ---- */
 const h1 = await api('adm', 'crearViaje', viaje({ shipment: 'H-1', pilotoId: 'P-3' }));

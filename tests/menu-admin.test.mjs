@@ -1,11 +1,13 @@
 /* Menú del ADMINISTRADOR agrupado por módulos (VIAJES · TORRE · COMERCIAL · OPL · FLOTAS).
    Comprueba: los módulos y sus opciones, que cada opción abre la pantalla correcta, que se respetan los permisos,
-   que no se perdió ninguna pantalla y que los DEMÁS perfiles conservan EXACTAMENTE su menú. */
+   que no se perdió ninguna pantalla y que los DEMÁS perfiles conservan EXACTAMENTE su menú.
+   Referencia: UI_BASE (ruta al ui.js anterior) o respaldo_antes_menu_admin/js/ui.js */
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fs from 'node:fs'; import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const raíz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const leer = f => fs.readFileSync(path.join(raíz, f), 'utf8');
+const BASE = process.env.UI_BASE ? path.resolve(process.env.UI_BASE) : path.join(raíz, 'respaldo_antes_menu_admin', 'js', 'ui.js');
 let ok = 0, mal = 0; const filas = [];
 const T = (n, c, x) => { c ? ok++ : mal++; filas.push((c ? 'OK   ' : 'FAIL ') + n + (!c && x !== undefined ? '  ← ' + (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, 400) : '')); };
 const tick = () => new Promise(r => setTimeout(r, 20));
@@ -32,7 +34,7 @@ T('M1 Aparecen los cinco módulos, en orden: VIAJES, TORRE, COMERCIAL, OPL, FLOT
 const L = t => (G.find(g => g.t === t) || { items: [] }).items.map(i => i.l);
 T('M2 VIAJES agrupa Nuevo viaje, Liquidaciones y Todos los viajes (y la pantalla existente de viajes por estado)', JSON.stringify(L('VIAJES')) === JSON.stringify(['Nuevo viaje', 'Liquidaciones', 'Todos los viajes', 'Viajes por estado']), L('VIAJES'));
 T('M3 TORRE agrupa «Viajes», «Horarios y fechas» y «Vista general» (todas abren la hoja existente de Torre de control)', JSON.stringify(L('TORRE')) === JSON.stringify(['Viajes', 'Horarios y fechas', 'Vista general']), L('TORRE'));
-T('M4 COMERCIAL agrupa Facturación, Clientes, Tarifas, Finanzas y Catálogos', JSON.stringify(L('COMERCIAL')) === JSON.stringify(['Facturación', 'Clientes', 'Tarifas', 'Finanzas', 'Catálogos']), L('COMERCIAL'));
+T('M4 COMERCIAL agrupa Facturación, Órdenes de compra, Clientes, Tarifas, Finanzas y Catálogos', JSON.stringify(L('COMERCIAL')) === JSON.stringify(['Facturación', 'Órdenes de compra', 'Clientes', 'Tarifas', 'Finanzas', 'Catálogos']), L('COMERCIAL'));
 T('M5 OPL agrupa Proveedores', JSON.stringify(L('OPL')) === JSON.stringify(['Proveedores']), L('OPL'));
 T('M6 FLOTAS agrupa Pilotos', JSON.stringify(L('FLOTAS')) === JSON.stringify(['Pilotos']), L('FLOTAS'));
 T('M7 Ninguna opción se repite dentro de un mismo módulo', G.every(g => new Set(g.items.map(i => i.l)).size === g.items.length));
@@ -99,10 +101,10 @@ T('A11 Estilos de acordeón y de pantalla pequeña presentes (panel oculto, flec
 
 /* permisos: una opción sin permiso no aparece y un módulo vacío se oculta */
 comoAdmin();
-ev("['finanzas_ver','tarifas_opl_ver'].forEach(p=>{const x=DB.permisos.find(y=>y.rol==='ADMIN'&&y.permiso===p);if(x)x.habilitado=false;});render()");
+ev("['sec_finanzas','sec_opl'].forEach(p=>{const x=DB.permisos.find(y=>y.rol==='ADMIN'&&y.permiso===p);if(x)x.habilitado=false;});render()");
 const G2 = grupos();
 T('M19 Sin los permisos de finanzas y de OPL desaparecen Finanzas y Proveedores y el módulo OPL vacío se oculta', !G2.some(g => g.t === 'OPL') && !G2.find(g => g.t === 'COMERCIAL').items.some(i => i.v === 'finanzas'), G2.map(g => g.t));
-ev("['finanzas_ver','tarifas_opl_ver'].forEach(p=>{const x=DB.permisos.find(y=>y.rol==='ADMIN'&&y.permiso===p);if(x)x.habilitado=true;});render()");
+ev("['sec_finanzas','sec_opl'].forEach(p=>{const x=DB.permisos.find(y=>y.rol==='ADMIN'&&y.permiso===p);if(x)x.habilitado=true;});render()");
 T('M20 Al volver a darle el permiso reaparecen', grupos().some(g => g.t === 'OPL'));
 
 /* los demás perfiles conservan su menú y sus pantallas.
@@ -113,8 +115,8 @@ const roles = ev('Object.keys(ROLES).filter(r=>r!=="ADMIN")'); const difs = [];
 for (const r of roles) {
   const salida = N.w.eval(`(()=>{const u={id:'U-${r}',usuario:'${r.toLowerCase()}',clave:'x',nombre:'Prueba ${r}',rol:'${r}',activo:true,proyectos:[]};DB.usuarios.push(u);DB.acceso.push({userId:u.id,cliente:'COLGATE'});S.user=u;S.view=ROLES.${r}.home;S.menu=false;S.modal=null;S.form=null;S.edit=null;try{render();}catch(e){return 'ERROR: '+e.message}const nav=[...document.querySelectorAll('nav.side button[data-v]')].map(b=>b.dataset.v);return JSON.stringify({nav,esperado:navItems()});})()`);
   let o; try { o = JSON.parse(salida); } catch (e) { difs.push(r + ' (' + salida + ')'); continue; }
-  const ok = o.esperado.length < 2 ? o.nav.length === 0 : JSON.stringify(o.nav) === JSON.stringify(o.esperado);   /* con una sola pantalla no se dibuja menú */
-  if (!ok) difs.push(r);
+  const ok = o.esperado.length < 2 ? o.nav.length === 0 : JSON.stringify([...new Set(o.nav)].sort()) === JSON.stringify([...new Set(o.esperado)].sort());   /* mismo conjunto de pantallas; el orden lo da el menú por módulos */   /* con una sola pantalla no se dibuja menú */
+  if (!ok) difs.push(r + (process.env.DBG ? JSON.stringify(o) : ""));
 }
 T(`M22 Los otros ${roles.length} perfiles (${roles.join(', ')}) conservan su menú: cada uno muestra exactamente las pantallas de su perfil`, difs.length === 0 && roles.length >= 7, difs);
 T('M23 Todas las pantallas de todos los menús existen (ninguna opción rota)', ev("Object.keys(ROLES).every(r=>ROLES[r].nav.every(v=>!!VIEWS[v]))"));

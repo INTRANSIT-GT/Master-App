@@ -29,7 +29,7 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
   if(!(window.supabase&&window.supabase.createClient)){console.warn('No se cargó supabase-js: modo demostración');return;}
   BACKEND.modo='supabase';
   const sb=BACKEND.sb=window.supabase.createClient(C.SUPABASE_URL.trim(),k,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  const MUT=['crearViaje','editarViaje','iniciar','finalizar','torreMoverEstado','torreEditarHorarios','enviarLiquidacion','aprobar','devolver','aprobarShipmentDuplicado','prepararFactura','actualizarFactura','enviarFactura','emitirFactura','registrarCobro','corregirFactura','anularAgrupacion','registrarImportes','registrarPago','anularPago','crearOrdenPago','adjuntarDocumentoOrden','registrarTransferencia','anularOrdenPago','crearTarifa','editarTarifa','cambiarEstadoTarifa','aplicarTarifa','aplicarTarifasPendientes','cargarMem','solicitarRuta','registrarRuta','validarRuta','rechazarRuta','aprobarRutaComercial','aprobarRutaTransporte','marcarNotificacion','setPermiso','setAcceso','guardarUsuario','guardarCliente','guardarReglasTorre','activarUsuario','cambiarClave','guardarCatalogo','guardarPiloto','cambiarEstadoPiloto','crearReporteAyuda','cambiarEstadoReporteAyuda'];
+  const MUT=['crearViaje','editarViaje','iniciar','finalizar','torreMoverEstado','torreEditarHorarios','enviarLiquidacion','aprobar','devolver','aprobarShipmentDuplicado','prepararFactura','ocGenerar','ocRegistrarPdf','ocEnviar','ocResponder','ocAnular','ocCorregir','actualizarFactura','enviarFactura','emitirFactura','registrarCobro','corregirFactura','anularAgrupacion','registrarImportes','registrarPago','anularPago','crearOrdenPago','adjuntarDocumentoOrden','registrarTransferencia','anularOrdenPago','crearTarifa','editarTarifa','cambiarEstadoTarifa','aplicarTarifa','aplicarTarifasPendientes','cargarMem','solicitarRuta','registrarRuta','validarRuta','rechazarRuta','aprobarRutaComercial','aprobarRutaTransporte','marcarNotificacion','setPermiso','setAcceso','guardarUsuario','guardarCliente','guardarReglasTorre','activarUsuario','cambiarClave','guardarCatalogo','guardarPiloto','cambiarEstadoPiloto','crearReporteAyuda','cambiarEstadoReporteAyuda'];
   const err=b=>{const e=new ApiError(b.code||'SERVIDOR',b.message||'Operación rechazada por el servidor.');if(b.faltantes)e.faltantes=b.faltantes;return e;};
   async function llamar(op,args){
     if(!navigator.onLine)throw new ApiError('SIN_CONEXION','Sin conexión con el servidor. La operación NO se guardó.');
@@ -64,7 +64,7 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
   function hidratar(sn){
     const previo=DB;
     const db=blankDB();
-    ['usuarios','acceso','permisos','clientes','liquidaciones','evidencias','agrupaciones','audit','pagos','ordenesPago','rutas','tarifas','mem','notificaciones','reportesAyuda'].forEach(k=>{db[k]=sn[k]||[];});
+    ['usuarios','acceso','permisos','clientes','liquidaciones','evidencias','agrupaciones','audit','pagos','ordenesPago','ordenesCompra','rutas','tarifas','mem','notificaciones','reportesAyuda'].forEach(k=>{db[k]=sn[k]||[];});
     db.trips=sn.trips||[];db.config=sn.config||{};
     /* Ventana de viajes que llegó del servidor (null en demostración): la pantalla la muestra y ofrece cargar más. */
     db.ventana=sn.ventana||null;
@@ -88,6 +88,8 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
   MUT.forEach(op=>{API[op]=async(uid,...args)=>{
     if(op==='enviarLiquidacion'&&typeof args[1]==='string'&&args[1].startsWith('data:'))args[1]=await subir('viajes/'+args[0],args[1]);
     if(op==='emitirFactura'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('facturas/'+args[0],args[1].archivo)});
+    if(op==='ocRegistrarPdf'&&args[1]&&typeof args[1].archivo==='string'&&args[1].archivo.startsWith('data:'))args[1]=Object.assign({},args[1],{archivo:await subir('oc/'+args[0],args[1].archivo)});
+    if(op==='ocResponder'&&args[1]&&Array.isArray(args[1].evidencias)){const ev=[];for(const e of args[1].evidencias)ev.push(typeof e==='string'&&e.startsWith('data:')?await subir('oc/'+args[0],e):e);args[1]=Object.assign({},args[1],{evidencias:ev});}
     if(op==='adjuntarDocumentoOrden'&&args[1]&&args[1].data){
       const up=await subir('pagos/'+args[0],args[1].data);
       args[1]={path:up.path,nombre:String(args[1].nombre||'').slice(0,80)};

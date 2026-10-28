@@ -43,6 +43,10 @@ export const TABLAS = [
   S('pagos', 'pagos', ['id'], [['id', 'id', 't'], ['tipo', 'tipo', 't'], ['viajeId', 'viaje_id', 't'], ['beneficiario', 'beneficiario', 't'], ['monto', 'monto', 'n'], ['fecha', 'fecha', 't'], ['referencia', 'referencia', 't'], ['porId', 'por_id', 'tn'], ['por', 'por', 'tn'], ['en', 'en', 'ts'], ['anulado', 'anulado', 'j']]),
   S('ordenes_pago', 'ordenesPago', ['id'], [['id', 'id', 't'], ['proveedor', 'proveedor', 't'], ['viajeIds', 'viaje_ids', 'a'], ['fase', 'fase', 't'], ['importe', 'importe', 'n'], ['importesViaje', 'importes_viaje', 'jo'],
     ['fechaEmision', 'fecha_emision', 't'], ['emision', 'emision', 'j'], ['transferencia', 'transferencia', 'j'], ['estado', 'estado', 't'], ['creadoPorId', 'creado_por_id', 'tn'], ['creadoPor', 'creado_por', 'tn'], ['creadoEn', 'creado_en', 'ts'], ['anulada', 'anulada', 'j'], ['correcciones', 'correcciones', 'ja']]),
+  /* Órdenes de compra (migración 034): tabla opcional, así el servidor sigue funcionando aunque la migración aún no se haya aplicado. */
+  S('ordenes_compra', 'ordenesCompra', ['id'], [['id', 'id', 't'], ['cliente', 'cliente_id', 't'], ['clienteNombre', 'cliente_nombre', 't'], ['proyecto', 'proyecto', 't'], ['estado', 'estado', 't'], ['moneda', 'moneda', 't'],
+    ['columnas', 'columnas', 'a'], ['viajeIds', 'viaje_ids', 'a'], ['lineas', 'lineas', 'ja'], ['total', 'total', 'n'], ['combustible', 'combustible', 'jo'], ['documentos', 'documentos', 'ja'], ['envio', 'envio', 'j'], ['respuesta', 'respuesta', 'j'], ['anulada', 'anulada', 'j'],
+    ['agrupacionId', 'agrupacion_id', 'tn'], ['historial', 'historial', 'ja'], ['preparadoPorId', 'preparado_por_id', 'tn'], ['preparadoPor', 'preparado_por', 'tn'], ['preparadoEn', 'preparado_en', 'ts']], { opcional: true, migracion: '034_ordenes_compra.sql' }),
   S('notificaciones', 'notificaciones', ['id'], [['id', 'id', 't'], ['tipo', 'tipo', 't'], ['destinatarios', 'destinatarios', 'a'], ['usuarios', 'usuarios', 'a'], ['asunto', 'asunto', 't'], ['detalle', 'detalle', 'jo'], ['creadaPor', 'creada_por', 'tn'], ['creadaPorId', 'creada_por_id', 'tn'],
     ['creadaEn', 'creada_en', 'ts'], ['leidaPor', 'leida_por', 'a'], ['canal', 'canal', 't'], ['externo', 'externo', 'jo']]),
   /* Ayuda: reportes de fallas. OPCIONAL: si la migración 027 aún no se aplicó, la tabla no existe y el resto de la aplicación sigue funcionando (la lista queda vacía). */
@@ -104,7 +108,7 @@ async function existeTabla(q, tabla) {
 }
 
 export async function loadState(q, opts = {}) {
-  const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], ordenesPago: [], rutas: [], tarifas: [], mem: [], notificaciones: [], reportesAyuda: [], config: {}, seq: {} };
+  const db = { v: 6, usuarios: [], acceso: [], permisos: [], clientes: [], trips: [], liquidaciones: [], evidencias: [], agrupaciones: [], audit: [], pagos: [], ordenesPago: [], ordenesCompra: [], rutas: [], tarifas: [], mem: [], notificaciones: [], reportesAyuda: [], config: {}, seq: {} };
   for (const spec of TABLAS) {
     /* opts.solo: carga solo esas tablas (para cálculos de conjunto que no necesitan todo el estado, como
        los totales del histórico financiero). */
@@ -204,7 +208,7 @@ export async function saveState(q, antes, db, rechazo) {
       /* Si el motor rechazó la operación, no debe haber tocado datos de negocio: solo la auditoría (el registro del
          intento) y las secuencias pueden cambiar. El fallo se detecta aquí, reusando el mismo recorrido del diff. */
       if (rechazo && spec.tabla !== 'auditoria') throw new Error('Operación rechazada con cambios parciales: se descarta para no guardar datos a medias.');
-      if (spec.opcional && !(await existeTabla(q, spec.tabla))) throw new Error('Falta crear la tabla master.' + spec.tabla + ': aplica la migración SQL correspondiente (027_reportes_ayuda.sql) antes de usar esta función.');
+      if (spec.opcional && !(await existeTabla(q, spec.tabla))) throw new Error('Falta crear la tabla master.' + spec.tabla + ': aplica la migración SQL correspondiente (' + (spec.migracion || '027_reportes_ayuda.sql') + ') antes de usar esta función.');
       await upsert(q, spec.tabla, spec.cols, claves, f.principal, tp);
       for (const part of spec.partes || []) {
         const fp = f.partes[part.tabla], pp = p && p.partes[part.tabla];

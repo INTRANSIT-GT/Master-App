@@ -210,6 +210,44 @@ async function expFactPdf(o){
   return d;
 }
 
+/* ---------- Orden de compra (PDF) ----------
+   Las columnas y los valores salen de ocColumnas/ocCelda (engine.js): son las mismas de la vista previa. El PDF se
+   conserva (queda guardado en el almacenamiento privado), así que aquí solo se construye; guardarlo es otro paso. */
+const expFechaHora=iso=>{if(!iso)return '-';const d=new Date(iso),p=n=>String(n).padStart(2,'0');return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+async function expSha256(buf){
+  try{const h=await crypto.subtle.digest('SHA-256',buf);return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');}catch(e){return '';}
+}
+const expBlobADataUrl=blob=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('LECTURA'));r.readAsDataURL(blob);});
+async function expOcPdf(oc,version){
+  if(!oc||!(oc.lineas||[]).length)throw new Error('SIN_DATOS');
+  if(!(window.jspdf&&window.jspdf.jsPDF))throw new Error('SIN_PDF');
+  const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'pt',format:'a4',compress:true}),W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=34;
+  const AZ=[0,86,151];
+  const logo=await expLogo();
+  if(logo){const lw=118,lh=lw*logo.h/logo.w;doc.addImage(logo.url,'PNG',M,28,lw,lh);}
+  doc.setFont('helvetica','normal').setFontSize(8).setTextColor(90);
+  doc.text(`Fecha de generación: ${expFechaHora(oc.preparadoEn)}`,W-M,36,{align:'right'});doc.text(`Preparada por: ${expPq(oc.preparadoPor)}`,W-M,47,{align:'right'});
+  doc.setFont('helvetica','bold').setFontSize(16).setTextColor(...AZ).text(`Orden de compra · ${oc.id}`,M,92);
+  doc.setFont('helvetica','normal').setFontSize(10).setTextColor(40);
+  doc.text(expPq(`Cliente: ${oc.clienteNombre}`),M,110);doc.text(expPq(`Proyecto: ${oc.proyecto}`),M+260,110);
+  doc.text(`Viajes: ${oc.lineas.length}`,M+520,110);doc.text(`Total: ${expQ(oc.total)}`,W-M,110,{align:'right'});
+  const cols=ocColumnas(oc.columnas),anio=ocUsaAnio(oc.lineas);
+  const body=oc.lineas.map(l=>cols.map(c=>ocCelda(l,c[0],anio)));
+  const iT=cols.findIndex(c=>c[0]==='tarifa');
+  const right={};if(iT>=0)right[iT]={halign:'right'};
+  const foot=cols.map((c,i)=>i===0?'Total':i===iT?expQ(oc.total):'');
+  doc.autoTable({theme:'grid',startY:122,head:[cols.map(c=>c[1])],body,foot:[foot],showFoot:'lastPage',
+    styles:{font:'helvetica',fontSize:8,cellPadding:3,lineColor:[208,215,222],lineWidth:.5},
+    headStyles:{fillColor:AZ,textColor:255,fontStyle:'bold',halign:'center',valign:'middle'},
+    footStyles:{fillColor:[232,242,250],textColor:[0,60,110],fontStyle:'bold'},columnStyles:right,margin:{left:M,right:M,bottom:34},
+    didParseCell:h=>{h.cell.text=h.cell.text.map(expPq);}});
+  const n=doc.getNumberOfPages();
+  for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont('helvetica','normal').setFontSize(7.5).setTextColor(120);
+    doc.text(`In Transit · innovative outsourcing  ·  ${oc.id}${version>1?' · versión '+version:''}`,M,H-16);doc.text(`Página ${i} de ${n}`,W-M,H-16,{align:'right'});}
+  const buf=doc.output('arraybuffer'),blob=new Blob([buf],{type:'application/pdf'});
+  return {blob,dataUrl:await expBlobADataUrl(blob),hash:await expSha256(buf),nombre:`${oc.id}${version>1?'-v'+version:''}.pdf`,bytes:blob.size};
+}
+
 /* Finanzas → Facturación e ingresos (Gerencia y Administradora): exporta las facturas del periodo y filtros de esa pantalla */
 function expFinOpts(){
   let R=null;try{R=API.resumenFinanciero(S.user.id,finFilters());}catch(x){}

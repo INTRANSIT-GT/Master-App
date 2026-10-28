@@ -49,7 +49,7 @@ function rollback(){}
    ===================================================================== */
 const DB_VERSION=8;
 /* Ganchos del entorno (el servidor los reemplaza): verificación de archivos en el almacenamiento protegido */
-const ENV={storageExists:()=>false};
+const ENV={storageExists:()=>false,soloAlmacenamiento:false};   /* soloAlmacenamiento: el servidor no guarda archivos dentro de la base, solo rutas del bucket privado */
 let DB=null,PROYECTOS=[],PROYECTOS_X={},PREF={phone:false,arch:false,tema:''},CLOCK=null;
 class ApiError extends Error{constructor(code,msg){super(msg);this.code=code;this.name='ApiError';}}
 const nowIso=()=>CLOCK?CLOCK():new Date().toISOString();
@@ -103,6 +103,12 @@ const PERMS=[
   ['comercial_agrupar','Preparar y enviar facturas (agrupar es opcional)','Comercial'],
   ['comercial_corregir','Corregir número de factura','Comercial'],
   ['comercial_anular','Anular agrupación comercial','Comercial'],
+  ['oc_ver','Ver órdenes de compra','Órdenes de compra'],
+  ['oc_preparar','Preparar órdenes de compra (agrupar viajes, generar el PDF)','Órdenes de compra'],
+  ['oc_enviar','Confirmar el envío de la orden de compra al cliente','Órdenes de compra'],
+  ['oc_responder','Registrar la respuesta del cliente (aceptar / rechazar la orden)','Órdenes de compra'],
+  ['oc_corregir','Corregir y anular órdenes de compra, y gestionar las rechazadas (con motivo)','Órdenes de compra'],
+  ['oc_ver_combustible','Ver el ajuste de combustible en la orden de compra','Órdenes de compra'],
   ['historial_ver','Ver historial completo del viaje','Consulta'],
   ['tablero_ver','Ver tablero global / gerencial','Consulta'],
   ['catalogos_ver','Ver catálogos y modelo de datos','Consulta'],
@@ -152,13 +158,13 @@ function refrescarSugerencias(){
   ORIGENES.sort(ord);DESTINOS.sort(ord);
 }
 const ROLES={
-  ADMIN:{label:'ADMIN',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','tarifas','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
+  ADMIN:{label:'ADMIN',home:'inicio',nav:['inicio','proyectos','todos','viajes','nuevo','torre','liquidaciones','comercial','oc','tarifas','rutas','opl','finanzas','catalogos','usuarios','auditoria','modelo'],alcance:'Permisos completos en todos los módulos'},
   GERENTE_TRANSPORTE:{label:'Gerente de Transporte',home:'inicio',nav:['inicio','nuevo','todos','viajes','rutas','opl','liquidaciones','finanzas','catalogos'],alcance:'Ver todo y registrar viajes; asignar unidades/pilotos y autorizar/crear tarifas OPL; control financiero en modo consulta'},
   VALIDADOR:{label:'Validador',home:'viajes',nav:['viajes','liquidaciones'],alcance:'Revisar/aprobar liquidaciones de clientes asignados'},
   OPERATIVO:{label:'Operativo',home:'inicio',nav:['inicio','nuevo','viajes','rutas','liquidaciones'],alcance:'Registrar, editar y liquidar viajes de clientes asignados. Ve y solicita rutas de su proyecto.'},
-  ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','tarifas','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
-  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','tarifas','rutas','opl','finanzas','catalogos'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
-  FACTURACION:{label:'Facturación',home:'comercial',nav:['todos','comercial'],alcance:'Cargar facturas, revisar viajes por facturar'},
+  ANALISTA_COMERCIAL:{label:'Analista Comercial',home:'proyectos',nav:['proyectos','oc','tarifas','rutas'],alcance:'Administrar clientes y tarifas con auditoría obligatoria'},
+  GERENTE_COMERCIAL:{label:'Gerencia Comercial',home:'inicio',nav:['inicio','proyectos','oc','tarifas','rutas','opl','finanzas','catalogos'],alcance:'Aprobar rutas, administrar clientes/tarifas, autorizar OPL'},
+  FACTURACION:{label:'Facturación',home:'comercial',nav:['todos','comercial','oc'],alcance:'Cargar facturas, revisar viajes por facturar'},
   COBROS:{label:'Cobros / Contabilidad',home:'comercial',nav:['comercial'],alcance:'Registrar cobros y pagos'},
   PAGO_OPL:{label:'Pago OPL',home:'opl',nav:['opl'],alcance:'Registrar OPL y tarifas a proveedores (requieren autorización)'},
   TORRE:{label:'Torre de control',home:'torre',nav:['torre'],alcance:'Editar horas y marcar Completado para viajes en ruta'},
@@ -171,9 +177,9 @@ const PERM_DEFAULT={
   GERENTE_TRANSPORTE:['viajes_ver','viajes_ver_todos','viajes_crear','viajes_editar_datos','pilotos_gestionar','catalogos_ver','historial_ver','liq_ver','rutas_ver','rutas_validar','rutas_aprobar_transporte','viajes_aprobar_duplicado','unidades_asignar','tarifas_opl_ver','tarifas_opl_crear','viajes_editar_estado','tarifas_ver','finanzas_ver','liq_aprobar','liq_devolver'],
   VALIDADOR:['viajes_ver','liq_ver','liq_aprobar','liq_devolver','historial_ver'],
   OPERATIVO:['viajes_ver','viajes_crear','viajes_editar_datos','viajes_editar_tiempos','viajes_iniciar','viajes_finalizar','liq_ver','liq_enviar','historial_ver','rutas_ver','rutas_solicitar'],
-  ANALISTA_COMERCIAL:['comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_solicitar','rutas_validar','historial_ver','clientes_gestionar'],
-  GERENTE_COMERCIAL:['viajes_ver_todos','historial_ver','comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_validar','rutas_aprobar_comercial','clientes_gestionar','tarifas_opl_ver','tarifas_opl_autorizar'],
-  FACTURACION:['viajes_ver_todos','comercial_ver','comercial_agrupar','facturas_emitir','tarifas_ver'],
+  ANALISTA_COMERCIAL:['comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_solicitar','rutas_validar','historial_ver','clientes_gestionar','oc_ver','oc_preparar','oc_enviar','oc_responder','oc_corregir','oc_ver_combustible'],
+  GERENTE_COMERCIAL:['viajes_ver_todos','historial_ver','comercial_ver','tarifas_ver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_ver','rutas_validar','rutas_aprobar_comercial','clientes_gestionar','tarifas_opl_ver','tarifas_opl_autorizar','oc_ver','oc_preparar','oc_enviar','oc_responder','oc_corregir','oc_ver_combustible'],
+  FACTURACION:['viajes_ver_todos','comercial_ver','comercial_agrupar','facturas_emitir','tarifas_ver','oc_ver'],
   COBROS:['comercial_ver','cobros_registrar','finanzas_ver'],
   PAGO_OPL:['finanzas_ver','tarifas_opl_ver','tarifas_opl_crear'],
   TORRE:['viajes_ver_todos','viajes_estatus_torre','viajes_editar_tiempos'],
@@ -186,23 +192,25 @@ const FACT_TODO=['comercial_agrupar','comercial_corregir','comercial_anular','fa
 const ADMIN_TODO=['usuarios_gestionar','permisos_gestionar','clientes_gestionar','auditoria_ver'];
 const TARIFAS_TODO=['tarifas_crear','tarifas_editar','tarifas_desactivar','tarifa_registrar'];
 const RUTAS_ADM=['rutas_gestionar','rutas_validar','rutas_aprobar_comercial','rutas_aprobar_transporte'];
+const OC_ESCRIBE=['oc_preparar','oc_enviar','oc_responder','oc_corregir','oc_ver_combustible'];
+const OC_TODO=['oc_ver',...OC_ESCRIBE];
 const PROHIBIDO={
   ADMIN:[],
-  GERENTE_TRANSPORTE:['permisos_gestionar','usuarios_gestionar','clientes_gestionar','liq_aprobar','liq_devolver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_aprobar_comercial'],
-  VALIDADOR:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','viajes_estatus_torre'],
-  OPERATIVO:['liq_aprobar','liq_devolver','viajes_editar_estado',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre'],
+  GERENTE_TRANSPORTE:['permisos_gestionar','usuarios_gestionar','clientes_gestionar','liq_aprobar','liq_devolver','tarifas_crear','tarifas_editar','tarifas_desactivar','rutas_aprobar_comercial',...OC_ESCRIBE],
+  VALIDADOR:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','viajes_estatus_torre',...OC_TODO],
+  OPERATIVO:['liq_aprobar','liq_devolver','viajes_editar_estado',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre',...OC_TODO],
   ANALISTA_COMERCIAL:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver','usuarios_gestionar','permisos_gestionar','auditoria_ver','finanzas_ver','costos_registrar','cobros_registrar','pagos_registrar','viajes_estatus_torre','rutas_gestionar'],
   GERENTE_COMERCIAL:['permisos_gestionar','usuarios_gestionar','liq_aprobar','liq_devolver','viajes_aprobar_duplicado','rutas_aprobar_transporte','viajes_editar_estado'],
-  FACTURACION:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...ADMIN_TODO,'costos_registrar','cobros_registrar','pagos_registrar','viajes_estatus_torre','rutas_gestionar','tarifas_crear','tarifas_editar','tarifas_desactivar'],
-  COBROS:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre'],
-  PAGO_OPL:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','viajes_estatus_torre','tarifas_opl_autorizar'],
+  FACTURACION:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...ADMIN_TODO,'costos_registrar','cobros_registrar','pagos_registrar','viajes_estatus_torre','rutas_gestionar','tarifas_crear','tarifas_editar','tarifas_desactivar',...OC_ESCRIBE],
+  COBROS:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'viajes_estatus_torre',...OC_ESCRIBE],
+  PAGO_OPL:[...OPERATIVOS,'viajes_editar_tiempos','viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','viajes_estatus_torre','tarifas_opl_autorizar',...OC_TODO],
   /* Torre nunca ve importes: además de finanzas/tarifas, se le niega todo permiso que abra datos monetarios (facturación, tarifas OPL, tablero, gastos de flota) aunque se habilite en la matriz */
-  TORRE:[...OPERATIVOS,'viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','comercial_ver','tarifas_opl_ver','tarifas_opl_crear','tarifas_opl_autorizar','tablero_ver','catalogos_ver'],
-  PROYECTOS:['usuarios_gestionar','permisos_gestionar']
+  TORRE:[...OPERATIVOS,'viajes_editar_estado','liq_aprobar','liq_devolver',...FACT_TODO,...ADMIN_TODO,...FINANZAS_TODO,...TARIFAS_TODO,'tarifas_ver',...RUTAS_ADM,'rutas_solicitar','comercial_ver','tarifas_opl_ver','tarifas_opl_crear','tarifas_opl_autorizar','tablero_ver','catalogos_ver',...OC_TODO],
+  PROYECTOS:['usuarios_gestionar','permisos_gestionar',...OC_ESCRIBE],
 };
 /* Permisos que no se pueden quitar (evita bloquearse a sí misma) */
 const SIEMPRE={ADMIN:['permisos_gestionar','usuarios_gestionar','auditoria_ver']};
-const VIEW_PERM={tarifas:'tarifas_ver',proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
+const VIEW_PERM={oc:'oc_ver',tarifas:'tarifas_ver',proyectos:'clientes_gestionar',todos:'viajes_ver_todos',torre:'viajes_ver_todos',liquidaciones:'liq_ver',comercial:'comercial_ver',rutas:'rutas_ver',opl:'tarifas_opl_ver',finanzas:'finanzas_ver',catalogos:'catalogos_ver',modelo:'catalogos_ver',usuarios:'usuarios_gestionar',auditoria:'auditoria_ver',nuevo:'viajes_crear',inicio:'viajes_ver',viajes:'viajes_ver'};
 /* Accesos por módulo y sección. La matriz manda sobre el menú: cada pantalla (sección) tiene su
    propio permiso «sec_<pantalla>», y el módulo es el grupo del menú que las agrupa.
    El permiso de acción que ya existía se conserva como regla de separación de funciones. */
@@ -214,6 +222,7 @@ const SECCIONES=[
   ['liquidaciones','Liquidaciones','liq_ver','VIAJES'],
   ['torre','Torre de control','viajes_ver_todos','TORRE'],
   ['comercial','Facturación','comercial_ver','COMERCIAL'],
+  ['oc','Órdenes de compra','oc_ver','COMERCIAL'],
   ['proyectos','Clientes','clientes_gestionar','COMERCIAL'],
   ['tarifas','Tarifas','tarifas_ver','COMERCIAL'],
   ['finanzas','Finanzas','finanzas_ver','COMERCIAL'],
@@ -225,9 +234,9 @@ const SECCIONES=[
   ['modelo','Modelo de datos','catalogos_ver','ADMINISTRACIÓN'],
   ['ayuda','Ayuda',null,'AYUDA']
 ];
-const MODULOS_SEC=[['VIAJES',['inicio','nuevo','viajes','todos','liquidaciones']],['TORRE',['torre']],['COMERCIAL',['comercial','proyectos','tarifas','finanzas','catalogos']],['OPL',['opl']],['FLOTAS',['catalogos']],['ADMINISTRACIÓN',['rutas','usuarios','auditoria','modelo']],['AYUDA',['ayuda']]];
+const MODULOS_SEC=[['VIAJES',['inicio','nuevo','viajes','todos','liquidaciones']],['TORRE',['torre']],['COMERCIAL',['comercial','oc','proyectos','tarifas','finanzas','catalogos']],['OPL',['opl']],['FLOTAS',['catalogos']],['ADMINISTRACIÓN',['rutas','usuarios','auditoria','modelo']],['AYUDA',['ayuda']]];
 const SEC_DE={};SECCIONES.forEach(x=>{SEC_DE[x[0]]={l:x[1],base:x[2],mod:x[3],perm:'sec_'+x[0]};});
-const NAVLBL={tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck'],ayuda:['Ayuda','help']};
+const NAVLBL={oc:['Órdenes de compra','receipt'],tarifas:['Tarifas','dollar'],proyectos:['Clientes','folder'],todos:['Todos los viajes','list'],torre:['Torre de control','tower'],liquidaciones:['Liquidaciones','receipt'],comercial:['Facturación','dollar'],rutas:['Rutas','truck'],opl:['OPL · Proveedores','truck'],finanzas:['Finanzas','dollar'],nuevo:['Nuevo viaje','plus'],catalogos:['Catálogos','grid'],usuarios:['Usuarios y permisos','users'],auditoria:['Auditoría','shield'],modelo:['Modelo de datos','db'],inicio:['Inicio','home'],viajes:['Viajes','truck'],ayuda:['Ayuda','help']};
 /* ---------- Ayuda: reportes de fallas (todos los perfiles pueden reportar; solo el Administrador gestiona) ---------- */
 const AYUDA_TIPOS=['No puedo guardar información','No puedo ingresar a una sección','Error en un formulario','La información no aparece o no se actualiza','Problema con un botón o una función','Otro'];
 const AYUDA_ESTADOS={PENDIENTE:'Pendiente',EN_REVISION:'En revisión',RESUELTO:'Resuelto'};
@@ -261,7 +270,7 @@ Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo 
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos','Gastos adicionales'];
 
 /* ---------- Base de datos ---------- */
-const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],pilotos:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1,pil:0}});
+const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],pilotos:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],ordenesCompra:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1,pil:0,oc:1}});
 /* ---------- Pilotos: documentos y vigencia (licencia, salud, penales, policíacos) ---------- */
 const DOC_PILOTO=[['licenciaVence','Licencia'],['saludVence','Tarjeta de salud'],['penalesVence','Antecedentes penales'],['policiacosVence','Antecedentes policíacos']];
 const DOC_DIAS_AVISO=30;
@@ -461,7 +470,8 @@ function completarEntrega(t,A){
 /* Los importes solo los ven los roles autorizados (se quitan en la capa de datos, no solo en pantalla). */
 function redact(A,t){
   const c=Object.assign({},t);
-  if(!hasPerm(A,'finanzas_ver')){delete c.costoProveedor;delete c.precioMem;delete c.ajusteCombustible;delete c.tarifaBase;}
+  if(!hasPerm(A,'finanzas_ver')){delete c.costoProveedor;delete c.precioMem;}
+  if(!hasPerm(A,'finanzas_ver')&&!hasPerm(A,'oc_ver_combustible')){delete c.ajusteCombustible;delete c.tarifaBase;}
   if(!hasPerm(A,'tarifas_ver')){delete c.tarifaCliente;delete c.tarifaId;delete c.tarifaAplicadaPor;delete c.tarifaAplicadaEn;}
   if(!hasPerm(A,'finanzas_ver')){delete c.tarifaOpl;delete c.tarifaOplBase;delete c.ajusteOpl;delete c.precioMemOpl;}
   if(!hasPerm(A,'finanzas_ver')&&!hasPerm(A,'viajes_editar_datos')){delete c.qViaticos;delete c.gastosAdicionales;}   /* los gastos adicionales siguen la misma regla que los viáticos */
@@ -685,6 +695,7 @@ function ajusteOplDelViaje(t,tar){
 /* Aplica la tarifa vigente al viaje. El importe del cliente = base + ajuste por combustible (MEM). */
 function aplicarUna(A,t){
   if(t.estado!=='ACEPTADO'||t.agrupacionId)return {err:'Solo se aplica tarifa a viajes aceptados que aún no estén facturados.'};
+  {const oc=ocDeViaje(t.id);if(oc)return {err:`El viaje está en la orden de compra ${oc.id}: su tarifa ya no se reaplica (los importes de la orden se conservan).`};}
   const r=tarifaPara(t);if(r.err)return r;
   const d=ajusteDelViaje(t,r.t);
   const o=ajusteOplDelViaje(t,r.t);
@@ -761,6 +772,180 @@ function faltantesEnvio(cliente,ids,nf,ff,exceptId){
     if(t.estado!=='ACEPTADO'||!t.liqAprobadaEn)f.push({campo:'viaje:'+id,msg:`aceptación del viaje ${id}`});
   });
   return f;
+}
+
+/* =====================================================================
+   ÓRDENES DE COMPRA (OC)
+   Agrupan viajes aceptados de un cliente y proyecto, con tarifa válida, ANTES de facturar. No sustituyen a
+   Facturación: una OC aceptada alimenta el flujo de facturas existente (una factura por OC).
+   ===================================================================== */
+const OC_ESTADOS={PREPARADA:'Preparada',ENVIADA:'Enviada al cliente',ACEPTADA:'Aceptada',RECHAZADA:'Rechazada',ANULADA:'Anulada',REEMPLAZADA:'Reemplazada por nueva versión'};
+/* Estados en los que la OC mantiene «reservados» sus viajes (un viaje no puede estar en dos OC activas).
+   Regla: RECHAZADA conserva la reserva hasta que Comercial/Gerencia/Administrador la corrija (nueva versión: la
+   OC rechazada pasa a REEMPLAZADA y sus viajes pasan atómicamente a la nueva) o la anule con motivo. REEMPLAZADA y
+   ANULADA no reservan: quedan solo como historial. */
+const OC_RESERVA=['PREPARADA','ENVIADA','ACEPTADA','RECHAZADA'];
+const OC_COL_OBLIG=[['semana','Semana'],['fecha','Fecha planificada'],['hora','Hora planificada'],['shipment','Shipment'],['placa','Placa'],['tipoUnidad','Tipo de unidad'],['estado','Estado'],['tarifa','Tarifa de cobro']];
+const OC_COL_OPC={capacidad:'Capacidad',origen:'Origen',ruta:'Ruta',combustible:'Tarifa de combustible',tipoViaje:'Tipo de viaje'};
+const OC_TARIFA_MSG='Viaje pendiente de asignación de tarifa';
+function ocGuardar(){if(!Array.isArray(DB.ordenesCompra))DB.ordenesCompra=[];if(!DB.seq)DB.seq={};if(!(DB.seq.oc>0))DB.seq.oc=1+DB.ordenesCompra.length;}
+/* Semana ISO 8601: el lunes inicia la semana y la semana 1 es la que contiene el primer jueves del año.
+   Se calcula SIEMPRE a partir de la fecha planificada (solo la parte AAAA-MM-DD) y nunca la modifica.
+   El año ISO puede diferir del año calendario cerca del 1 de enero y del 31 de diciembre. */
+function semanaIso(f){
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(f||''));
+  if(!m)return null;
+  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
+  if(isNaN(d)||d.getUTCMonth()!==+m[2]-1||d.getUTCDate()!==+m[3])return null;
+  d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7)+3);          /* jueves de esa semana */
+  const anio=d.getUTCFullYear();
+  const e=new Date(Date.UTC(anio,0,4));
+  e.setUTCDate(e.getUTCDate()-((e.getUTCDay()+6)%7)+3);          /* jueves de la semana 1 */
+  const semana=1+Math.round((d-e)/604800000);
+  const n=String(semana).padStart(2,'0');
+  return {semana,anio,texto:'Semana '+n,textoAnio:'Semana '+n+' · '+anio};
+}
+/* Motivo por el que un viaje NO tiene tarifa de cobro válida ('' = válida). La tarifa del cliente ya incluye el
+   ajuste por combustible (base + ajuste): nunca se suma otra vez. Sin ceros, sin valores por defecto ni inventados. */
+function ocMotivoTarifa(t){
+  if(!t)return 'El viaje no existe.';
+  const r=DB.rutas.find(x=>x.id===t.rutaId);
+  if(!r)return 'El viaje no tiene ruta asignada.';
+  if(r.estado!=='ACTIVA')return 'La ruta del viaje no está activa (requiere tarifa y aprobaciones de ambas gerencias).';
+  const v=nn(t.tarifaCliente);
+  if(v==null)return 'El viaje no tiene tarifa de cobro asignada.';
+  if(!(v>0))return 'La tarifa de cobro del viaje no es válida (debe ser mayor a cero).';
+  return '';
+}
+let OC_IGNORAR='';   /* OC que se está reemplazando: sus viajes cuentan como libres solo durante esa validación */
+const ocDeViaje=id=>(DB.ordenesCompra||[]).find(o=>o.id!==OC_IGNORAR&&OC_RESERVA.includes(o.estado)&&(o.lineas||[]).some(l=>l.viajeId===id))||null;
+const ocClienteNombre=c=>{const x=DB.clientes.find(k=>k.id===c)||{};return x.cliente||x.nombre||c;};
+/* Clasificación de un viaje para armar una OC: elegible, pendiente de tarifa, o no disponible (con motivo). */
+function ocClasificar(t){
+  if(t.estado!=='ACEPTADO'||!t.liqAprobadaEn)return {k:'NO',motivo:'El viaje no está aceptado (su liquidación aún no se aprobó).'};
+  if(t.agrupacionId)return {k:'NO',motivo:`El viaje ya está asociado a la factura ${t.agrupacionId}.`};
+  const o=ocDeViaje(t.id);
+  if(o)return {k:'NO',motivo:`El viaje ya está en la orden de compra ${o.id} (${OC_ESTADOS[o.estado]}).`,ocId:o.id};
+  const m=ocMotivoTarifa(t);
+  if(m)return {k:'PEND',motivo:m};
+  return {k:'OK',motivo:''};
+}
+function ocLinea(t,full){
+  const wk=semanaIso(t.fechaPlan),f=FLOTA.find(x=>x.unidad===t.unidadId)||{},r=DB.rutas.find(x=>x.id===t.rutaId)||{};
+  const comb=(t.ajusteCombustible===''||t.ajusteCombustible==null)?null:r2(Number(t.ajusteCombustible));
+  return Object.assign({viajeId:t.id,noViaje:t.noViaje||'',semana:wk?wk.semana:null,semanaAnio:wk?wk.anio:null,semanaTxt:wk?wk.texto:'',
+    fechaPlan:t.fechaPlan||'',fecha:(t.fechaPlan||'').slice(0,10),hora:(t.fechaPlan||'').slice(11,16),
+    shipment:t.shipment||'',placa:f.placa||'',tipoUnidad:f.tipo||'',estado:(ESTADOS[t.estado]||{}).l||t.estado,
+    tarifa:r2(nn(t.tarifaCliente)),tarifaId:t.tarifaId||'',
+    capacidad:f.capacidad||'',origen:r.origen||'',ruta:r.nombre||'',tipoViaje:t.tipoViaje||''}
+  ,full?{combustible:comb,tarifaBase:nn(t.tarifaBase)}:{});
+}
+/* Columnas y celdas de la OC: la vista previa y el PDF usan EXACTAMENTE estas funciones, así coinciden. */
+const ocColumnas=opc=>OC_COL_OBLIG.concat((opc||[]).filter(c=>OC_COL_OPC[c]).map(c=>[c,OC_COL_OPC[c]]));
+const ocUsaAnio=ls=>new Set(ls.map(l=>l.semanaAnio)).size>1||ls.some(l=>l.semanaAnio!=null&&String(l.semanaAnio)!==String(l.fecha).slice(0,4));
+const ocQ=v=>v==null||v===''?'—':'Q '+Number(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+function ocCelda(l,k,anio){
+  switch(k){
+    case 'semana':return l.semanaTxt?(anio&&l.semanaAnio?l.semanaTxt+' · '+l.semanaAnio:l.semanaTxt):'—';
+    case 'fecha':return l.fecha||'—';
+    case 'hora':return l.hora||'—';
+    case 'tarifa':return ocQ(l.tarifa);
+    case 'combustible':return ocQ(l.combustible);
+    default:return l[k]===''||l[k]==null?'—':String(l[k]);
+  }
+}
+/* Arma (sin guardar) la OC: valida cliente/proyecto, acceso, elegibilidad y tarifa de cada viaje. La usan la vista
+   previa y la generación, de modo que ambas aplican exactamente la misma regla. */
+function ocArmar(A,d){
+  ocGuardar();
+  d=d||{};
+  const cliente=d.cliente,proyecto=d.proyecto;
+  if(!DB.clientes.find(c=>c.id===cliente))deny('Selecciona el cliente de la orden de compra.','VALIDACION');
+  if(!proyectosDe(cliente).includes(proyecto))deny('Selecciona un proyecto válido del cliente.','VALIDACION');
+  const ids=Array.isArray(d.viajeIds)?d.viajeIds.slice():[];
+  if(new Set(ids).size!==ids.length)deny('La selección contiene viajes duplicados.','VALIDACION');
+  const colsIn=Array.isArray(d.columnas)?d.columnas:[];
+  const cols=[];
+  colsIn.forEach(c=>{
+    if(!OC_COL_OPC[c])deny(`Columna opcional no válida: ${c}.`,'VALIDACION');
+    if(c==='combustible'&&!hasPerm(A,'oc_ver_combustible'))deny('Tu perfil no puede incluir la tarifa de combustible en la orden de compra.','SIN_PERMISO');
+    if(!cols.includes(c))cols.push(c);
+  });
+  const lineas=[],pendientes=[],errores=[];
+  ids.forEach(id=>{
+    const t=DB.trips.find(x=>x.id===id);
+    if(!t||!puedeVer(A,t)){errores.push({viajeId:id,motivo:'El viaje no existe o no tienes acceso.'});return;}
+    if(t.proyecto!==cliente||t.proyectoCat!==proyecto){errores.push({viajeId:id,motivo:`El viaje pertenece a ${t.proyecto} · ${t.proyectoCat}: una orden de compra es de un solo cliente y proyecto.`});return;}
+    const c=ocClasificar(t);
+    if(c.k==='NO'){errores.push({viajeId:id,motivo:c.motivo});return;}
+    if(c.k==='PEND'){pendientes.push({viajeId:id,mensaje:OC_TARIFA_MSG,noViaje:t.noViaje||t.id,shipment:t.shipment||'',cliente:ocClienteNombre(t.proyecto),proyecto:t.proyectoCat,motivo:c.motivo});return;}
+    lineas.push(ocLinea(t,hasPerm(A,'oc_ver_combustible')));
+  });
+  lineas.sort((a,b)=>(a.fechaPlan<b.fechaPlan?-1:a.fechaPlan>b.fechaPlan?1:a.viajeId<b.viajeId?-1:1));
+  const total=r2(lineas.reduce((x,l)=>x+l.tarifa,0));   /* suma de tarifas válidas; el combustible ya va dentro de cada tarifa */
+  return {cliente,clienteNombre:ocClienteNombre(cliente),proyecto,columnas:cols,lineas,total,pendientes,errores,ok:!pendientes.length&&!errores.length&&lineas.length>0};
+}
+/* Crea la OC a partir de un armado válido, reserva sus viajes y audita. Única vía de creación (preparar y corregir). */
+function ocCrear(A,r,ex){
+  ocGuardar();
+  const id='OC-'+pad4(DB.seq.oc++),en=nowIso();
+  const o={id,cliente:r.cliente,clienteNombre:r.clienteNombre,proyecto:r.proyecto,estado:'PREPARADA',moneda:'Q',columnas:r.columnas,lineas:r.lineas,total:r.total,
+    viajeIds:r.lineas.map(l=>l.viajeId),preparadoPorId:A.id,preparadoPor:A.nombre,preparadoEn:en,documentos:[],envio:null,respuesta:null,anulada:null,agrupacionId:'',
+    historial:[{en,por:A.nombre,porId:A.id,accion:ex.reemplazaA?`Nueva versión (v${ex.version}) de ${ex.reemplazaA}: ${ex.motivo}`:'Orden de compra preparada'}]};
+  if(ex.reemplazaA){o.reemplazaA=ex.reemplazaA;o.version=ex.version;}
+  /* Congela también el ajuste de combustible, pero fuera de las líneas: lo ve solo quien tiene oc_ver_combustible. */
+  o.combustible={};
+  o.lineas.forEach(l=>{const t0=getT(l.viajeId);o.combustible[l.viajeId]={base:nn(t0.tarifaBase),ajuste:(t0.ajusteCombustible===''||t0.ajusteCombustible==null)?null:r2(Number(t0.ajusteCombustible))};delete l.combustible;delete l.tarifaBase;});
+  DB.ordenesCompra.push(o);
+  r.lineas.forEach(l=>{const t=getT(l.viajeId);t.ocId=id;auditAdd({entidad:'OC',viajeId:t.id,accion:'Viaje incluido en orden de compra',campo:'Orden de compra',nuevo:id,por:A,ref:`${id} · Q ${l.tarifa}`});});
+  auditAdd({entidad:'OC',accion:ex.reemplazaA?'Orden de compra preparada (nueva versión)':'Orden de compra preparada',campo:'Estado',nuevo:'Preparada',por:A,ref:`${id} · ${r.clienteNombre} · ${r.proyecto} · ${r.lineas.length} viaje(s) · Q ${r.total}`});
+  return o;
+}
+function ocErrorArmado(r){
+  const pa=r.pendientes.slice(0,5).map(p=>`#${p.noViaje} (No. de Transporte ${p.shipment||'—'}) · ${p.cliente} · ${p.proyecto}: ${p.motivo}`);
+  const ea=r.errores.slice(0,5).map(e=>`${e.viajeId}: ${e.motivo}`);
+  const e=new ApiError(r.pendientes.length?'TARIFA_PENDIENTE':'NO_ELEGIBLE',(r.pendientes.length?OC_TARIFA_MSG+': ':'')+pa.concat(ea).join(' | ')||'La selección no tiene viajes válidos.');
+  e.pendientes=r.pendientes;e.errores=r.errores;return e;
+}
+const ocPorId=id=>{ocGuardar();const o=DB.ordenesCompra.find(x=>x.id===id);if(!o)deny('La orden de compra no existe.','NO_EXISTE');return o;};
+const ocFacturaActiva=o=>o.agrupacionId?DB.agrupaciones.find(g=>g.id===o.agrupacionId&&g.estado==='ACTIVA')||null:null;
+/* Etapa derivada (no se guarda): Facturada / Cobrada salen de la factura vinculada, igual que etapaAgr. */
+function ocEtapa(o){
+  if(o.estado!=='ACEPTADA')return o.estado;
+  const g=ocFacturaActiva(o);if(!g)return 'ACEPTADA';
+  const e=etapaAgr(g);
+  return e==='COBRADO'?'COBRADA':(e==='FACTURADO'||e==='COBRO_PARCIAL')?'FACTURADA':'EN_FACTURACION';
+}
+/* Copia para el usuario: sin el ajuste de combustible salvo permiso explícito. */
+function redactOC(A,o){
+  /* El ajuste de combustible se guarda aparte (o.combustible) y solo se devuelve a quien tiene el permiso propio. */
+  const c=JSON.parse(JSON.stringify(o)),mapa=c.combustible||{};
+  delete c.combustible;
+  (c.lineas||[]).forEach(l=>{
+    delete l.combustible;delete l.tarifaBase;
+    if(hasPerm(A,'oc_ver_combustible')){const m=mapa[l.viajeId];l.combustible=m&&m.ajuste!=null?m.ajuste:null;l.tarifaBase=m&&m.base!=null?m.base:null;}
+  });
+  return c;
+}
+function ocDocumento(A,o,d,motivo){
+  /* Valida un PDF de la OC: ruta propia del almacenamiento privado (oc/<id>/...) o data URL de PDF. */
+  let doc={version:(o.documentos||[]).length+1,por:A.nombre,porId:A.id,en:nowIso(),motivo:motivo||''};
+  const a=d&&d.archivo;
+  if(a&&typeof a==='object'&&typeof a.path==='string'){
+    if(!new RegExp('^oc/'+o.id+'/[A-Za-z0-9._-]{8,90}$').test(a.path))deny('La ruta del PDF no corresponde a esta orden de compra.','VALIDACION');
+    if(!ENV.storageExists(a.path))deny('El PDF no está en el almacenamiento privado: vuelve a generarlo.','VALIDACION');
+    doc.path=a.path;
+  }else if(typeof a==='string'){
+    if(ENV.soloAlmacenamiento)deny('El PDF debe subirse al almacenamiento privado antes de registrarse.','VALIDACION');
+    if(!/^data:application\/pdf/.test(a))deny('La orden de compra debe conservarse como PDF.','VALIDACION');
+    if(a.length>3000000)deny('El PDF es demasiado grande (máx. 2 MB).','VALIDACION');
+    doc.data=a;
+  }else deny('Falta el archivo PDF de la orden de compra.','VALIDACION');
+  const h=String((d&&d.hash)||'');
+  doc.hash=/^[a-f0-9]{16,64}$/.test(h)?h:(doc.data?fnv(doc.data):'');
+  doc.nombre=String((d&&d.nombre)||(o.id+'-v'+doc.version+'.pdf')).slice(0,80);
+  doc.columnas=Array.isArray(d&&d.columnas)?d.columnas.filter(c=>OC_COL_OPC[c]):o.columnas.slice();
+  return doc;
 }
 
 /* =====================================================================
@@ -1104,9 +1289,19 @@ const API={
     need(A,'comercial_agrupar','preparar facturas');
     const cliente=d&&d.cliente;
     const cl=DB.clientes.find(c=>c.id===cliente);if(!cl)deny('Selecciona el cliente de la factura.','VALIDACION');
-    const ids=Array.isArray(d.viajeIds)?d.viajeIds.slice():[];
+    ocGuardar();
+    /* Factura de una OC: debe estar aceptada, sin otra factura activa, y contiene EXACTAMENTE los viajes de la OC. */
+    const oc=d&&d.ocId?ocPorId(d.ocId):null;
+    if(oc){
+      if(oc.estado!=='ACEPTADA')deny('Solo una orden de compra aceptada por el cliente puede facturarse.','ESTADO_INVALIDO');
+      if(ocFacturaActiva(oc))deny(`La orden de compra ${oc.id} ya tiene la factura ${oc.agrupacionId}: una orden se factura una sola vez.`,'YA_FACTURADO');
+      if(oc.cliente!==cliente)deny('El cliente de la factura no coincide con el de la orden de compra.','CLIENTE_DISTINTO');
+    }
+    const ids=oc?oc.lineas.map(l=>l.viajeId):(Array.isArray(d.viajeIds)?d.viajeIds.slice():[]);
     if(!ids.length)deny('Selecciona al menos un viaje.','VALIDACION');
     if(new Set(ids).size!==ids.length)deny('La selección contiene viajes duplicados.','VALIDACION');
+    if(oc&&Array.isArray(d.viajeIds)&&d.viajeIds.length&&(d.viajeIds.length!==ids.length||d.viajeIds.some(x=>!ids.includes(x))))deny('La factura de una orden de compra incluye exactamente los viajes de la orden.','VALIDACION');
+    if(!oc)ids.forEach(id=>{const o2=ocDeViaje(id);if(o2)deny(`El viaje ${id} está en la orden de compra ${o2.id}: se factura desde esa orden una vez aceptada.`,'EN_ORDEN_DE_COMPRA');});
     const nf=String(d.numeroFactura||'').trim(),sf=String(d.serieFactura||'').trim();if(nf)valFactura(nf,null);if(sf)valSerie(sf);
     const ff=String(d.fechaFactura||'').trim();if(ff&&!/^\d{4}-\d{2}-\d{2}$/.test(ff))deny('Fecha de factura no válida.','VALIDACION');
     const ts=ids.map(id=>{
@@ -1115,11 +1310,21 @@ const API={
       if(t.proyecto!==cliente)deny(`El viaje ${id} pertenece a otro cliente (${t.proyecto}). Una factura solo puede contener viajes de ${cliente}.`,'CLIENTE_DISTINTO');
       if(t.agrupacionId||['FACTURADO','COBRADO'].includes(t.estado))deny(`El viaje ${id} ya está asociado a la factura ${t.agrupacionId}. Para reasignarlo hay que anular esa factura (permiso restringido).`,'YA_FACTURADO');
       if(t.estado!=='ACEPTADO'||!t.liqAprobadaEn||!puedeVer(A,t))deny(`El viaje ${id} no es elegible para facturación: no está aceptado.`,'NO_ELEGIBLE');
+      if(oc){
+        const mt=ocMotivoTarifa(t);if(mt)deny(`${OC_TARIFA_MSG}: #${t.noViaje||t.id} (No. de Transporte ${t.shipment||'—'}) · ${ocClienteNombre(t.proyecto)} · ${t.proyectoCat}: ${mt}`,'TARIFA_PENDIENTE');
+        const ln=oc.lineas.find(l=>l.viajeId===id);
+        if(r2(nn(t.tarifaCliente))!==ln.tarifa)deny(`La tarifa del viaje ${id} cambió respecto de la orden de compra ${oc.id}: se requiere una corrección auditada antes de facturar.`,'TARIFA_CAMBIADA');
+      }
       return t;
     });
     const gid='AGR-'+pad4(DB.seq.agr++),en=nowIso();
     DB.agrupaciones.push({id:gid,cliente,modalidad:ids.length===1?'INDIVIDUAL':'AGRUPADA',fase:'PREPARADA',viajeIds:ids,serieFactura:sf,numeroFactura:nf,fechaFactura:ff,importeEnviado:null,importesViaje:{},viajesSinImporte:[],importeFacturado:null,envio:null,emision:null,cobros:[],estado:'ACTIVA',creadoPorId:A.id,creadoPor:A.nombre,creadoEn:en,anulada:null,correcciones:[]});
-    auditAdd({entidad:'AGRUPACION',accion:ids.length===1?'Factura individual preparada':'Factura de viajes agrupados preparada',campo:'Viajes',nuevo:ids.join(', '),por:A,ref:gid+(nf?` · ${nf}`:'')});
+    auditAdd({entidad:'AGRUPACION',accion:ids.length===1?'Factura individual preparada':'Factura de viajes agrupados preparada',campo:'Viajes',nuevo:ids.join(', '),por:A,ref:gid+(nf?` · ${nf}`:'')+(oc?` · ${oc.id}`:'')});
+    if(oc){
+      DB.agrupaciones[DB.agrupaciones.length-1].ocId=oc.id;oc.agrupacionId=gid;
+      oc.historial.push({en,por:A.nombre,porId:A.id,accion:`Factura ${gid} preparada desde la orden de compra`});
+      auditAdd({entidad:'OC',accion:'Factura preparada desde la orden de compra',campo:'Factura',nuevo:gid,por:A,ref:oc.id});
+    }
     ts.forEach(t=>{t.agrupacionId=gid;if(nf)t.numeroFactura=nf;});     /* se reserva el viaje: no puede ir en otra factura */
     return DB.agrupaciones[DB.agrupaciones.length-1];
   });},
@@ -1167,6 +1372,8 @@ const API={
       if(!ENV.storageExists(d.archivo.path))deny('El archivo de evidencia no está en el almacenamiento: vuelve a subirlo.','VALIDACION');
       archPath=d.archivo.path;
     }else if(d.archivo){if(typeof d.archivo!=='string'||!/^data:(image\/|application\/pdf)/.test(d.archivo))deny('El archivo de evidencia debe ser imagen o PDF.','VALIDACION');if(d.archivo.length>3000000)deny('El archivo de evidencia es demasiado grande (máx. 2 MB).','VALIDACION');arch=d.archivo;}
+    const sinTarifa=g.viajeIds.filter(id=>!(nn((g.importesViaje||{})[id])>0));
+    if(sinTarifa.length)deny(`${OC_TARIFA_MSG}: no se puede emitir la factura porque el viaje ${sinTarifa[0]} no tiene tarifa de cobro válida.`,'TARIFA_PENDIENTE');
     const dif=Math.abs(imp-g.importeEnviado)>0.005,mot=String(d.motivoDiferencia||'').trim();
     if(dif&&mot.length<5)deny(`El importe emitido (Q ${r2(imp)}) difiere de lo enviado a facturar (Q ${g.importeEnviado}): explica el motivo.`,'VALIDACION');
     g.fase='EMITIDA';g.importeFacturado=r2(imp);
@@ -1221,6 +1428,7 @@ const API={
     const fase=g.fase;
     g.estado='ANULADA';g.anulada={porId:A.id,por:A.nombre,en:nowIso(),motivo:m,faseAlAnular:fase};
     auditAdd({entidad:'AGRUPACION',accion:prep?'Factura preparada descartada':'Factura anulada',campo:'Estado',anterior:'ACTIVA',nuevo:'ANULADA',por:A,motivo:m,ref:`${g.id}${g.numeroFactura?' · '+g.numeroFactura:''}`});
+    if(g.ocId){const oc=(DB.ordenesCompra||[]).find(x=>x.id===g.ocId);if(oc&&oc.agrupacionId===g.id){oc.agrupacionId='';oc.historial.push({en:nowIso(),por:A.nombre,porId:A.id,accion:`Factura ${g.id} anulada: la orden vuelve a estar disponible para facturar`});auditAdd({entidad:'OC',accion:'Factura de la orden de compra anulada',campo:'Factura',anterior:g.id,nuevo:'(sin factura)',por:A,motivo:m,ref:oc.id});}}
     g.viajeIds.forEach(id=>{
       const t=getT(id);const prev=`${g.id}${t.numeroFactura?' · '+t.numeroFactura:''}`;
       t.agrupacionId='';t.numeroFactura='';
@@ -1228,6 +1436,126 @@ const API={
       else auditAdd({entidad:'AGRUPACION',viajeId:id,accion:'Reserva de factura liberada',campo:'Factura',anterior:prev,nuevo:'(liberado)',por:A,motivo:m});
     });
     return g;
+  });},
+
+  /* ----- órdenes de compra ----- */
+  /* Lectura: lista de OC (sin el ajuste de combustible si el perfil no tiene su permiso propio). */
+  ordenesCompra(uid){const A=actor(uid);need(A,'oc_ver','ver las órdenes de compra');ocGuardar();return DB.ordenesCompra.map(o=>redactOC(A,o));},
+  /* Lectura: viajes de un cliente/proyecto clasificados para armar una OC (elegibles, pendientes de tarifa, no disponibles). */
+  ocDisponibles(uid,d){const A=actor(uid);need(A,'oc_preparar','preparar órdenes de compra');
+    d=d||{};const out=[];
+    DB.trips.forEach(t=>{
+      if((d.cliente&&t.proyecto!==d.cliente)||(d.proyecto&&t.proyectoCat!==d.proyecto)||!puedeVer(A,t))return;
+      if(t.estado!=='ACEPTADO'&&!ocDeViaje(t.id))return;
+      const c=ocClasificar(t);
+      out.push(Object.assign({viajeId:t.id,tipo:c.k,motivo:c.motivo,ocId:c.ocId||''},ocLinea(t,hasPerm(A,'oc_ver_combustible'))));
+    });
+    return out;
+  },
+  /* Lectura: vista previa de la OC con las mismas reglas que la generación. No guarda nada. */
+  ocPrevisualizar(uid,d){const A=actor(uid);need(A,'oc_preparar','preparar órdenes de compra');return ocArmar(A,d);},
+  ocGenerar(uid,d){return exec(uid,'ocGenerar','',A=>{
+    need(A,'oc_preparar','preparar órdenes de compra');
+    const r=ocArmar(A,d);
+    if(!r.ok)throw ocErrorArmado(r);
+    return redactOC(A,ocCrear(A,r,{}));
+  });},
+  /* Corregir / nueva versión. Aplica a una OC enviada, aceptada (sin factura activa) o rechazada. La original NO se
+     borra ni se edita: conserva sus líneas, PDFs, respuesta e historial y pasa a REEMPLAZADA. La nueva OC (PREPARADA)
+     toma los viajes en la misma operación, de modo que un viaje nunca queda en dos OC activas. */
+  ocCorregir(uid,ocId,d){return exec(uid,'ocCorregir','',A=>{
+    need(A,'oc_corregir','corregir órdenes de compra');
+    need(A,'oc_preparar','preparar la nueva versión de la orden de compra');
+    const o=ocPorId(ocId);
+    if(!['ENVIADA','ACEPTADA','RECHAZADA'].includes(o.estado))deny('Solo una orden de compra enviada, aceptada o rechazada puede corregirse con una nueva versión (la preparada se descarta o se edita; la anulada o reemplazada ya está cerrada).','ESTADO_INVALIDO');
+    if(ocFacturaActiva(o))deny(`La orden de compra tiene la factura ${o.agrupacionId} activa: anula primero esa factura.`,'TIENE_FACTURA');
+    const m=String((d&&d.motivo)||'').trim();if(m.length<5)deny('El motivo de la corrección es obligatorio (mínimo 5 caracteres).','VALIDACION');
+    const ids=Array.isArray(d&&d.viajeIds)&&d.viajeIds.length?d.viajeIds:o.viajeIds.slice();
+    const cols=Array.isArray(d&&d.columnas)?d.columnas:(o.columnas||[]);
+    /* Valida la nueva versión con los viajes de la original considerados libres (solo durante esta validación). */
+    OC_IGNORAR=o.id;let r;
+    try{r=ocArmar(A,{cliente:o.cliente,proyecto:o.proyecto,viajeIds:ids,columnas:cols});}finally{OC_IGNORAR='';}
+    if(!r.ok)throw ocErrorArmado(r);
+    const en=nowIso(),antes=o.estado;
+    /* Cierra la original y libera sus viajes; la nueva los toma enseguida (misma operación, un solo guardado). */
+    o.estado='REEMPLAZADA';o.correccion={porId:A.id,por:A.nombre,en,motivo:m,estadoAlCorregir:antes};
+    o.lineas.forEach(l=>{const t=DB.trips.find(x=>x.id===l.viajeId);if(t&&t.ocId===o.id)t.ocId='';});
+    const n=ocCrear(A,r,{reemplazaA:o.id,version:(o.version||1)+1,motivo:m});
+    o.reemplazadaPor=n.id;
+    o.historial.push({en,por:A.nombre,porId:A.id,accion:`Corregida (era ${OC_ESTADOS[antes]}): reemplazada por ${n.id}. Motivo: ${m}`});
+    auditAdd({entidad:'OC',accion:'Orden de compra corregida (nueva versión)',campo:'Estado',anterior:OC_ESTADOS[antes],nuevo:'Reemplazada por '+n.id,por:A,motivo:m,ref:`${o.id} → ${n.id}`});
+    notificar(A,{tipo:'OC_CORREGIDA',destinatarios:['GERENTE_COMERCIAL','ANALISTA_COMERCIAL'],asunto:`Orden de compra ${o.id} corregida: nueva versión ${n.id}`,detalle:{orden:o.id,nueva:n.id,cliente:o.clienteNombre,proyecto:o.proyecto,motivo:m,corregidaPor:A.nombre}});
+    return redactOC(A,n);
+  });},
+  /* El PDF se conserva por versiones: registrar otro PDF NO borra el anterior. Solo mientras la OC está preparada. */
+  ocRegistrarPdf(uid,ocId,d){return exec(uid,'ocRegistrarPdf','',A=>{
+    need(A,'oc_preparar','generar el PDF de la orden de compra');
+    const o=ocPorId(ocId);
+    if((o.columnas||[]).includes('combustible')&&!hasPerm(A,'oc_ver_combustible'))deny('Esta orden incluye la columna de combustible: solo quien tiene ese permiso puede generar su PDF.','SIN_PERMISO');
+    if(o.estado!=='PREPARADA')deny('El PDF solo se puede generar mientras la orden de compra está preparada (no enviada).','ESTADO_INVALIDO');
+    const doc=ocDocumento(A,o,d,String((d&&d.motivo)||'').trim());
+    if(doc.version>1&&doc.motivo.length<5)deny('Indica el motivo de generar una nueva versión del PDF (mínimo 5 caracteres).','VALIDACION');
+    o.documentos.push(doc);
+    o.historial.push({en:doc.en,por:A.nombre,porId:A.id,accion:`PDF generado (versión ${doc.version})`});
+    auditAdd({entidad:'OC',accion:'PDF de orden de compra generado',campo:'Versión',nuevo:String(doc.version),por:A,motivo:doc.motivo,ref:`${o.id} · ${doc.hash.slice(0,12)}`});
+    return redactOC(A,o);
+  });},
+  ocEnviar(uid,ocId,d){return exec(uid,'ocEnviar','',A=>{
+    need(A,'oc_enviar','confirmar el envío de órdenes de compra');
+    const o=ocPorId(ocId);
+    if(o.estado!=='PREPARADA')deny('Solo una orden de compra preparada puede enviarse.','ESTADO_INVALIDO');
+    if(!(o.documentos||[]).length)deny('Genera el PDF de la orden de compra antes de registrar su envío.','SIN_DOCUMENTO');
+    /* La tarifa se vuelve a validar al enviar: ningún viaje sin tarifa vigente sale en una OC. */
+    const mal=o.lineas.map(l=>({l,t:DB.trips.find(x=>x.id===l.viajeId)})).filter(x=>ocMotivoTarifa(x.t)||(x.t&&r2(nn(x.t.tarifaCliente))!==x.l.tarifa));
+    if(mal.length){const x=mal[0];throw new ApiError('TARIFA_PENDIENTE',`${OC_TARIFA_MSG}: #${(x.t&&x.t.noViaje)||x.l.viajeId} (No. de Transporte ${x.l.shipment||'—'}) · ${o.clienteNombre} · ${o.proyecto}: ${(x.t&&ocMotivoTarifa(x.t))||'la tarifa cambió después de preparar la orden.'}`);}
+    const dest=String((d&&d.destinatario)||'').trim().slice(0,120),medio=String((d&&d.medio)||'').trim().slice(0,40),en=nowIso();
+    o.estado='ENVIADA';o.envio={porId:A.id,por:A.nombre,en,destinatario:dest,medio,documentoVersion:o.documentos.length};
+    o.historial.push({en,por:A.nombre,porId:A.id,accion:'Envío al cliente confirmado'+(dest?' a '+dest:'')});
+    auditAdd({entidad:'OC',accion:'Orden de compra enviada al cliente',campo:'Estado',anterior:'Preparada',nuevo:'Enviada al cliente',por:A,ref:`${o.id} · Q ${o.total}`+(dest?` · ${dest}`:'')});
+    notificar(A,{tipo:'OC_ENVIADA',destinatarios:['FACTURACION'],asunto:`Orden de compra ${o.id} pendiente de confirmación del cliente`,detalle:{orden:o.id,cliente:o.clienteNombre,proyecto:o.proyecto,viajes:o.lineas.length,total:'Q '+o.total,enviadaPor:A.nombre}});
+    return redactOC(A,o);
+  });},
+  /* Respuesta del cliente. Permiso propio (oc_responder): lo tienen Comercial, Gerencia y Administrador. No reutiliza
+     liq_aprobar/liq_devolver ni ningún permiso de Liquidaciones, Finanzas o Facturación. */
+  ocResponder(uid,ocId,d){return exec(uid,'ocResponder','',A=>{
+    need(A,'oc_responder','registrar la respuesta del cliente a una orden de compra');
+    const o=ocPorId(ocId);
+    if(o.estado!=='ENVIADA')deny('Solo una orden de compra enviada al cliente puede aceptarse o rechazarse.','ESTADO_INVALIDO');
+    const res=d&&d.resultado;if(!['ACEPTADA','RECHAZADA'].includes(res))deny('Indica si el cliente aceptó o rechazó la orden de compra.','VALIDACION');
+    const ref=String((d&&d.referencia)||'').trim(),mot=String((d&&d.motivo)||'').trim();
+    if(res==='ACEPTADA'&&ref.length<3)deny('Registra la referencia con la que el cliente aceptó (mínimo 3 caracteres).','VALIDACION');
+    if(res==='RECHAZADA'&&mot.length<5)deny('Registra el motivo del rechazo (mínimo 5 caracteres).','VALIDACION');
+    const evid=[];
+    (Array.isArray(d.evidencias)?d.evidencias:[]).slice(0,5).forEach(a=>{
+      if(a&&typeof a==='object'&&typeof a.path==='string'){
+        if(!new RegExp('^oc/'+o.id+'/[A-Za-z0-9._-]{8,90}$').test(a.path))deny('La ruta de la evidencia no corresponde a esta orden de compra.','VALIDACION');
+        if(!ENV.storageExists(a.path))deny('La evidencia no está en el almacenamiento: vuelve a subirla.','VALIDACION');
+        evid.push({path:a.path,nombre:String(a.nombre||'').slice(0,80)});
+      }else if(typeof a==='string'){
+        if(ENV.soloAlmacenamiento)deny('La evidencia debe subirse al almacenamiento privado antes de registrarse.','VALIDACION');
+        if(!/^data:(image\/|application\/pdf)/.test(a)||a.length>3000000)deny('La evidencia debe ser imagen o PDF de máximo 2 MB.','VALIDACION');
+        evid.push({data:a});
+      }else deny('Evidencia no válida.','VALIDACION');
+    });
+    const en=nowIso();
+    o.estado=res;o.respuesta={resultado:res,porId:A.id,por:A.nombre,en,referencia:ref,motivo:mot,evidencias:evid};
+    o.historial.push({en,por:A.nombre,porId:A.id,accion:res==='ACEPTADA'?'Aceptada por el cliente'+(ref?' ('+ref+')':''):'Rechazada por el cliente: '+mot});
+    auditAdd({entidad:'OC',accion:res==='ACEPTADA'?'Orden de compra aceptada por el cliente':'Orden de compra rechazada por el cliente',campo:'Estado',anterior:'Enviada al cliente',nuevo:OC_ESTADOS[res],por:A,motivo:mot,ref:`${o.id}${ref?' · '+ref:''}`});
+    notificar(A,{tipo:res==='ACEPTADA'?'OC_ACEPTADA':'OC_RECHAZADA',destinatarios:res==='ACEPTADA'?['FACTURACION','GERENTE_COMERCIAL','ANALISTA_COMERCIAL']:['GERENTE_COMERCIAL','ANALISTA_COMERCIAL'],asunto:res==='ACEPTADA'?`Orden de compra ${o.id} aceptada: disponible para facturar`:`Orden de compra ${o.id} rechazada por el cliente`,detalle:{orden:o.id,cliente:o.clienteNombre,proyecto:o.proyecto,total:'Q '+o.total,motivo:mot||undefined}});
+    return redactOC(A,o);
+  });},
+  ocAnular(uid,ocId,motivo){return exec(uid,'ocAnular','',A=>{
+    const o=ocPorId(ocId);
+    need(A,o.estado==='PREPARADA'?'oc_preparar':'oc_corregir',o.estado==='PREPARADA'?'descartar órdenes de compra preparadas':'anular órdenes de compra ya enviadas');
+    if(o.estado==='ANULADA'||o.estado==='REEMPLAZADA')deny('La orden de compra ya está cerrada ('+OC_ESTADOS[o.estado].toLowerCase()+').','ESTADO_INVALIDO');
+    if(ocFacturaActiva(o))deny(`La orden de compra tiene la factura ${o.agrupacionId} activa: anula primero esa factura.`,'TIENE_FACTURA');
+    const m=String(motivo||'').trim();if(m.length<5)deny('El motivo de la anulación es obligatorio (mínimo 5 caracteres).','VALIDACION');
+    const en=nowIso(),antes=o.estado;
+    o.estado='ANULADA';o.anulada={porId:A.id,por:A.nombre,en,motivo:m,estadoAlAnular:antes};
+    o.historial.push({en,por:A.nombre,porId:A.id,accion:'Orden de compra anulada: '+m});
+    o.lineas.forEach(l=>{const t=DB.trips.find(x=>x.id===l.viajeId);if(t&&t.ocId===o.id){t.ocId='';auditAdd({entidad:'OC',viajeId:t.id,accion:'Viaje liberado de la orden de compra',campo:'Orden de compra',anterior:o.id,nuevo:'(liberado)',por:A,motivo:m});}});
+    auditAdd({entidad:'OC',accion:'Orden de compra anulada',campo:'Estado',anterior:OC_ESTADOS[antes],nuevo:'Anulada',por:A,motivo:m,ref:o.id});
+    return redactOC(A,o);
   });},
 
   /* ----- finanzas: costos, pagos y consulta ----- */

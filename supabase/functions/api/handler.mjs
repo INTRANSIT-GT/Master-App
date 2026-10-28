@@ -4,7 +4,7 @@
 import { createEngine } from './core.mjs';
 import { loadState, saveState, fotografia } from './store.mjs';
 
-export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
+export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'ocGenerar', 'ocRegistrarPdf', 'ocEnviar', 'ocResponder', 'ocAnular','ocCorregir', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
   'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
   'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'setAcceso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'activarUsuario', 'cambiarClave', 'guardarCatalogo', 'guardarPiloto', 'cambiarEstadoPiloto', 'crearReporteAyuda', 'cambiarEstadoReporteAyuda'];
 export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores', 'buscarViajes'];
@@ -235,6 +235,7 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
       const rutas = rutasDeArchivos(args);
       const existentes = new Set(rutas.length ? (await q("select name from storage.objects where bucket_id='evidencias' and name = any(string_to_array($1,'|'))", [rutas.join('|')])).rows.map(r => r.name) : []);
       E.ENV.storageExists = p => existentes.has(p);
+      E.ENV.soloAlmacenamiento = true;    /* el servidor nunca guarda archivos dentro de la base: solo rutas del bucket privado */
       /* alta de usuarios: la cuenta de acceso se crea en Supabase Auth (solo la administradora, con la clave de servicio del servidor) */
       if (op === 'guardarUsuario' && args[0] && !args[0].id) {
         if (!E.hasPerm(A, 'usuarios_gestionar')) rechazo = falla('SIN_PERMISO', 'Tu perfil no puede gestionar usuarios.');
@@ -309,7 +310,11 @@ async function armarSnapshot(E, uid, deps, ventana) {
     if (em && em.path) ordPaths.push(em.path);
     if (tr && tr.evidencia && tr.evidencia.path) ordPaths.push(tr.evidencia.path);
     if (tr && tr.factura && tr.factura.path) ordPaths.push(tr.factura.path); });
-  const paths = [...evs.map(e => e.path), ...agr.map(g => g.emision && g.emision.archivoPath), ...ordPaths].filter(Boolean).slice(-400);
+  /* Órdenes de compra: PDF por versiones y evidencias de la respuesta del cliente, siempre en el bucket privado (URL firmada de 1 h). */
+  const ocs = has('oc_ver') ? seguro(() => API.ordenesCompra(uid), []) : [];
+  const ocPaths = [];
+  ocs.forEach(o => { (o.documentos || []).forEach(d => d.path && ocPaths.push(d.path)); ((o.respuesta && o.respuesta.evidencias) || []).forEach(e => e.path && ocPaths.push(e.path)); });
+  const paths = [...evs.map(e => e.path), ...agr.map(g => g.emision && g.emision.archivoPath), ...ordPaths, ...ocPaths].filter(Boolean).slice(-400);
   const urls = paths.length ? await deps.firmar(paths) : new Map();
   evs.forEach(e => evidencias.push({ id: e.id, viajeId: e.viajeId, liqId: e.liqId, dataUrl: urls.get(e.path) || '', path: '', porId: e.porId, por: e.por, en: e.en }));
   const agrupaciones = agr.map(g => g.emision && g.emision.archivoPath ? { ...g, emision: { ...g.emision, archivo: urls.get(g.emision.archivoPath) || '', archivoPath: '' } } : g);
@@ -328,6 +333,9 @@ async function armarSnapshot(E, uid, deps, ventana) {
     yo: uid, ventana: ventana || null, usuarios, acceso: DB.acceso, permisos: DB.permisos, clientes, trips, liquidaciones, evidencias, agrupaciones,
     audit: [...audit.values()].sort((a, b) => a.id < b.id ? -1 : 1),
     pagos: has('finanzas_ver') ? DB.pagos : [],
+    ordenesCompra: ocs.map(o => ({ ...o,
+      documentos: (o.documentos || []).map(d => ({ ...d, url: d.path ? (urls.get(d.path) || '') : '' })),
+      respuesta: o.respuesta ? { ...o.respuesta, evidencias: (o.respuesta.evidencias || []).map(e => ({ ...e, url: e.path ? (urls.get(e.path) || '') : '' })) } : o.respuesta })),
     ordenesPago: ord.map(o => { const c = JSON.parse(JSON.stringify(o));
       if (c.emision && c.emision.documento) c.emision.documentoUrl = urls.get(c.emision.documento.path) || '';
       if (c.transferencia) { if (c.transferencia.evidencia) c.transferencia.evidenciaUrl = urls.get(c.transferencia.evidencia.path) || ''; if (c.transferencia.factura) c.transferencia.facturaUrl = urls.get(c.transferencia.factura.path) || ''; }

@@ -38,7 +38,9 @@ const cargar = () => {
     .replace(/<script src="(js\/[^"]+)"><\/script>/g, (m, f) => /vendor\/(jspdf|supabase)/.test(f) ? '' : `<script>${leer(f)}</script>`);
   const errs = []; const vc = new VirtualConsole(); vc.on('jsdomError', e => errs.push(String(e.message).slice(0, 200)));
   const w = new JSDOM(html, { runScripts: 'dangerously', url: 'https://x.test/', pretendToBeVisual: true, virtualConsole: vc }).window;
-  w.eval(FIXTURE); return { w, errs };
+  w.eval(FIXTURE);
+  /* Acceso por sección (matriz «sec_<pantalla>») */
+  w.eval(`SECCIONES.forEach(x=>Object.keys(ROLES).forEach(r=>{DB.permisos.push({rol:r,permiso:'sec_'+x[0],habilitado:r==='TORRE'?['inicio','viajes','todos','torre','ayuda'].includes(x[0]):true});}))`); return { w, errs };
 };
 const N = cargar(), w = N.w, d = w.document, ev = c => w.eval(c);
 const click = async el => { el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true })); await tick(); };
