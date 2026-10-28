@@ -38,6 +38,18 @@ El código vive en GitHub; aquí se anota qué se ejecutó en el entorno y cuán
 - **Efecto:** el flujo queda Comercial prepara y confirma con el cliente → Facturación valida/emite y cobra. Los permisos y apartados nuevos ya se pueden asignar desde la matriz.
 - **Verificado:** migración aplicada sin errores; API responde con las nuevas secciones; snapshot incluye los permisos nuevos.
 
+## 2026-10-28 · OT del cliente y salida del perfil Cobros (036)
+
+- **Migración aplicada:** `supabase/migrations/036_ot_y_cobros.sql`.
+  - Nuevo permiso `comercial_ot` (Asistente Comercial, Gerencia Comercial y Administrador); reemplaza a `comercial_confirmar`.
+  - El perfil **Cobros desaparece**: sus usuarios pasan a Facturación y sus filas de permisos se retiran.
+  - Facturación conserva `cobros_registrar` y no puede agrupar ni registrar la OT.
+- **API desplegada:** función `api`, versión **90**.
+- **Front publicado:** service worker **v1.0.98**.
+- **Flujo:** el Asistente Comercial agrupa los viajes, genera el reporte y registra el número de OT con su evidencia. Facturación recibe la agrupación con OT, registra serie/número/fecha, sube la foto de la factura, la envía y valida el cobro (monto, fecha y referencia).
+- **Verificado:** motor de punta a punta (agrupar → OT → datos de factura → envío → emisión con foto → cobro), permisos cruzados (Facturación no registra OT; Asistente no factura) y matriz sin el perfil Cobros.
+- **Migración 037 aplicada:** las políticas de Storage (`app.puede_subir` y `app.puede_ver_archivo`) ahora usan `comercial_ot`; sin esto el Asistente no podía subir la evidencia de la OT.
+
 ## Cómo anotar
 
 Una sección por despliegue, con fecha, migración/función, versión, motivo y verificación.
