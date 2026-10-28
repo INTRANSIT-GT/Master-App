@@ -1402,6 +1402,8 @@ const API={
       }
       return t;
     });
+    /* Regla de trabajo: una agrupación = un cliente y UN solo proyecto (la regla del cliente ya se valida arriba). */
+    { const pj=[...new Set(ts.map(t=>t.proyectoCat||''))];if(pj.length>1)deny(`Una agrupación contiene viajes de un solo proyecto. La selección mezcla: ${pj.map(x=>x||'(sin proyecto)').join(', ')}.`,'PROYECTO_DISTINTO'); }
     const gid='AGR-'+pad4(DB.seq.agr++),en=nowIso();
     DB.agrupaciones.push({id:gid,cliente,modalidad:ids.length===1?'INDIVIDUAL':'AGRUPADA',fase:'PREPARADA',viajeIds:ids,serieFactura:sf,numeroFactura:nf,fechaFactura:ff,importeEnviado:null,importesViaje:{},viajesSinImporte:[],importeFacturado:null,envio:null,emision:null,cobros:[],estado:'ACTIVA',creadoPorId:A.id,creadoPor:A.nombre,creadoEn:en,anulada:null,correcciones:[]});
     auditAdd({entidad:'AGRUPACION',accion:ids.length===1?'Factura individual preparada':'Factura de viajes agrupados preparada',campo:'Viajes',nuevo:ids.join(', '),por:A,ref:gid+(nf?` · ${nf}`:'')+(oc?` · ${oc.id}`:'')});

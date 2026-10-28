@@ -70,7 +70,11 @@ T('B5 El PDF del cliente trae las 7 columnas obligatorias y Ruta; no trae «INTE
 T('B5b El PDF del cliente no trae datos internos (piloto, proveedor, margen)', !/piloto|proveedor|margen|costo/i.test(pdfTxt));
 await click(boton('Generar PDF interno', '.dlg button'));
 await click(boton('GENERAR PDF', '.dlg button')); await tick(900);
-T('B6 El PDF interno es otro documento (tipo INTERNO, versión 1) y no reemplaza al del cliente', J('DB.agrupaciones[0].pdfs.length') === 2 && J('DB.agrupaciones[0].pdfs[1].tipo') === 'INTERNO');
+T('B6 El PDF interno es otro documento (tipo INTERNO, versión 1) y no reemplaza al del cliente', J('DB.agrupaciones[0].pdfs.length') === 2 && J('DB.agrupaciones[0].pdfs[1].tipo') === 'INTERNO');
+const txtPdf = d0 => { const buf = Buffer.from(d0.split(',')[1], 'base64'); const s0 = buf.toString('latin1'); let out = ''; const re = /stream\r?\n/g; let m; while ((m = re.exec(s0))) { const i0 = m.index + m[0].length, f = s0.indexOf('endstream', i0); if (f < 0) break; try { out += zlib.inflateSync(buf.subarray(i0, f)).toString('latin1') + '\n'; } catch (e) { } re.lastIndex = f; } return out; };
+const pdfInt = txtPdf(J('DB.agrupaciones[0].pdfs[1].data'));
+T('B6b El PDF interno trae el detalle completo (Shipment, Capacidad, Ruta, Origen, Tarifa de combustible), el aviso «NO ENVIAR AL CLIENTE», la agrupación y la factura', ['Shipment', 'Capacidad', 'Ruta', 'Origen', 'Tarifa de combustible', 'NO ENVIAR AL CLIENTE', 'AGR-0001', 'F-100'].every(t => pdfInt.includes(t)), pdfInt.slice(0, 300));
+T('B6c El PDF del cliente y el interno salen de la MISMA agrupación y suman el mismo total', J('DB.agrupaciones[0].pdfs[0].total') === J('DB.agrupaciones[0].pdfs[1].total') && J('DB.agrupaciones[0].pdfs[0].huella') !== undefined && J('DB.agrupaciones[0].pdfs[0].viajes') === J('DB.agrupaciones[0].pdfs[1].viajes'));
 await click(boton('Generar PDF para el cliente', '.dlg button'));
 T('B7 Una segunda versión del PDF del cliente exige motivo', !!d.querySelector('.dlg [data-mf="motivo"]'));
 await click(boton('Cancelar', '.dlg button'));
@@ -234,9 +238,34 @@ await click(boton('Importes', '#main button'));
 T('T7 El botón «Importes» abre la consulta con lo autorizado y el tarifario vigente (solo lectura)', /Autorizado por el cliente/.test(txt(d.querySelector('.dlg'))) && /Tarifario vigente hoy/.test(txt(d.querySelector('.dlg'))) && /Tarifa de combustible/.test(txt(d.querySelector('.dlg'))));
 ev("S.modal=null;render()");
 
+/* ===== Regla de trabajo: una agrupación = un cliente y un solo proyecto ===== */
+{ const mezcla = J(`__try(()=>API.prepararFactura('U-N',{cliente:'COLGATE',viajeIds:['${V.col}','${V.otroProy}'],serieFactura:'A',numeroFactura:'F-400',fechaFactura:'2031-04-12'}))`);
+  T('V1 No se agrupan viajes de dos proyectos del mismo cliente (PROYECTO_DISTINTO, motor)', mezcla.ok === false && mezcla.code === 'PROYECTO_DISTINTO', mezcla);
+  const cliMezcla = J(`__try(()=>API.prepararFactura('U-N',{cliente:'COLGATE',viajeIds:['${V.col}','${V.coca}'],serieFactura:'A',numeroFactura:'F-401',fechaFactura:'2031-04-12'}))`);
+  T('V2 Tampoco clientes distintos (CLIENTE_DISTINTO)', cliMezcla.ok === false && cliMezcla.code === 'CLIENTE_DISTINTO', cliMezcla);
+  const noLiq = J(`__try(()=>API.prepararFactura('U-N',{cliente:'COLGATE',viajeIds:['${V.plan}'],serieFactura:'A',numeroFactura:'F-402',fechaFactura:'2031-04-12'}))`);
+  T('V3 Un viaje no liquidado ni confirmado no se agrupa (NO_ELEGIBLE, motor)', noLiq.ok === false && noLiq.code === 'NO_ELEGIBLE', noLiq);
+  T('V4 Los intentos rechazados no crean agrupaciones', J('DB.agrupaciones.length') === 3); }
+
+/* ===== Filtros de fecha: creación de la agrupación ≠ fecha del viaje ===== */
+como('U-N', 'analista'); ev("S.tab.comA='fact';S.fgEst='';S.fgCli='';S.fgPc='';S.fgQ='';S.fgDesde='';S.fgHasta='';S.fgVDesde='';S.fgVHasta='';render()");
+{ T('W0 La pantalla ofrece por separado «Creación desde/hasta» y «Viaje desde/hasta»', ['fgDesde', 'fgHasta', 'fgVDesde', 'fgVHasta'].every(k => !!d.querySelector(`input[data-flt=${k}]`)));
+  await cambia(d.querySelector('input[data-flt=fgVDesde]'), '2031-12-28'); await cambia(d.querySelector('input[data-flt=fgVHasta]'), '2031-12-28');
+  T('W1 Por fecha del VIAJE (28-dic-2031) aparece solo AGR-0001 (su viaje SH-A es de esa fecha)', idsLista().join() === 'AGR-0001', idsLista());
+  ev("S.fgVDesde='2040-01-01';S.fgVHasta='';render()"); T('W2 Una fecha de viaje futura no devuelve agrupaciones', idsLista().length === 0);
+  ev("S.fgVDesde='';S.fgVHasta='';S.fgDesde='2040-01-01';render()"); T('W3 Por fecha de CREACIÓN futura tampoco; son filtros independientes', idsLista().length === 0);
+  ev("S.fgDesde='';S.fgVDesde='2031-12-28';S.fgVHasta='2031-12-29';render()"); T('W4 Combinados con creación vacía: rango de viaje 28–29 dic incluye AGR-0001', idsLista().includes('AGR-0001'));
+  ev("S.fgVDesde='';S.fgVHasta='';render()"); }
+
 /* ===== Unicidad del número de factura ===== */
-{ const dup = J(`__try(()=>API.prepararFactura('U-N',{cliente:'COLGATE',viajeIds:['${V.col}'],serieFactura:'A',numeroFactura:'F-100',fechaFactura:'2031-04-12'}))`);
-  T('U1 Un número de factura ya usado en la misma serie se rechaza (no se sustituye en silencio)', dup.ok === false, dup); }
+{ const dup = J(`__try(()=>API.prepararFactura('U-N',{cliente:'COLGATE',viajeIds:['${V.col}'],serieFactura:'B',numeroFactura:'f-100',fechaFactura:'2031-04-12'}))`);
+  T('U1 Un número de factura ya usado en una agrupación activa se rechaza aunque cambie la serie (no se sustituye en silencio)', dup.ok === false, dup); }
+/* ===== Hallazgo documentado (NO se corrige todavía): Gerencia de Transporte no tiene oc_ver vetado ===== */
+{ const hp0 = r => ev(`hasPerm({activo:true,rol:'${r}'},'oc_ver')`);
+  const fija = (r, h) => ev(`(()=>{let x=DB.permisos.find(p=>p.rol==='${r}'&&p.permiso==='oc_ver');if(!x){x={rol:'${r}',permiso:'oc_ver',habilitado:false};DB.permisos.push(x);}const o=x.habilitado;x.habilitado=${h};return o;})()`);
+  const antes = hp0('GERENTE_TRANSPORTE'), oGT = fija('GERENTE_TRANSPORTE', true), gtMatriz = hp0('GERENTE_TRANSPORTE'), oT = fija('TORRE', true), torreMatriz = hp0('TORRE');
+  fija('GERENTE_TRANSPORTE', !!oGT); fija('TORRE', !!oT);
+  T('GT1 Hoy Gerencia de Transporte NO tiene oc_ver por defecto, pero NO está vetado: si alguien lo activa en la matriz lo obtendría (Torre sí está vetado). Es el riesgo a decidir', antes === false && gtMatriz === true && torreMatriz === false, [antes, gtMatriz, torreMatriz]); }
 T('Z9 Sin errores de JavaScript al final', N.errs.length === 0, N.errs);
 console.log(filas.join('\n'));
 console.log(`\nTotal: ${ok} OK · ${mal} FAIL`);
