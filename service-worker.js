@@ -2,11 +2,11 @@
    NUNCA guarda datos operativos: las solicitudes a Supabase (otro origen) y cualquier petición que no sea
    un archivo estático de la lista van directo a la red. Sin conexión, la app abre pero avisa y no confirma operaciones.
    Para publicar una versión nueva, cambia VERSION. */
-const VERSION = 'v1.1.4';
+const VERSION = 'v1.2.0';
 const CACHE = 'intransit-interfaz-' + VERSION;
 const ESTATICOS = [
   './', './index.html', './offline.html', './manifest.json', './css/app.css',
-  './js/config.js', './js/vendor/supabase.js', './js/assets.js', './js/catalogos.js', './js/utils.js', './js/engine.js', './js/pwa.js', './js/exportar.js', './js/vendor/jspdf.umd.min.js', './js/vendor/jspdf.plugin.autotable.min.js', './js/backend.js', './js/ui.js', './js/modulos/transporte.js', './js/modulos/comercial.js', './js/modulos/oc.js', './js/modulos/torre.js', './js/modulos/finanzas.js', './js/modulos/admin.js', './js/modulos/ayuda.js', './js/guias-data.js',
+  './js/config.js', './js/vendor/supabase.js', './js/assets.js', './js/catalogos.js', './js/utils.js', './js/engine.js', './js/pwa.js', './js/exportar.js', './js/vendor/jspdf.umd.min.js', './js/vendor/jspdf.plugin.autotable.min.js', './js/backend.js', './js/ui.js', './js/modulos/transporte.js', './js/modulos/comercial.js', './js/modulos/torre.js', './js/modulos/finanzas.js', './js/modulos/admin.js', './js/modulos/ayuda.js', './js/guias-data.js',
   './assets/logos/logo-blanco.png', './assets/logos/logo-color.png', './assets/logos/isologo.png', './assets/logos/isologo-blanco.png',
   './assets/icons/icon-192.png', './assets/icons/icon-512.png', './assets/icons/icon-maskable-512.png', './assets/icons/apple-touch-icon.png',
   './assets/icons/favicon-32.png', './assets/icons/favicon-48.png'

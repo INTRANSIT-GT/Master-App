@@ -61,3 +61,14 @@ El código vive en GitHub; aquí se anota qué se ejecutó en el entorno y cuán
 
 Una sección por despliegue, con fecha, migración/función, versión, motivo y verificación.
 Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
+
+## 2026-10-29 · Retiro del módulo OC y renombre OT → OC
+
+- **Migración aplicada:** `supabase/migrations/039_retirar_oc.sql`.
+  - Se desactivan `oc_ver`, `oc_preparar`, `oc_enviar`, `oc_responder`, `oc_corregir` y `sec_oc`.
+  - Se conserva el historial de `master.ordenes_compra` y el permiso interno `oc_ver_combustible`, que también controla el desglose de combustible en los reportes de agrupación.
+- **Interfaz:** se retira la pestaña/módulo «Órdenes de compra» de Comercial (menú, matriz, historiales y carga de `js/modulos/oc.js`). El flujo que antes se llamaba **OT** ahora se muestra como **OC** en toda la interfaz (botones, avisos, estados e historial); las claves internas (`comercial_ot`, `g.confirmacion.ot`) se conservan para no migrar datos.
+- **Tarifas:** el botón de tarifas pendientes aplica solo los viajes realmente disponibles (no todos los aceptados) y distingue los que necesitan completar el importe OPL; se agregó el acceso «Completar tarifa» al caso concreto.
+- **API desplegada:** versión **94**.
+- **Front publicado:** service worker **v1.2.0**.
+- **Datos de prueba:** `OC-0001` quedó anulada; los viajes `200042`/`200043` quedaron libres. `TAR-3113` completó su importe OPL y el viaje `102901` quedó aplicado.

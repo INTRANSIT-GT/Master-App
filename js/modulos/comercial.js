@@ -51,7 +51,7 @@ BODY.comercial=()=>{
   const selT=S.sel.map(id=>el.find(t=>t.id===id)),cli0=selT[0]&&selT[0].proyecto;
   const conT=selT.filter(t=>nn(t.tarifaCliente)!=null),tot=conT.reduce((a,t)=>a+Number(t.tarifaCliente),0);
   const sinTar=comTrips().filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId&&nn(t.tarifaCliente)==null).length;
-  const bar=canAct?`<div class="selbar"><b>${selT.length} ${selT.length===1?'viaje seleccionado':'viajes seleccionados'}</b><span>${cli0?'· Cliente: <b>'+esc((PROYECTOS.find(p=>p.id===cli0)||{}).cliente)+'</b>':'· Selecciona uno o varios viajes del mismo cliente'}</span>${selT.length?`<span>· ${selT.length===1?(esAsist?'Viaje individual (no hace falta agrupar)':'Factura individual (no hace falta agrupar)'):(esAsist?'Viajes para agrupar':'Factura de viajes agrupados')} · Tarifa: <b>${qfmt(tot)}</b>${selT.length>conT.length?` <span class="warnl">(${selT.length-conT.length} sin tarifa)</span>`:''}</span>`:''}<span class="spacer"></span>${hp('tarifa_registrar')?`<button class="btn sm" data-act="aplicarTarifasTodas">Aplicar tarifas vigentes${sinTar?` (${sinTar} sin tarifa)`:''}</button>`:''}<button class="btn sm ghost" data-act="selClear" ${selT.length?'':'disabled'}>Limpiar</button><button class="btn primary" data-act="facturaOpen" ${selT.length?'':'disabled'}>${esAsist?'AGRUPAR Y GENERAR OT':'FACTURAR'}</button></div>`:'';
+  const bar=canAct?`<div class="selbar"><b>${selT.length} ${selT.length===1?'viaje seleccionado':'viajes seleccionados'}</b><span>${cli0?'· Cliente: <b>'+esc((PROYECTOS.find(p=>p.id===cli0)||{}).cliente)+'</b>':'· Selecciona uno o varios viajes del mismo cliente'}</span>${selT.length?`<span>· ${selT.length===1?(esAsist?'Viaje individual (no hace falta agrupar)':'Factura individual (no hace falta agrupar)'):(esAsist?'Viajes para agrupar':'Factura de viajes agrupados')} · Tarifa: <b>${qfmt(tot)}</b>${selT.length>conT.length?` <span class="warnl">(${selT.length-conT.length} sin tarifa)</span>`:''}</span>`:''}<span class="spacer"></span>${hp('tarifa_registrar')?`<button class="btn sm" data-act="aplicarTarifasTodas">Aplicar tarifas vigentes${sinTar?` (${sinTar} sin tarifa)`:''}</button>`:''}<button class="btn sm ghost" data-act="selClear" ${selT.length?'':'disabled'}>Limpiar</button><button class="btn primary" data-act="facturaOpen" ${selT.length?'':'disabled'}>${esAsist?'AGRUPAR Y GENERAR OC':'FACTURAR'}</button></div>`:'';
   const pendRows=rows.filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId&&!ocReservaDe(t));
   const allSel=canAct&&pendRows.length&&pendRows.every(t=>S.sel.includes(t.id));
   const pg=paginar('com',rows);
@@ -76,16 +76,16 @@ function agrPanelHTML(g){
   const evs=g.evidenciasAutorizacion||[],evUlt=ult?evs.filter(e=>e.pdfVersion===ult.version):[],rzs=g.rechazos||[],rechUlt=!!ult&&rzs.some(x=>x.pdfVersion===ult.version);
   const B=(a,l,c,t)=>`<button class="btn sm ${c||''}" data-act="${a}" data-id="${g.id}"${t?` data-t="${t}"`:''}>${l}</button> `;
   const lstPdf=pdfs.length?pdfs.map((p,i)=>`<li>${agrLink(g,'pdf',i,(p.tipo==='INTERNO'?'Interno':'Cliente')+' · versión '+p.version)} · ${esc(fmtDT(p.en))} · ${esc(p.por)} · ${p.viajes} viaje(s) · ${esc(qfmt(p.total))}${p.motivo?' · '+esc(p.motivo):''}</li>`).join(''):'<li class="mute">Aún no hay reportes generados.</li>';
-  const lstEv=evs.length?evs.map((e,i)=>`<li>${agrLink(g,'ev',i,e.id+' · '+(e.nombre||'evidencia'))} · reporte v${e.pdfVersion} · ${esc(fmtDT(e.en))} · ${esc(e.por)}${e.nota?' · '+esc(e.nota):''}</li>`).join(''):'<li class="mute">Sin evidencia de la OT.</li>';
-  const conf=g.confirmacion?`<div class="alertbox info" style="margin:8px 0"><b>OT recibida</b> · ${esc(g.confirmacion.ot||g.confirmacion.referencia||'—')} · ${esc(g.confirmacion.por)} · ${esc(fmtDT(g.confirmacion.en))} · reporte v${g.confirmacion.pdfVersion} · evidencia(s): ${esc((g.confirmacion.evidencias||[]).join(', '))}</div>`:'';
+  const lstEv=evs.length?evs.map((e,i)=>`<li>${agrLink(g,'ev',i,e.id+' · '+(e.nombre||'evidencia'))} · reporte v${e.pdfVersion} · ${esc(fmtDT(e.en))} · ${esc(e.por)}${e.nota?' · '+esc(e.nota):''}</li>`).join(''):'<li class="mute">Sin evidencia de la OC.</li>';
+  const conf=g.confirmacion?`<div class="alertbox info" style="margin:8px 0"><b>OC recibida</b> · ${esc(g.confirmacion.ot||g.confirmacion.referencia||'—')} · ${esc(g.confirmacion.por)} · ${esc(fmtDT(g.confirmacion.en))} · reporte v${g.confirmacion.pdfVersion} · evidencia(s): ${esc((g.confirmacion.evidencias||[]).join(', '))}</div>`:'';
   const acc=[];
   if(edit&&hp('comercial_agrupar')){acc.push(B('agrPdfOpen','Generar PDF interno','','INTERNO'));acc.push(B('agrPdfOpen','Generar PDF para el cliente','primary','CLIENTE'));}
-  if(edit&&hp('comercial_ot')){acc.push(B('agrEvidOpen','Adjuntar evidencia de la OT','',''));acc.push(`<button class="btn sm ok" data-act="agrConfirmarOpen" data-id="${g.id}" ${(ult&&evUlt.length&&!rechUlt)?'':'disabled title="Requiere el PDF del cliente vigente, su evidencia y que no esté rechazado"'}>Registrar OT</button> `);acc.push(`<button class="btn sm fix" data-act="agrRechazarOpen" data-id="${g.id}" ${(ult&&!rechUlt)?'':'disabled title="Requiere un reporte del cliente vigente sin rechazo"'}>El cliente rechazó</button> `);}
+  if(edit&&hp('comercial_ot')){acc.push(B('agrEvidOpen','Adjuntar evidencia de la OC','',''));acc.push(`<button class="btn sm ok" data-act="agrConfirmarOpen" data-id="${g.id}" ${(ult&&evUlt.length&&!rechUlt)?'':'disabled title="Requiere el PDF del cliente vigente, su evidencia y que no esté rechazado"'}>Registrar OC</button> `);acc.push(`<button class="btn sm fix" data-act="agrRechazarOpen" data-id="${g.id}" ${(ult&&!rechUlt)?'':'disabled title="Requiere un reporte del cliente vigente sin rechazo"'}>El cliente rechazó</button> `);}
   acc.push(B('agrImportes','Importes y tarifas','ghost'));
   return `<dl class="kv" style="margin-bottom:10px">${kvr('Cliente',esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente))}${kvr('Estado',etapaBadge(etapaAgr(g)))}${kvr('Factura',g.numeroFactura?esc((g.serieFactura?g.serieFactura+'-':'')+g.numeroFactura):'<span class="warnl">pendiente</span>')}${kvr('Viajes',String(g.viajeIds.length))}${kvr('Creada por',esc(g.creadoPor||'—')+' · '+esc(fmtDT(g.creadoEn)))}</dl>${conf}
     <h3 style="margin:10px 0 4px">Reportes PDF (se conservan todas las versiones)</h3><ul class="feed" style="margin:0 0 8px">${lstPdf}</ul>
     ${rzs.length?`<h3 style="margin:10px 0 4px">Rechazos del cliente</h3><ul class="feed" style="margin:0 0 8px">${rzs.map((e,i)=>`<li><b>${e.id}</b> · reporte v${e.pdfVersion} · ${esc(fmtDT(e.en))} · ${esc(e.por)} · “${esc(e.motivo)}”${e.path||e.data||e.url?' · '+agrLink(g,'rz',i,'evidencia'):''}</li>`).join('')}</ul>`:''}
-    <h3 style="margin:10px 0 4px">Evidencia de la OT (no se reemplaza)</h3><ul class="feed" style="margin:0 0 8px">${lstEv}</ul>
+    <h3 style="margin:10px 0 4px">Evidencia de la OC (no se reemplaza)</h3><ul class="feed" style="margin:0 0 8px">${lstEv}</ul>
     <div class="acts-wrap">${acc.join('')}${B('agrHistorial','Ver historial','ghost')}</div>`;
 }
 const hsF=()=>({cli:S.hsCli||'',pc:S.hsPcat||'',d:S.hsDesde||'',h:S.hsHasta||'',q:String(S.hsQ||'').trim().toLowerCase()});
@@ -96,7 +96,7 @@ function hsTabla(heads,rows,vacio){
 }
 function historialesHTML(){
   const f=hsF(),sub=S.tab.hs||'agr';
-  const subs=[['agr','Agrupaciones y reportes'],['aut','Autorizaciones y rechazos'],['evid','Evidencias'],['viajes','Viajes']].concat(hp('oc_ver')?[['oc','Órdenes de compra']]:[]);
+  const subs=[['agr','Agrupaciones y reportes'],['aut','Autorizaciones y rechazos'],['evid','Evidencias'],['viajes','Viajes']];
   const k=subs.some(x=>x[0]===sub)?sub:'agr';
   const filtros=`<div class="lfilters" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:10px 0">
     <input type="text" data-flt="hsQ" placeholder="Buscar factura, agrupación, viaje…" value="${esc(S.hsQ||'')}" aria-label="Buscar">
@@ -116,7 +116,7 @@ function historialesHTML(){
   }else if(k==='aut'){
     const ev=[];
     ags.forEach(g=>{
-      if(g.confirmacion&&pasaG(g,dLoc(g.confirmacion.en)))ev.push({en:g.confirmacion.en,g,tipo:'<span class="stc tn-done">OT recibida</span>',por:g.confirmacion.por,pdf:'v'+g.confirmacion.pdfVersion,det:(g.confirmacion.evidencias||[]).map(id=>{const i=(g.evidenciasAutorizacion||[]).findIndex(e=>e.id===id);return i>=0?agrLink(g,'ev',i,id):esc(id);}).join(' · ')});
+      if(g.confirmacion&&pasaG(g,dLoc(g.confirmacion.en)))ev.push({en:g.confirmacion.en,g,tipo:'<span class="stc tn-done">OC recibida</span>',por:g.confirmacion.por,pdf:'v'+g.confirmacion.pdfVersion,det:(g.confirmacion.evidencias||[]).map(id=>{const i=(g.evidenciasAutorizacion||[]).findIndex(e=>e.id===id);return i>=0?agrLink(g,'ev',i,id):esc(id);}).join(' · ')});
       (g.rechazos||[]).forEach((x,i)=>{if(pasaG(g,dLoc(x.en)))ev.push({en:x.en,g,tipo:'<span class="stc tn-alert">Cliente rechazó</span>',por:x.por,pdf:'v'+x.pdfVersion,det:esc(x.motivo)+((x.path||x.data||x.url)?' · '+agrLink(g,'rz',i,x.id):'')});});
     });
     const rows=ev.sort((a,b)=>b.en<a.en?-1:1).map(x=>[`<b>${x.g.id}</b>`,esc((PROYECTOS.find(p=>p.id===x.g.cliente)||{}).cliente||x.g.cliente),esc(proyDe(x.g).join(', ')),x.tipo,esc(x.por)+'<div class="mute small">'+esc(fmtDT(x.en))+'</div>',x.pdf,x.det,hsOk(x.g.numeroFactura)]);
@@ -136,18 +136,13 @@ function historialesHTML(){
     const rows=comTrips().filter(t=>(!f.cli||t.proyecto===f.cli)&&(!f.pc||t.proyectoCat===f.pc)&&hsFecha(f,planD(t))&&(!f.q||(t.id+' '+(t.noViaje||'')+' '+(AG[t.id]?AG[t.id].id+' '+(AG[t.id].numeroFactura||''):'')+' '+(t.ocId||'')).toLowerCase().includes(f.q)))
       .sort((a,b)=>b.id.localeCompare(a.id)).slice(0,300).map(t=>{const g=AG[t.id];return [`<b>#${esc(t.id)}</b>`,esc(cliNombre(t.proyecto)),esc(t.proyectoCat||''),esc(fmtDate(planD(t))),badge(t.estado),hsOk(t.ocId),g?esc(g.id):'<span class="mute">—</span>',g?hsOk(g.numeroFactura):'<span class="mute">—</span>',`<button class="btn sm ghost" data-act="detalle" data-id="${esc(t.id)}">Ver</button>`];});
     tabla=hsTabla(['Viaje','Cliente','Proyecto','Fecha','Estado','OC','Agrupación','Factura',''],rows,'Sin viajes con estos filtros');
-  }else{
-    let ocs=[];try{ocs=API.ordenesCompra(S.user.id);}catch(e){}
-    const rows=ocs.filter(o=>(!f.cli||o.cliente===f.cli)&&(!f.pc||o.proyecto===f.pc)&&hsFecha(f,dLoc(o.preparadoEn))&&(!f.q||(o.id+' '+(o.agrupacionId||'')+' '+((DB.agrupaciones||[]).find(g=>g.id===o.agrupacionId)||{}).numeroFactura).toLowerCase().includes(f.q)))
-      .slice().reverse().map(o=>{const g=(DB.agrupaciones||[]).find(x=>x.id===o.agrupacionId);return [`<b>${esc(o.id)}</b>${o.version>1?' <span class="mute">v'+o.version+'</span>':''}`,esc(o.clienteNombre),esc(o.proyecto),ocEstadoChip(o),esc(o.preparadoPor)+'<div class="mute small">'+esc(fmtDT(o.preparadoEn))+'</div>',o.respuesta?esc(o.respuesta.por)+'<div class="mute small">'+esc(fmtDT(o.respuesta.en))+'</div>':'<span class="mute">—</span>',g?esc(g.id+(g.numeroFactura?' · '+g.numeroFactura:'')):'<span class="mute">—</span>',`<button class="btn sm ghost" data-act="ocDetalle" data-id="${esc(o.id)}">Ver historial</button>`];});
-    tabla=hsTabla(['Orden','Cliente','Proyecto','Estado','Preparó · fecha','Respuesta del cliente','Agrupación · factura',''],rows,'Sin órdenes de compra con estos filtros');
   }
   return `<div class="chips">${subs.map(x=>`<button class="chip" aria-pressed="${x[0]===k}" data-act="hsSub" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>${filtros}${tabla}`;
 }
 
 /* ---- Pestaña «Facturas / Agrupaciones»: la MISMA lista para Analista, Facturación y la vista general, con filtros reales ---- */
-const EST_ANALISTA=[['','Todas las vigentes'],['PREPARADA','Preparadas (sin reporte)'],['REPORTE','Reporte enviado · espera OT'],['RECHAZADA','Rechazadas por el cliente'],['CONFIRMADA','Con OT'],['ENVIADO_A_FACTURAR','En facturación (sin factura enviada)'],['FACTURADO','Facturas enviadas'],['COBRO_PARCIAL','Cobro parcial'],['COBRADO','Cobradas'],['ANULADA','Anuladas']];
-const EST_FACT=[['','Todas las recibidas'],['CONFIRMADA','Pendientes: facturar (con OT)'],['ENVIADO_A_FACTURAR','Pendientes: registrar envío de la factura'],['FACTURADO','Facturas enviadas'],['COBRO_PARCIAL','Cobro parcial'],['COBRADO','Cobradas'],['ANULADA','Anuladas']];
+const EST_ANALISTA=[['','Todas las vigentes'],['PREPARADA','Preparadas (sin reporte)'],['REPORTE','Reporte enviado · espera OC'],['RECHAZADA','Rechazadas por el cliente'],['CONFIRMADA','Con OC'],['ENVIADO_A_FACTURAR','En facturación (sin factura enviada)'],['FACTURADO','Facturas enviadas'],['COBRO_PARCIAL','Cobro parcial'],['COBRADO','Cobradas'],['ANULADA','Anuladas']];
+const EST_FACT=[['','Todas las recibidas'],['CONFIRMADA','Pendientes: facturar (con OC)'],['ENVIADO_A_FACTURAR','Pendientes: registrar envío de la factura'],['FACTURADO','Facturas enviadas'],['COBRO_PARCIAL','Cobro parcial'],['COBRADO','Cobradas'],['ANULADA','Anuladas']];
 const proyDeAgr=g=>[...new Set(g.viajeIds.map(id=>{const t=DB.trips.find(x=>x.id===id);return t?t.proyectoCat:'';}).filter(Boolean))];
 function agrFiltradas(ags,modo){
   const est=(S.fgEst||''),q=String(S.fgQ||'').trim().toLowerCase();
@@ -196,11 +191,11 @@ function agrTable(list,acts){
   if(okA){
     ac+=B('agrHistorial','Historial','ghost')+B('agrImportes','Importes','ghost');
     if(g.fase==='PREPARADA'){
-      ac+=B('agrPanel','Reportes y OT',g.confirmacion?'':'primary');
+      ac+=B('agrPanel','Reportes y OC',g.confirmacion?'':'primary');
       if(hp('comercial_ot')&&!g.confirmacion){
         const cli=(g.pdfs||[]).filter(p=>p.tipo==='CLIENTE'),ult=cli[cli.length-1];
         const evs=ult?(g.evidenciasAutorizacion||[]).filter(e=>e.pdfVersion===ult.version):[];
-        if(ult&&evs.length)ac+=B('agrConfirmarOpen','Registrar OT','primary');
+        if(ult&&evs.length)ac+=B('agrConfirmarOpen','Registrar OC','primary');
       }
       if(g.confirmacion&&hp('facturas_emitir')){if(!g.numeroFactura||!g.fechaFactura)ac+=B('facturaEditar','Datos de factura','primary');else ac+=B('agrRecibir','Enviar a facturación','primary');}
     }
@@ -212,14 +207,14 @@ function agrTable(list,acts){
     if(g.fase==='PREPARADA'?(g.confirmacion?hp('comercial_ot'):hp('comercial_agrupar')):hp('comercial_anular'))ac+=B('anularOpen',g.fase==='PREPARADA'?'Descartar':'Anular','fix');
   }
   return `<tr class="${okA?'':'dim'}"><td><b>${g.id}</b></td><td>${g.modalidad==='AGRUPADA'?'Agrupada':'Individual'}</td><td>${esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente)}</td><td title="Viajes: ${g.viajeIds.join(', ')}">${g.viajeIds.slice(0,8).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${g.viajeIds.length>8?' <span class="mute">…</span>':''} <b class="mute">[${g.viajeIds.length}]</b>${reas}</td>
-  <td>${g.numeroFactura?`<b>${esc(g.numeroFactura)}</b>`:(g.confirmacion?`<span class="mute">OT ${esc(g.confirmacion.ot||g.confirmacion.referencia||'—')}</span>`:'<span class="warnl">pendiente</span>')}</td><td>${g.fechaFactura?fmtDate(g.fechaFactura):'—'}</td>
+  <td>${g.numeroFactura?`<b>${esc(g.numeroFactura)}</b>`:(g.confirmacion?`<span class="mute">OC ${esc(g.confirmacion.ot||g.confirmacion.referencia||'—')}</span>`:'<span class="warnl">pendiente</span>')}</td><td>${g.fechaFactura?fmtDate(g.fechaFactura):'—'}</td>
   <td style="text-align:right">${g.fase==='PREPARADA'?'<span class="mute">sin enviar</span>':qfmt(g.importeEnviado)}</td><td>${g.envio?`${esc(g.envio.por)}<br><span class="mute">${fmtDT(g.envio.en)}</span>`:'—'}</td>
   <td style="white-space:normal;min-width:170px">${g.emision?`${fmtDate(g.emision.fecha)}<br><span class="mute">${esc(g.emision.evidencia)}</span>`:'<span class="mute">Sin emitir</span>'}</td>
   <td style="text-align:right">${g.fase==='EMITIDA'?qfmt(fa):'—'}</td><td style="text-align:right">${g.fase==='EMITIDA'?qfmt(cob):'—'}</td><td style="text-align:right">${fa==null?'—':qfmt(r2(fa-cob))}</td>
   <td>${etapaBadge(et)}</td><td style="white-space:normal;min-width:190px;font-size:12px">${g.anulada?`<span class="mute">Anulada por ${esc(g.anulada.por)} · ${fmtDT(g.anulada.en)} · “${esc(g.anulada.motivo)}”</span><br>`:''}${(g.cobros||[]).map(c=>`<span class="mute">Cobro ${qfmt(c.monto)} · ${fmtDate(c.fecha)} · ${esc(c.referencia)}</span><br>`).join('')}${g.correcciones.map(c=>`<span class="mute">Nº corregido: ${esc(c.anterior)} → ${esc(c.nuevo)} (${esc(c.por)})</span><br>`).join('')}</td>
   ${acts?`<td class="stkR" style="white-space:normal;min-width:220px"><div class="acts-wrap">${ac}</div></td>`:''}</tr>`;}).join('')}
   </tbody><tfoot><tr><td colspan="6"><b>Totales (cada factura se cuenta una sola vez; las preparadas no suman)</b></td><td style="text-align:right"><b>${qfmt(sum(g=>g.importeEnviado))}</b></td><td colspan="2"></td><td style="text-align:right"><b>${qfmt(sum(g=>g.fase==='EMITIDA'?nn(g.importeFacturado):0))}</b></td><td style="text-align:right"><b>${qfmt(sum(g=>cobradoDe(g)))}</b></td><td style="text-align:right"><b>${emi.length?qfmt(r2(emi.reduce((s,g)=>s+g.importeFacturado-cobradoDe(g),0))):'—'}</b></td><td colspan="${acts?3:2}"></td></tr></tfoot></table></div>${paginador('agr',pg)}
-  <div class="mute" style="margin-top:8px;font-size:13px"><b>Preparada</b> = datos en armado, no enviada. <b>Con OT</b> = el cliente entregó su orden de trabajo. <b>Enviada a facturación</b> = validada y enviada. <b>Emitida</b> = factura oficial con su foto. <b>Cobrada</b> = dinero recibido. Son etapas distintas: no se marca una factura como emitida sin evidencia.</div>`;
+  <div class="mute" style="margin-top:8px;font-size:13px"><b>Preparada</b> = datos en armado, no enviada. <b>Con OC</b> = el cliente entregó su orden de trabajo. <b>Enviada a facturación</b> = validada y enviada. <b>Emitida</b> = factura oficial con su foto. <b>Cobrada</b> = dinero recibido. Son etapas distintas: no se marca una factura como emitida sin evidencia.</div>`;
 }
 /* ---- Facturación: historial de lo enviado a facturar, con filtros combinables ---- */
 function weekRange(v){
@@ -309,7 +304,7 @@ function tarifasVista(){
   let memRows=[];try{memRows=API.mem(S.user.id);}catch(e){}
   const memUlt=memRows.length?memRows[memRows.length-1]:null;
   return `${sin.length?`<div class="alertbox" style="margin-bottom:12px"><b>${sin.length} ${sin.length===1?'viaje sin tarifa válida':'viajes sin tarifa válida'}</b> · se requiere revisión; no se inventan importes.
-    <ul style="margin:6px 0 0 18px;padding:0">${sin.slice(0,8).map(x=>`<li><button class="linkbtn" data-act="detalle" data-id="${x.id}">#${x.id}</button> · ${esc(x.cliente)} · ${esc(x.proyecto)}: ${esc(x.motivo)}</li>`).join('')}${sin.length>8?`<li class="mute">… y ${sin.length-8} más</li>`:''}</ul>
+    <ul style="margin:6px 0 0 18px;padding:0">${sin.slice(0,8).map(x=>`<li><button class="linkbtn" data-act="detalle" data-id="${x.id}">#${x.id}</button> · ${esc(x.cliente)} · ${esc(x.proyecto)}: ${esc(x.motivo)}${x.faltaOpl&&x.tarifaId&&hp('tarifas_editar')?` <button class="btn sm" data-act="tarifaOpen" data-id="${x.tarifaId}">Completar tarifa</button>`:''}</li>`).join('')}${sin.length>8?`<li class="mute">… y ${sin.length-8} más</li>`:''}</ul>
     ${disp&&hp('tarifa_registrar')?`<div style="margin-top:8px"><button class="btn sm primary" data-act="aplicarTarifasTodas">Aplicar las ${disp} tarifas vigentes disponibles</button></div>`:''}</div>`:''}
     <div class="lfilters" style="grid-template-columns:2fr repeat(4,1fr)"><input type="text" data-live="tfQ" placeholder="Buscar por cliente, proyecto, ruta, origen, destino o capacidad" value="${esc(S.tfQ)}" aria-label="Buscar">
     <select data-flt="tfCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.tfCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>
@@ -326,15 +321,14 @@ function tarifasVista(){
 /* TARIFAS es una sección del módulo COMERCIAL (antes era una pestaña dentro de Facturación). */
 VIEWS.tarifas=()=>`<div class="inner" style="max-width:1500px">${pageHead('TARIFAS','Tarifa de cobro al cliente por ruta, capacidad y vigencia',hp('tarifas_crear')?`<button class="btn primary" data-act="tarifaOpen" data-id="">${icon('plus',18)} Nueva tarifa</button>`:'')}${tarifasVista()}</div>`;
 function comView(modo){
-  const verOc=hp('oc_ver')&&allowed('oc');   /* pestaña de OC dentro de este mismo espacio (no es otro módulo) */
   const TK=modo==='analista'?'comA':modo==='factcom'?'comF':'com';
   const canAct=hp('comercial_agrupar');
-  const T={bandeja:{k:'bandeja',l:'Pendientes de gestión'},oc:{k:'oc',l:'Órdenes de compra'},
+  const T={bandeja:{k:'bandeja',l:'Pendientes de gestión'},
     fact:{k:'fact',l:modo==='analista'?'Agrupaciones':modo==='factcom'?'Por facturar y facturadas':'Facturas'},
     hist:{k:'hist',l:'Facturación'},historial:{k:'historial',l:'Historiales'},reg:{k:'reg',l:'Registros anteriores'}};
-  const orden=modo==='analista'?['bandeja','oc','fact','historial','reg']:modo==='factcom'?['fact','hist','oc','historial','reg']:['bandeja','oc','fact','hist','historial','reg'];
-  const tabsV=orden.filter(x=>x!=='oc'||verOc).map(x=>T[x]);
-  const k=tabsV.some(t=>t.k===S.tab[TK])?S.tab[TK]:((verOc&&hp('oc_preparar')&&!canAct)?'oc':(modo==='factcom'?'fact':'bandeja'));
+  const orden=modo==='analista'?['bandeja','fact','historial','reg']:modo==='factcom'?['fact','hist','historial','reg']:['bandeja','fact','hist','historial','reg'];
+  const tabsV=orden.map(x=>T[x]);
+  const k=tabsV.some(t=>t.k===S.tab[TK])?S.tab[TK]:(modo==='factcom'?'fact':'bandeja');
   const acts=canAct||hp('facturas_emitir')||hp('comercial_corregir')||hp('comercial_anular')||hp('cobros_registrar')||hp('comercial_ot');
   let ags=[];try{ags=API.agrupaciones(S.user.id);}catch(e){}
   let body;
@@ -344,8 +338,6 @@ function comView(modo){
     body=factTabHTML(ags,acts,modo);
   }else if(k==='historial'){
     body=historialesHTML();
-  }else if(k==='oc'){
-    body=ocPanelHTML();
   }else if(k==='hist'){
     body=`${histFiltros()}${esAdm()?viajeDetalleFact():''}<div id="vb">${BODY.hist()}</div>`;
   }else{
@@ -353,9 +345,9 @@ function comView(modo){
     body=`<h2 style="margin-bottom:10px">Facturas anuladas</h2>${agrTable(ags.filter(g=>g.estado==='ANULADA').slice().reverse(),false)}<h2 style="margin:22px 0 10px">Movimientos comerciales</h2><div class="card">${ev.length?`<ul class="feed">${ev.slice().reverse().slice(0,60).map(x=>`<li><span class="avatar" style="width:30px;height:30px;font-size:12px">${initials(x.por)}</span><div><b>${esc(x.por)}</b> · ${esc(x.accion)}<br><span class="mute">${esc(x.ref)}${x.campo&&x.nuevo?' · '+esc(x.campo)+': '+esc(x.anterior||'(vacío)')+' → '+esc(x.nuevo):''}${x.motivo?' · “'+esc(x.motivo)+'”':''}</span></div><span class="when">${fmtDT(x.en)}</span></li>`).join('')}</ul>`:'<div class="mute">Sin movimientos.</div>'}</div>`;
   }
   const tit=modo==='analista'?'ASISTENTE COMERCIAL':modo==='factcom'?'FACTURACIÓN COMERCIAL':'COMERCIAL';
-  const sub=modo==='analista'?'Viajes ya liquidados: agrúpalos por cliente, genera el reporte, envíalo al cliente y registra el número de OT.':modo==='factcom'?'Agrupaciones con OT: registra número y fecha de factura, sube la foto de la factura y valida el cobro.':(canAct?'Selecciona uno o varios viajes del mismo cliente y factúralos. Agrupar es opcional.':'Consulta de gestión comercial.');
+  const sub=modo==='analista'?'Viajes ya liquidados: agrúpalos por cliente, genera el reporte, envíalo al cliente y registra el número de OC.':modo==='factcom'?'Agrupaciones con OC: registra número y fecha de factura, sube la foto de la factura y valida el cobro.':(canAct?'Selecciona uno o varios viajes del mismo cliente y factúralos. Agrupar es opcional.':'Consulta de gestión comercial.');
   return `<div class="inner" style="max-width:1500px">${pageHead(tit,sub)}
-    ${modo==='factcom'?'<div class="alertbox info" style="margin-bottom:12px">La <b>OT</b> la registra el Asistente Comercial. Aquí solo aparecen las agrupaciones que ya tienen OT; si falta alguna, pídesela al Asistente.</div>':''}
+    ${modo==='factcom'?'<div class="alertbox info" style="margin-bottom:12px">La <b>OC</b> la registra el Asistente Comercial. Aquí solo aparecen las agrupaciones que ya tienen OC; si falta alguna, pídesela al Asistente.</div>':''}
     ${tabs(TK,tabsV,k,null)}<div style="height:14px"></div>${body}</div>`;
 }
 VIEWS.comercial=()=>comView('');
@@ -375,17 +367,17 @@ Object.assign(ACT,{
     const sinTar=ts.filter(t=>nn(t.tarifaCliente)==null);
     if(sinTar.length){toast(`No se puede agrupar: ${sinTar.map(t=>'#'+t.id).join(', ')} sin tarifa de cobro. Aplica o crea la tarifa en Tarifas.`,'err');return;}
     const nombre=(PROYECTOS.find(p=>p.id===cli)||{}).cliente,ids=ts.map(t=>t.id),tot=ts.reduce((a,t)=>a+(nn(t.tarifaCliente)||0),0);
-    formM({title:esAsist?(ts.length===1?'Agrupar viaje y generar OT':'Agrupar viajes y generar OT'):(ts.length===1?'Facturar un solo viaje':'Facturar viajes agrupados'),
-      text:esAsist?`Cliente: <b>${esc(nombre)}</b> · ${ts.length} ${ts.length===1?'viaje':'viajes'}. Se crea el grupo; después generas el reporte para el cliente y registras la OT.`:`Cliente: <b>${esc(nombre)}</b> · ${ts.length} ${ts.length===1?'viaje (factura individual, sin agrupar)':'viajes (se facturan juntos)'}`,
+    formM({title:esAsist?(ts.length===1?'Agrupar viaje y generar OC':'Agrupar viajes y generar OC'):(ts.length===1?'Facturar un solo viaje':'Facturar viajes agrupados'),
+      text:esAsist?`Cliente: <b>${esc(nombre)}</b> · ${ts.length} ${ts.length===1?'viaje':'viajes'}. Se crea el grupo; después generas el reporte para el cliente y registras la OC.`:`Cliente: <b>${esc(nombre)}</b> · ${ts.length} ${ts.length===1?'viaje (factura individual, sin agrupar)':'viajes (se facturan juntos)'}`,
       summary:miniTable(['Viaje','Ruta','Piloto','Tarifa'],ts.map(t=>[`<b>#${t.id}</b>`,rutaHTML(t),esc(J(t).piloto),nn(t.tarifaCliente)==null?'<span class="warnl">⚠ sin tarifa</span>':qfmt(t.tarifaCliente)]),['Total','','',qfmt(tot)]),
       fields:[],
       buttons:[{label:esAsist?'CREAR GRUPO':'CREAR AGRUPACIÓN',act:'facturaPrep',cls:'primary'}],
       id:cli,data:{}});
   },
-  async facturaPrep(d){const r=await run(()=>API.prepararFactura(S.user.id,{cliente:d.id,viajeIds:S.sel.slice()}),g=>`Agrupación ${g.id} creada. Genera el reporte para el cliente y registra la OT cuando te la envíe.`,true);if(r.ok){S.sel=[];afterWrite();}},
+  async facturaPrep(d){const r=await run(()=>API.prepararFactura(S.user.id,{cliente:d.id,viajeIds:S.sel.slice()}),g=>`Agrupación ${g.id} creada. Genera el reporte para el cliente y registra la OC cuando te la envíe.`,true);if(r.ok){S.sel=[];afterWrite();}},
   async facturaEditar(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
-    formM({title:`Datos de factura · ${g.id}`,text:`${g.viajeIds.length} ${g.viajeIds.length===1?'viaje':'viajes'} · ${g.modalidad==='AGRUPADA'?'agrupados':'factura individual'} · OT ${esc((g.confirmacion&&(g.confirmacion.ot||g.confirmacion.referencia))||'—')}. Registra serie, número y fecha de la factura.`,
+    formM({title:`Datos de factura · ${g.id}`,text:`${g.viajeIds.length} ${g.viajeIds.length===1?'viaje':'viajes'} · ${g.modalidad==='AGRUPADA'?'agrupados':'factura individual'} · OC ${esc((g.confirmacion&&(g.confirmacion.ot||g.confirmacion.referencia))||'—')}. Registra serie, número y fecha de la factura.`,
       fields:[{k:'serieFactura',label:'Serie de factura',req:1},{k:'numeroFactura',label:'Número de factura',req:1},{k:'fechaFactura',label:'Fecha de la factura',type:'date',req:1}],
       live:x=>faltantesEnvio(g.cliente,g.viajeIds,x.numeroFactura,x.fechaFactura,g.id,x.serieFactura),
       buttons:[{label:'GUARDAR',act:'facturaEditarGuardar',cls:'primary'}],
@@ -421,7 +413,7 @@ Object.assign(ACT,{
   async agrPanel(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
     let gg=g;try{gg=API.agrupaciones(S.user.id).find(x=>x.id===d.id)||g;}catch(e){}
-    formM({title:`Agrupación ${gg.id} · reportes y OT del cliente`,summary:agrPanelHTML(gg),ancho:'900px',noCancel:true,ok:'Cerrar',act:'closeModal'});
+    formM({title:`Agrupación ${gg.id} · reportes y OC del cliente`,summary:agrPanelHTML(gg),ancho:'900px',noCancel:true,ok:'Cerrar',act:'closeModal'});
   },
   async agrHistorial(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
@@ -450,9 +442,9 @@ Object.assign(ACT,{
     }catch(e){if(S.modal){S.modal.err=e.message;render();}else toast('No se pudo generar el PDF: '+e.message,'err');}
   },
   async agrEvidOpen(d){
-    formM({title:`Evidencia de la OT · ${d.id}`,text:'Adjunta la captura del correo, la orden de trabajo o el mensaje con que el cliente entregó la OT. Queda con tu usuario, fecha y hora; no se puede reemplazar ni borrar.',fields:[{k:'archivo',label:'Captura o archivo (imagen o PDF)',type:'file',req:1},{k:'nota',label:'Nota (opcional)'}],data:{archivo:'',nota:''},ok:'ADJUNTAR EVIDENCIA',act:'agrEvidOk',id:d.id});
+    formM({title:`Evidencia de la OC · ${d.id}`,text:'Adjunta la captura del correo, la orden de trabajo o el mensaje con que el cliente entregó la OC. Queda con tu usuario, fecha y hora; no se puede reemplazar ni borrar.',fields:[{k:'archivo',label:'Captura o archivo (imagen o PDF)',type:'file',req:1},{k:'nota',label:'Nota (opcional)'}],data:{archivo:'',nota:''},ok:'ADJUNTAR EVIDENCIA',act:'agrEvidOk',id:d.id});
   },
-  async agrEvidOk(d){const m=S.modal.data;const r=await run(()=>API.agrAdjuntarEvidencia(S.user.id,d.id,{archivo:m.archivo,nota:m.nota}),'Evidencia de la OT adjuntada.',true);if(r.ok){afterWrite();ACT.agrPanel({id:d.id});}},
+  async agrEvidOk(d){const m=S.modal.data;const r=await run(()=>API.agrAdjuntarEvidencia(S.user.id,d.id,{archivo:m.archivo,nota:m.nota}),'Evidencia de la OC adjuntada.',true);if(r.ok){afterWrite();ACT.agrPanel({id:d.id});}},
   async agrRechazarOpen(d){
     formM({title:`El cliente rechazó el reporte · ${d.id}`,text:'Registra el rechazo del reporte vigente con su motivo (y la captura del cliente, si la tienes). La agrupación sigue en preparación para corregirla y generar una nueva versión; las versiones y evidencias anteriores se conservan.',fields:[{k:'motivo',label:'Motivo del rechazo',type:'textarea',req:1},{k:'archivo',label:'Captura o correo del cliente (opcional)',type:'file'}],data:{motivo:'',archivo:''},ok:'REGISTRAR RECHAZO',okCls:'fix',act:'agrRechazarOk',id:d.id});
   },
@@ -461,13 +453,13 @@ Object.assign(ACT,{
     let r;try{r=API.agrImportes(S.user.id,d.id);}catch(e){toast(e.message,'err');return;}
     const fila=l=>`<tr><td>${esc(fmtDate(l.fecha))}</td><td>#${esc(l.noViaje)}</td><td>${esc(l.placa||'—')}</td><td style="text-align:right">${qfmt(l.tarifa)}</td>${r.combustibleVisible?`<td style="text-align:right">${qfmt(l.combustible)}</td>`:''}<td style="text-align:right">${qfmt(l.cobro)}</td></tr>`;
     const tabla=(ls,tot)=>ls.length?`<div class="xlwrap"><table class="xl"><thead><tr><th>Fecha</th><th>Viaje</th><th>Placa</th><th>Tarifa</th>${r.combustibleVisible?'<th>Tarifa de combustible</th>':''}<th>Cobro</th></tr></thead><tbody>${ls.map(fila).join('')}</tbody><tfoot><tr><td colspan="${r.combustibleVisible?5:4}"><b>Total</b></td><td style="text-align:right"><b>${qfmt(tot)}</b></td></tr></tfoot></table></div>`:'<div class="mute">Sin líneas.</div>';
-    const dif=r.diferencias.length?`<div class="alertbox warn" style="margin:8px 0"><b>Atención:</b> ${r.confirmada?'después de la OT':'respecto del reporte generado'} hay diferencias con el tarifario vigente. La agrupación NO se modifica; se conserva el importe autorizado.<ul>${r.diferencias.map(x=>`<li>#${esc(x.noViaje||x.viajeId)}: ${esc(x.motivo)}${x.autorizado!=null?` (autorizado ${qfmt(x.autorizado)} · vigente ${qfmt(x.vigente)})`:''}</li>`).join('')}</ul></div>`:'';
+    const dif=r.diferencias.length?`<div class="alertbox warn" style="margin:8px 0"><b>Atención:</b> ${r.confirmada?'después de la OC':'respecto del reporte generado'} hay diferencias con el tarifario vigente. La agrupación NO se modifica; se conserva el importe autorizado.<ul>${r.diferencias.map(x=>`<li>#${esc(x.noViaje||x.viajeId)}: ${esc(x.motivo)}${x.autorizado!=null?` (autorizado ${qfmt(x.autorizado)} · vigente ${qfmt(x.vigente)})`:''}</li>`).join('')}</ul></div>`:'';
     formM({title:`Importes y tarifas · ${d.id}${r.numeroFactura?' · '+r.numeroFactura:''}`,summary:`${dif}${r.pdfVersion?`<h3 style="margin:6px 0">Autorizado por el cliente — reporte v${r.pdfVersion}${r.confirmada?'':' (aún sin confirmar)'}</h3>${tabla(r.autorizadas,r.totalAutorizado)}`:'<div class="mute">Todavía no hay un reporte del cliente generado.</div>'}<h3 style="margin:12px 0 6px">Tarifario vigente hoy (solo consulta)</h3>${tabla(r.vigentes,r.totalVigente)}${r.facturado?`<h3 style="margin:12px 0 6px">Facturado</h3><div>Total: <b>${qfmt(r.facturado.total)}</b></div>`:''}`,ancho:'980px',noCancel:true,ok:'Cerrar',act:'closeModal'});
   },
   async agrConfirmarOpen(d){
-    formM({title:`Registrar OT del cliente · ${d.id}`,text:'Escribe el número de OT que entregó el cliente. Quedan tu usuario, la fecha y la hora, la evidencia y la versión del reporte. Con la OT, Facturación puede continuar.',fields:[{k:'ot',label:'Número de OT',req:1}],data:{ot:''},ok:'REGISTRAR OT',okCls:'ok',act:'agrConfirmarOk',id:d.id});
+    formM({title:`Registrar OC del cliente · ${d.id}`,text:'Escribe el número de OC que entregó el cliente. Quedan tu usuario, la fecha y la hora, la evidencia y la versión del reporte. Con la OC, Facturación puede continuar.',fields:[{k:'ot',label:'Número de OC',req:1}],data:{ot:''},ok:'REGISTRAR OC',okCls:'ok',act:'agrConfirmarOk',id:d.id});
   },
-  async agrConfirmarOk(d){const r=await run(()=>API.confirmarCliente(S.user.id,d.id,{ot:S.modal.data.ot}),`Agrupación ${d.id}: OT registrada. Facturación ya puede continuar.`,true);if(r.ok){afterWrite();}},
+  async agrConfirmarOk(d){const r=await run(()=>API.confirmarCliente(S.user.id,d.id,{ot:S.modal.data.ot}),`Agrupación ${d.id}: OC registrada. Facturación ya puede continuar.`,true);if(r.ok){afterWrite();}},
   async agrRecibir(d){const r=await run(()=>API.enviarFactura(S.user.id,d.id),g=>`Agrupación ${g.id} en facturación (factura ${g.numeroFactura}). Registra el envío de la factura con su comprobante cuando la envíes.`);if(r.ok)afterWrite();},
   async agrDetalle(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
