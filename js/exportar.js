@@ -210,6 +210,37 @@ async function expFactPdf(o){
   return d;
 }
 
+/* ---------- Torre de Control · Vista general (PDF) ----------
+   Mismo estilo que Facturación/Agrupaciones: logo, azul corporativo, helvetica, tablas con rejilla, encabezado repetido y pie con paginación.
+   Recibe TODAS las filas ya filtradas (no la página visible) y las columnas de la vista general. */
+async function expTorrePdf(o){
+  if(!o||!o.filas||!o.filas.length)throw new Error('SIN_DATOS');
+  if(!(window.jspdf&&window.jspdf.jsPDF))throw new Error('SIN_PDF');
+  const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'pt',format:'a3',compress:true}),W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=24;
+  const AZ=[0,86,151],CL=[232,242,250];
+  const logo=await expLogo();
+  if(logo){const lw=118,lh=lw*logo.h/logo.w;doc.addImage(logo.url,'PNG',M,22,lw,lh);}
+  doc.setFont('helvetica','normal').setFontSize(8).setTextColor(90);
+  doc.text(`Generado: ${expFechaHora(new Date().toISOString())}`,W-M,30,{align:'right'});doc.text(`Generado por: ${expPq(S.user&&S.user.nombre)||'-'}`,W-M,41,{align:'right'});
+  doc.setFont('helvetica','bold').setFontSize(16).setTextColor(...AZ).text('Torre de Control · Vista general',M,84);
+  doc.setFont('helvetica','normal').setFontSize(8.5).setTextColor(60);
+  const ftl=doc.splitTextToSize(expPq('Filtros aplicados: '+(o.filtros||[]).map(f=>f[0]+': '+f[1]).join('  |  ')+'  |  Total: '+o.filas.length+(o.filas.length===1?' viaje':' viajes')),W-2*M);
+  doc.text(ftl,M,99);
+  const y=99+ftl.length*11+6,n=o.cab.length;
+  /* 21 columnas: se usa A3 horizontal para que la letra siga legible; el texto se ajusta dentro de la celda (nunca se corta ni se encima) */
+  const cw=(W-2*M)/n,cs={};o.cab.forEach((c,i)=>{cs[i]={cellWidth:i===0?46:i===n-1?58:undefined};});
+  doc.autoTable({theme:'grid',startY:y,margin:{left:M,right:M,top:M,bottom:34},tableWidth:W-2*M,rowPageBreak:'avoid',
+    styles:{font:'helvetica',fontSize:6.8,cellPadding:2.5,lineColor:[208,215,222],lineWidth:.4,overflow:'linebreak',valign:'middle'},
+    headStyles:{fillColor:AZ,textColor:255,fontStyle:'bold',halign:'center',valign:'middle',fontSize:6.8},alternateRowStyles:{fillColor:[247,250,253]},
+    columnStyles:cs,showHead:'everyPage',head:[o.cab.map(expPq)],body:o.filas.map(r=>r.map(expPq)),
+    didParseCell:h=>{if(h.section==='body'&&h.column.index===n-1)h.cell.styles.fontStyle='bold';}});
+  const pgs=doc.getNumberOfPages();
+  for(let i=1;i<=pgs;i++){doc.setPage(i);doc.setFont('helvetica','normal').setFontSize(7.5).setTextColor(120);
+    doc.text('In Transit · innovative outsourcing  ·  Torre de Control: vista general',M,H-16);doc.text(`Página ${i} de ${pgs}`,W-M,H-16,{align:'right'});}
+  doc.save(`Torre_vista_general_${expSello()}.pdf`);
+  return {filas:o.filas.length,paginas:pgs};
+}
+
 /* ---------- Orden de compra (PDF) ----------
    Las columnas y los valores salen de ocColumnas/ocCelda (engine.js): son las mismas de la vista previa. El PDF se
    conserva (queda guardado en el almacenamiento privado), así que aquí solo se construye; guardarlo es otro paso. */

@@ -18,7 +18,7 @@ const torreMotivo=t=>!hp('viajes_estatus_torre')?'tu perfil no tiene el permiso 
 const torreAccion=t=>!!clienteDe(t).torreEstatus&&!!TORRE_SIGUIENTE[t.estado];
 function torreList(){
   const base=vis().filter(t=>!S.tProy||t.proyecto===S.tProy),k=S.tab.torre||'curso',cur=TT.find(x=>x.k===k)||TT[0],q=S.q.trim().toLowerCase();
-  let l=base.filter(cur.f).filter(t=>!torreGen()||torreFechaOk(t)).filter(t=>!q||(t.id+' '+(J(t).piloto||'')+' '+(J(t).f.placa||'')+' '+(J(t).cliente||'')+' '+(J(t).destino||'')+' '+((ESTADOS[t.estado]||{}).l||'')+(torreGen()?' '+(t.proyectoCat||'')+' '+(t.origen||'')+' '+(t.destino||'')+' '+torreRutaTxt(t):'')).toLowerCase().includes(q));
+  let l=base.filter(cur.f).filter(t=>!torreGen()||torreFechaOk(t)).filter(t=>!torreGen()||!S.tEst||t.estado===S.tEst).filter(t=>!q||(t.id+' '+(J(t).piloto||'')+' '+(J(t).f.placa||'')+' '+(J(t).cliente||'')+' '+(J(t).destino||'')+' '+((ESTADOS[t.estado]||{}).l||'')+(torreGen()?' '+(t.proyectoCat||'')+' '+(t.origen||'')+' '+(t.destino||'')+' '+torreRutaTxt(t):'')).toLowerCase().includes(q));
   l.sort((a,b)=>a.proyecto.localeCompare(b.proyecto)||a.id.localeCompare(b.id));
   return l;
 }
@@ -54,12 +54,16 @@ function torreHorarios(list){
 const torreGen=()=>S.navK==='general';
 /* Filtros por FECHA DEL VIAJE (fecha plan), no por ningún horario. Fecha específica, «desde» y «hasta» se combinan entre sí y con la búsqueda. */
 const torreFiltrosFecha=()=>!!(S.tDia||S.tDesde||S.tHasta);
+/* Filtro por estatus real del viaje (vista general). Vacío = «Todos los estatus». */
+const TORRE_ESTATUS=['PLANIFICADO','EN_RUTA','ENTREGADO','LIQUIDADO','ACEPTADO','RECHAZADO','FACTURADO','COBRADO'];
+const torreEstActivo=()=>torreGen()&&!!S.tEst&&!!ESTADOS[S.tEst];
+const torreHayFiltros=()=>!!(torreFiltrosFecha()||S.q.trim()||torreEstActivo());
 const torreFechaOk=t=>{if(!torreFiltrosFecha())return true;const f=planD(t);if(!f)return false;return (!S.tDia||f===S.tDia)&&(!S.tDesde||f>=S.tDesde)&&(!S.tHasta||f<=S.tHasta);};
 const torreRutaTxt=t=>{const r=DB.rutas.find(x=>x.id===t.rutaId);if(!r)return t.sinRuta?'Sin ruta':'—';return r.nombre||((r.origen&&r.destino)?`${r.origen} → ${r.destino}`:(r.codigo||t.rutaId||'—'));};
 /* Estatus editable: solo el paso siguiente que ya permiten las reglas de Torre (mismo permiso, mismos clientes autorizados y mismas validaciones del servidor). */
 const torreEstatusEditable=t=>hp('viajes_estatus_torre')&&torreAccion(t);
 function torreGeneral(list){
-  if(!list.length)return empty(torreFiltrosFecha()||S.q.trim()?'Ningún viaje coincide con los filtros':'No hay viajes registrados','Cambia o limpia los filtros para ver más viajes.');
+  if(!list.length)return empty(torreHayFiltros()||S.tProy||(S.tab.torre&&S.tab.torre!=='todos')?'Ningún viaje coincide con los filtros'+(torreEstActivo()?' (estatus: '+ESTADOS[S.tEst].l+')':''):'No hay viajes registrados','Cambia o limpia los filtros para ver más viajes.');
   const pg=paginar('torre',list);
   const celda=v=>v?fmtL(v):'<span class="mute" title="Sin registrar">—</span>';
   const txt=v=>v?esc(v):'<span class="mute">—</span>';
@@ -72,7 +76,7 @@ function torreGeneral(list){
   </tbody></table></div>${paginador('torre',pg)}`;
 }
 function torreFiltrosHTML(){
-  return `<div class="lfilters" style="margin:0 0 10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"><label class="dlab">Fecha del viaje <input type="date" data-flt="tDia" value="${esc(S.tDia||'')}" aria-label="Fecha específica del viaje"></label><label class="dlab">Desde <input type="date" data-flt="tDesde" value="${esc(S.tDesde||'')}"></label><label class="dlab">Hasta <input type="date" data-flt="tHasta" value="${esc(S.tHasta||'')}"></label><button class="btn sm" data-act="torreLimpiar" ${torreFiltrosFecha()||S.q?'':'disabled'}>Limpiar filtros</button></div>`;
+  return `<div class="lfilters" style="margin:0 0 10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"><label class="dlab">Estatus <select data-flt="tEst" id="tEst" aria-label="Filtrar por estatus del viaje"><option value="">Todos los estatus</option>${TORRE_ESTATUS.filter(e=>ESTADOS[e]).map(e=>`<option value="${e}" ${S.tEst===e?'selected':''}>${esc(ESTADOS[e].l)}</option>`).join('')}</select></label><label class="dlab">Fecha del viaje <input type="date" data-flt="tDia" value="${esc(S.tDia||'')}" aria-label="Fecha específica del viaje"></label><label class="dlab">Desde <input type="date" data-flt="tDesde" value="${esc(S.tDesde||'')}"></label><label class="dlab">Hasta <input type="date" data-flt="tHasta" value="${esc(S.tHasta||'')}"></label><button class="btn sm" data-act="torreLimpiar" ${torreFiltrosFecha()||S.q||S.tEst?'':'disabled'}>Limpiar filtros</button><button class="btn primary sm" data-act="torreGenPdf" id="btnTorrePdf">Descargar PDF</button></div>`;
 }
 BODY.torre=()=>{const l=torreList();return `<div class="mute" style="margin-bottom:8px">${l.length} viajes</div>${torreGen()?torreGeneral(l):torreHor()?torreHorarios(l):torreSheet(l)}`;};
 VIEWS.torre=()=>{
@@ -109,7 +113,25 @@ async function torreEstadoSave(id,dest,btn){
 /* ---- Acciones (handlers) de este módulo ---- */
 Object.assign(ACT,{
   async torreVista(d){S.navK=d.v==='h'?'horarios':d.v==='g'?'general':'';if(d.v==='g')S.tab.torre='todos';S.pag.torre=1;render();},
-  async torreLimpiar(){S.tDia='';S.tDesde='';S.tHasta='';S.q='';S.pag.torre=1;render();},
+  async torreLimpiar(){S.tDia='';S.tDesde='';S.tHasta='';S.tEst='';S.q='';S.pag.torre=1;render();},
+  /* Descarga en PDF TODA la vista general filtrada (no solo la página visible): usa torreList() sin paginar. */
+  async torreGenPdf(){
+    if(!torreGen())return;
+    const l=torreList();
+    if(!l.length){toast('No hay viajes con los filtros seleccionados: no se generó el PDF.','err');return;}
+    const tabK=S.tab.torre||'todos',tab=TT.find(x=>x.k===tabK)||TT[0];
+    const cli=S.tProy?((PROYECTOS.find(p=>p.id===S.tProy)||{}).nombre||S.tProy):'Todos los clientes';
+    const filtros=[['Estatus',torreEstActivo()?ESTADOS[S.tEst].l:'Todos los estatus'],['Pestaña',tab.l],['Cliente',cli]];
+    if(S.tDia)filtros.push(['Fecha del viaje',S.tDia]);
+    if(S.tDesde)filtros.push(['Desde',S.tDesde]);
+    if(S.tHasta)filtros.push(['Hasta',S.tHasta]);
+    if(S.q.trim())filtros.push(['Búsqueda',S.q.trim()]);
+    const cab=['Viaje','Cliente','Proyecto','Fecha del viaje','Placa','Tipo de unidad','Piloto','Origen','Destino','Ruta',...CAMPOS_TIEMPO.map(x=>x[1]),'Estatus'];
+    const f=v=>v?fmtL(v):'-';
+    const filas=l.map(t=>{const j=J(t);return ['#'+t.id,j.cliente||'-',t.proyectoCat||'-',f(t.fechaPlan),j.f.placa||'-',j.f.tipo||'-',j.piloto||'-',t.origen||'-',t.destino||'-',torreRutaTxt(t),...CAMPOS_TIEMPO.map(([k])=>f(t[k])),(ESTADOS[t.estado]||{}).l||t.estado];});
+    try{await expTorrePdf({filtros,cab,filas});toast(`PDF descargado: ${l.length} ${l.length===1?'viaje':'viajes'}.`);}
+    catch(e){toast(e.message==='SIN_DATOS'?'No hay viajes con los filtros seleccionados: no se generó el PDF.':e.message==='SIN_PDF'?'No se pudo generar el PDF: falta la librería de PDF.':'No se pudo generar el PDF: '+e.message,'err');}
+  },
   /* Cambio de estatus desde la tabla general: pide confirmación y guarda con la misma operación (y las mismas reglas) que «Enviar a ruta / Confirmar entrega» */
   async torreEstatusSel(sel){
     const id=sel.dataset.torreest,dest=sel.value,t=DB.trips.find(x=>x.id===id);
