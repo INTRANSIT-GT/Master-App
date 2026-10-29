@@ -72,3 +72,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - **API desplegada:** versión **95**.
 - **Front publicado:** service worker **v1.2.0**.
 - **Datos de prueba:** `OC-0001` quedó anulada; los viajes `200042`/`200043` quedaron libres. `TAR-3113` completó su importe OPL (Q2,000) y el viaje `102901` quedó aplicado (cliente Q3,121.36 · OPL Q2,274.34). Si una tarifa no tiene OPL, la aplicación ya no la reporta como aplicada: pide completarla.
+
+## 2026-10-29 · Ajuste de la tabla comercial
+
+- Se retiraron los botones **Historial** e **Importes** de la tabla de facturación y del panel de la agrupación; los importes siguen consultándose desde **Ver viajes**.
+- La vista comercial y Tarifas usan un ancho máximo de **1900 px** en escritorio, y la tabla principal reduce su ancho mínimo para aprovechar mejor la ventana.
+- **API:** sin cambios (v95). **Front/SW:** v1.2.1.
