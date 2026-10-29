@@ -69,6 +69,6 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
   - Se conserva el historial de `master.ordenes_compra` y el permiso interno `oc_ver_combustible`, que también controla el desglose de combustible en los reportes de agrupación.
 - **Interfaz:** se retira la pestaña/módulo «Órdenes de compra» de Comercial (menú, matriz, historiales y carga de `js/modulos/oc.js`). El flujo que antes se llamaba **OT** ahora se muestra como **OC** en toda la interfaz (botones, avisos, estados e historial); las claves internas (`comercial_ot`, `g.confirmacion.ot`) se conservan para no migrar datos.
 - **Tarifas:** el botón de tarifas pendientes aplica solo los viajes realmente disponibles (no todos los aceptados) y distingue los que necesitan completar el importe OPL; se agregó el acceso «Completar tarifa» al caso concreto.
-- **API desplegada:** versión **94**.
+- **API desplegada:** versión **95**.
 - **Front publicado:** service worker **v1.2.0**.
-- **Datos de prueba:** `OC-0001` quedó anulada; los viajes `200042`/`200043` quedaron libres. `TAR-3113` completó su importe OPL y el viaje `102901` quedó aplicado.
+- **Datos de prueba:** `OC-0001` quedó anulada; los viajes `200042`/`200043` quedaron libres. `TAR-3113` completó su importe OPL (Q2,000) y el viaje `102901` quedó aplicado (cliente Q3,121.36 · OPL Q2,274.34). Si una tarifa no tiene OPL, la aplicación ya no la reporta como aplicada: pide completarla.

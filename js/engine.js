@@ -728,6 +728,9 @@ function aplicarUna(A,t){
   const r=tarifaPara(t);if(r.err)return r;
   const d=ajusteDelViaje(t,r.t);
   const o=ajusteOplDelViaje(t,r.t);
+  /* Si la tarifa no tiene importe de proveedor (OPL), el viaje queda marcado como inválido en Tarifas.
+     No se reporta como aplicada: se pide completar la tarifa para no dejar una falsa sensación de éxito. */
+  if(o.total==null)return {err:`La tarifa ${r.t.id} no tiene importe de proveedor (OPL): completa la tarifa antes de aplicarla.`};
   const yaFijado=t.tarifaId===r.t.id&&String(t.tarifaCliente)===String(d.total)
     &&String(t.tarifaBase==null?'':t.tarifaBase)===String(d.aplica?d.base:'')
     &&String(t.ajusteCombustible==null?'':t.ajusteCombustible)===String(d.aplica?d.ajuste:'')
