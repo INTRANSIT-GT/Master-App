@@ -775,9 +775,12 @@ function render(){
   if(!S.user||S.view==='login'){root.innerHTML=bannerHTML()+loginHTML()+menuHTML();return;}
   if(!allowed(S.view)){S.view=homeOf(S.user);S.param=null;}
   const prev=$('#main'),keep=prev&&S._lv===S.view&&S._lp===S.param,st=keep?prev.scrollTop:0;
+  /* Todas las listas conservan su posición al re-renderizar (marcar una casilla, filtrar, etc.):
+     antes solo Comercial lo hacía y las demás volvían al principio de la tabla. */
+  const wraps=keep?Array.from(prev.querySelectorAll('.xlwrap,.pmwrap')).map(w=>[w.scrollTop,w.scrollLeft]):[];
   root.innerHTML=bannerHTML()+headerHTML()+`<div class="body">${navHTML()}${movil&&S.nav?'<div class="mback" data-act="navClose"></div>':''}<main id="main" class="main">${VIEWS[S.view]()}</main></div>`+modalHTML()+menuHTML();
   S._lv=S.view;S._lp=S.param;
-  if(keep){const m=$('#main');if(m)m.scrollTop=st;}
+  if(keep){const m=$('#main');if(m)m.scrollTop=st;const nw=m?Array.from(m.querySelectorAll('.xlwrap,.pmwrap')):[];nw.forEach((w,i)=>{if(wraps[i]){w.scrollTop=wraps[i][0];w.scrollLeft=wraps[i][1];}});}
   reponer();
 }
 function toast(msg,type){

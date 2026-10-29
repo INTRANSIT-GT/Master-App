@@ -90,3 +90,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - El PDF que se adjunta al emitir una orden de pago a proveedor (OPL) usa el mismo diseño que los PDF de OC: logo, encabezado, tabla con encabezado azul, total y pie de página.
 - Columnas del documento OPL: **Cliente, Shipment, Placa, Ruta y Tarifa**; se conserva el proveedor, la fecha, el total y el número de orden en el encabezado.
 - **API:** sin cambios. **Front/SW:** v1.2.4.
+
+## 2026-10-29 · Conservar el scroll en todas las listas
+
+- `render()` conserva ahora la posición vertical y horizontal de todas las tablas (`.xlwrap` y `.pmwrap`) cuando se vuelve a dibujar la misma pantalla.
+- Aplica a selecciones de viajes, OPL, permisos y cualquier lista que se refresque al marcar, filtrar o cambiar datos; ya no vuelve al principio.
+- **API:** sin cambios. **Front/SW:** v1.2.5.
