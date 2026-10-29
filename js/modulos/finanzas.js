@@ -247,7 +247,7 @@ Object.assign(ACT,{
   async cobroOk(d){const m=S.modal.data;const r=await run(()=>API.registrarCobro(S.user.id,d.id,m),c=>`Cobro ${c.id} registrado.`,true);if(r.ok)afterWrite();},
   async aplicarTarifaViaje(d){const r=await run(()=>API.aplicarTarifa(S.user.id,d.id),x=>`Tarifa aplicada al viaje #${d.id}: ${qfmt(x.importe)}.`);render();},
   async aplicarTarifasTodas(){let sin=[];try{sin=API.viajesSinTarifa(S.user.id);}catch(e){toast(e.message,'err');return;}const ids=sin.filter(x=>x.disponible).map(x=>x.id);if(!ids.length){toast('No hay tarifas vigentes listas para aplicar; revisa las que necesitan OPL.','err');return;}const r=await run(()=>API.aplicarTarifasPendientes(S.user.id,ids),x=>`Tarifas aplicadas: ${x.aplicadas.length}. Sin tarifa válida (requieren revisión): ${x.sinTarifa.length}.`);if(r.ok)afterWrite();},
-  async opSoloOpl(){S.opSoloOpl=!S.opSoloOpl;render();},
+  async opSoloOpl(){S.opSoloOpl=!S.opSoloOpl;refrescarLista();},
   async tarifaOpenOpl(d){const t=DB.tarifas.find(x=>x.id===d.id);if(!t)return;
     formM({title:`Tarifa del proveedor (OPL) · ${t.id}`,text:`${esc((PROYECTOS.find(p=>p.id===t.cliente)||{}).cliente)} · ${esc(t.proyecto)} · ${esc(rutaTxt(t.rutaId))} · ${esc(t.capacidad)}.<br>Solo se define lo que se <b>paga al proveedor</b>; el importe de cobro al cliente no se cambia desde aquí.`,
       fields:[{k:'importeOpl',label:'Importe proveedor / OPL (Q)',type:'number'},{k:'dieselPactadoOpl',label:'Q diésel pactado proveedor (opcional)',type:'number'},{k:'combustiblePctOpl',label:'% de combustible proveedor (opcional · 0 a 100)',type:'number'},{k:'motivo',label:'Motivo del cambio (opcional)',type:'textarea'}],
@@ -259,8 +259,8 @@ Object.assign(ACT,{
     formM({title:`Costo del proveedor · viaje #${d.id}`,text:`Importe por pagar a ${esc(t.opl||'el proveedor (OPL)')}.`,fields:[{k:'monto',label:'Costo (Q)',type:'number',req:1}],data:{monto:t[d.k]===''||t[d.k]==null?'':t[d.k]},ok:'GUARDAR',act:'importeOk',id:d.id,k:d.k});
   },
   async importeOk(d){const r=await run(()=>API.registrarImportes(S.user.id,d.id,{[S.modal.k]:S.modal.data.monto}),'Importe registrado.',true);if(r.ok)afterWrite();},
-  async opTog(d){S.opSel=S.opSel||{};S.opSel[d.id]=!S.opSel[d.id];render();},
-  async opClear(){S.opSel={};render();},
+  async opTog(d){S.opSel=S.opSel||{};S.opSel[d.id]=!S.opSel[d.id];refrescarLista();},
+  async opClear(){S.opSel={};refrescarLista();},
   async opAbrir(d){const u=urlSegura(d.url);if(u)window.open(u,'_blank','noopener');else toast('El archivo no tiene un enlace válido.','err');},
   async opDoc(d){
     const o=DB.ordenesPago.find(x=>x.id===d.id);if(!o)return;

@@ -116,3 +116,8 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - La misma regla se aplica a los pagos directos a pilotos.
 - **API v100**, **front/SW v1.2.7**.
 - Nota: las órdenes ya registradas con fecha futura (OP-0010, OP-0014, OP-0015 y OP-0016) no se modifican automáticamente; son datos históricos/de prueba.
+
+## 2026-10-29 · Scroll explícito en selección de viajes OPL
+
+- La selección de viajes por pagar (`opTog`), limpiar y el filtro «Solo con tarifa OPL» usan un refresco que guarda y repone la posición de `#main` y de las tablas.
+- **front/SW:** v1.2.8. Sin cambios de API.

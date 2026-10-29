@@ -802,6 +802,18 @@ function go(view,param){
    ===================================================================== */
 /* Reconstruye solo la lista comercial conservando el scroll de la tabla: al marcar una casilla
    no debe saltar al inicio, porque normalmente se seleccionan viajes contiguos. */
+/* Refresco explícito para listas que no usan el refresco parcial de Comercial: guarda la posición
+   de la página y de todas las tablas antes de reconstruir la pantalla. */
+function refrescarLista(){
+  const main=document.getElementById('main');if(!main){render();return;}
+  const st=main.scrollTop,sl=main.scrollLeft;
+  const wraps=Array.from(main.querySelectorAll('.xlwrap,.pmwrap')).map(w=>[w.scrollTop,w.scrollLeft]);
+  render();
+  const m=document.getElementById('main');if(!m)return;
+  m.scrollTop=st;m.scrollLeft=sl;
+  const nw=Array.from(m.querySelectorAll('.xlwrap,.pmwrap'));
+  nw.forEach((w,i)=>{if(wraps[i]){w.scrollTop=wraps[i][0];w.scrollLeft=wraps[i][1];}});
+}
 function refrescarComercial(){
   const vb=document.getElementById('vb');if(!vb)return;
   const wraps=Array.from(document.querySelectorAll('#vb .xlwrap')).map(w=>[w.scrollTop,w.scrollLeft]);
