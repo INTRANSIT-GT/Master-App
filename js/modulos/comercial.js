@@ -25,6 +25,8 @@ function viajeDetalleFact(){
 /* ---- Comercial ---- */
 const COMTABS=[{k:'bandeja',l:'Pendientes de gestión'},{k:'fact',l:'Facturas'},{k:'hist',l:'Facturación'},{k:'reg',l:'Registros anteriores'}];
 const comTrips=()=>vis().filter(t=>['ACEPTADO','FACTURADO','COBRADO'].includes(t.estado));
+/* Un viaje reservado por una OC no se puede meter en una agrupación: se factura desde la OC. */
+const ocReservaDe=t=>(DB.ordenesCompra||[]).find(o=>['PREPARADA','ENVIADA','ACEPTADA','RECHAZADA'].includes(o.estado)&&(o.lineas||[]).some(l=>l.viajeId===t.id))||null;
 const qfmt=v=>v===''||v==null?'—':'Q '+Number(v).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
 const sinReg='<span class="mute">Sin registrar</span>';
 function agrMap(){let a=[];try{a=API.agrupaciones(S.user.id);}catch(e){}const m={};a.forEach(g=>{m[g.id]=g;});return m;}
@@ -43,21 +45,21 @@ function tarifaCelda(t,pend){
 BODY.comercial=()=>{
   const esAsist=S.view==='analista';
   const canAct=hp('comercial_agrupar'),rows=comFiltered(),AG=agrMap();
-  const el=comTrips().filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId);
+  const el=comTrips().filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId&&!ocReservaDe(t));
   S.sel=S.sel.filter(id=>el.some(t=>t.id===id));
   const selT=S.sel.map(id=>el.find(t=>t.id===id)),cli0=selT[0]&&selT[0].proyecto;
   const conT=selT.filter(t=>nn(t.tarifaCliente)!=null),tot=conT.reduce((a,t)=>a+Number(t.tarifaCliente),0);
   const sinTar=comTrips().filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId&&nn(t.tarifaCliente)==null).length;
   const bar=canAct?`<div class="selbar"><b>${selT.length} ${selT.length===1?'viaje seleccionado':'viajes seleccionados'}</b><span>${cli0?'· Cliente: <b>'+esc((PROYECTOS.find(p=>p.id===cli0)||{}).cliente)+'</b>':'· Selecciona uno o varios viajes del mismo cliente'}</span>${selT.length?`<span>· ${selT.length===1?(esAsist?'Viaje individual (no hace falta agrupar)':'Factura individual (no hace falta agrupar)'):(esAsist?'Viajes para agrupar':'Factura de viajes agrupados')} · Tarifa: <b>${qfmt(tot)}</b>${selT.length>conT.length?` <span class="warnl">(${selT.length-conT.length} sin tarifa)</span>`:''}</span>`:''}<span class="spacer"></span>${hp('tarifa_registrar')?`<button class="btn sm" data-act="aplicarTarifasTodas">Aplicar tarifas vigentes${sinTar?` (${sinTar} sin tarifa)`:''}</button>`:''}<button class="btn sm ghost" data-act="selClear" ${selT.length?'':'disabled'}>Limpiar</button><button class="btn primary" data-act="facturaOpen" ${selT.length?'':'disabled'}>${esAsist?'AGRUPAR Y GENERAR OT':'FACTURAR'}</button></div>`:'';
-  const pendRows=rows.filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId);
+  const pendRows=rows.filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId&&!ocReservaDe(t));
   const allSel=canAct&&pendRows.length&&pendRows.every(t=>S.sel.includes(t.id));
   const pg=paginar('com',rows);
   const tbl=rows.length?`<div class="xlwrap"><table class="xl" style="min-width:1700px"><thead><tr><th>${canAct?`<input type="checkbox" data-selall="1" ${allSel?'checked':''} aria-label="Seleccionar todos los pendientes visibles">`:''}</th><th>Cliente</th><th>Proyecto</th><th>Fecha plan</th><th>ID viaje</th><th>No. viaje</th><th>Piloto</th><th>Unidad · placa</th><th>Capacidad</th><th>Ruta</th><th>Salida</th><th>Fin descarga</th><th>Tarifa cliente</th><th>Estado comercial</th><th>Factura</th><th>No. factura</th></tr></thead><tbody>
-    ${pg.filas.map(t=>{const j=J(t),pend=t.estado==='ACEPTADO',res=!!t.agrupacionId,g=AG[t.agrupacionId],chk=S.sel.includes(t.id),bloq=cli0&&t.proyecto!==cli0,libre=pend&&!res;
-      return `<tr class="${chk?'sel':''} ${libre?'':'dim'}"><td>${canAct&&libre?`<input type="checkbox" data-sel="${t.id}" ${chk?'checked':''} ${bloq?`disabled title="Solo puedes ${esAsist?'agrupar':'facturar'} viajes de un mismo cliente"`:`${''}`} aria-label="Seleccionar viaje ${t.id}">`:''}</td>
+    ${pg.filas.map(t=>{const j=J(t),pend=t.estado==='ACEPTADO',res=!!t.agrupacionId,oc=ocReservaDe(t),g=AG[t.agrupacionId],chk=S.sel.includes(t.id),bloq=cli0&&t.proyecto!==cli0,libre=pend&&!res&&!oc;
+      return `<tr class="${chk?'sel':''} ${libre?'':'dim'}"><td>${canAct&&libre?`<input type="checkbox" data-sel="${t.id}" ${chk?'checked':''} ${oc?`disabled title="Viaje en la orden de compra ${esc(oc.id)}: se factura desde esa OC"`:(bloq?`disabled title="Solo puedes ${esAsist?'agrupar':'facturar'} viajes de un mismo cliente"`:`${''}`)} aria-label="Seleccionar viaje ${t.id}">`:''}</td>
       <td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${fmtL(t.fechaPlan)}</td><td><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${esc(t.noViaje||'—')}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td>${esc(j.f.capacidad||'—')}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${t.tSalida?fmtL(t.tSalida):'—'}</td><td>${t.tFinDescarga?fmtL(t.tFinDescarga):'—'}</td>
       <td style="text-align:right">${tarifaCelda(t,pend)}</td>
-      <td>${g?etapaBadge(etapaAgr(g)):chip('neutral','Pendiente')}</td><td>${g?(g.modalidad==='AGRUPADA'?`<b>${g.id}</b> · agrupada`:`${g.id} · individual`):'—'}</td><td>${t.numeroFactura?esc(t.numeroFactura):'—'}</td></tr>`;}).join('')}
+      <td>${oc?chip('progress','En OC '+oc.id):(g?etapaBadge(etapaAgr(g)):chip('neutral','Pendiente'))}</td><td>${g?(g.modalidad==='AGRUPADA'?`<b>${g.id}</b> · agrupada`:`${g.id} · individual`):'—'}</td><td>${t.numeroFactura?esc(t.numeroFactura):'—'}</td></tr>`;}).join('')}
     </tbody></table></div>${paginador('com',pg)}`:empty('No hay viajes con estos filtros','Solo aparecen viajes con la liquidación aprobada.');
   return bar+tbl;
 };
