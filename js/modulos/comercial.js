@@ -80,7 +80,7 @@ function agrPanelHTML(g){
   const conf=g.confirmacion?`<div class="alertbox info" style="margin:8px 0"><b>OC recibida</b> · ${esc(g.confirmacion.ot||g.confirmacion.referencia||'—')} · ${esc(g.confirmacion.por)} · ${esc(fmtDT(g.confirmacion.en))} · reporte v${g.confirmacion.pdfVersion} · evidencia(s): ${esc((g.confirmacion.evidencias||[]).join(', '))}</div>`:'';
   const acc=[];
   if(edit&&hp('comercial_agrupar')){acc.push(B('agrPdfOpen','Generar PDF interno','','INTERNO'));acc.push(B('agrPdfOpen','Generar PDF para el cliente','primary','CLIENTE'));}
-  if(edit&&hp('comercial_ot')){acc.push(B('agrEvidOpen','Adjuntar evidencia de la OC','',''));acc.push(`<button class="btn sm ok" data-act="agrConfirmarOpen" data-id="${g.id}" ${(ult&&evUlt.length&&!rechUlt)?'':'disabled title="Requiere el PDF del cliente vigente, su evidencia y que no esté rechazado"'}>Registrar OC</button> `);acc.push(`<button class="btn sm fix" data-act="agrRechazarOpen" data-id="${g.id}" ${(ult&&!rechUlt)?'':'disabled title="Requiere un reporte del cliente vigente sin rechazo"'}>El cliente rechazó</button> `);}
+  if(edit&&hp('comercial_ot')){acc.push(`<button class="btn sm ok" data-act="agrConfirmarOpen" data-id="${g.id}" ${(ult&&!rechUlt)?'':'disabled title="Requiere el PDF del cliente vigente y que no esté rechazado"'}>Registrar OC</button> `);acc.push(`<button class="btn sm fix" data-act="agrRechazarOpen" data-id="${g.id}" ${(ult&&!rechUlt)?'':'disabled title="Requiere un reporte del cliente vigente sin rechazo"'}>El cliente rechazó</button> `);}
   return `<dl class="kv" style="margin-bottom:10px">${kvr('Cliente',esc((PROYECTOS.find(p=>p.id===g.cliente)||{}).cliente||g.cliente))}${kvr('Estado',etapaBadge(etapaAgr(g)))}${kvr('Factura',g.numeroFactura?esc((g.serieFactura?g.serieFactura+'-':'')+g.numeroFactura):'<span class="warnl">pendiente</span>')}${kvr('Viajes',String(g.viajeIds.length))}${kvr('Creada por',esc(g.creadoPor||'—')+' · '+esc(fmtDT(g.creadoEn)))}</dl>${conf}
     <h3 style="margin:10px 0 4px">Reportes PDF (se conservan todas las versiones)</h3><ul class="feed" style="margin:0 0 8px">${lstPdf}</ul>
     ${rzs.length?`<h3 style="margin:10px 0 4px">Rechazos del cliente</h3><ul class="feed" style="margin:0 0 8px">${rzs.map((e,i)=>`<li><b>${e.id}</b> · reporte v${e.pdfVersion} · ${esc(fmtDT(e.en))} · ${esc(e.por)} · “${esc(e.motivo)}”${e.path||e.data||e.url?' · '+agrLink(g,'rz',i,'evidencia'):''}</li>`).join('')}</ul>`:''}
@@ -192,8 +192,8 @@ function agrTable(list,acts){
       ac+=B('agrPanel','Reportes y OC',g.confirmacion?'':'primary');
       if(hp('comercial_ot')&&!g.confirmacion){
         const cli=(g.pdfs||[]).filter(p=>p.tipo==='CLIENTE'),ult=cli[cli.length-1];
-        const evs=ult?(g.evidenciasAutorizacion||[]).filter(e=>e.pdfVersion===ult.version):[];
-        if(ult&&evs.length)ac+=B('agrConfirmarOpen','Registrar OC','primary');
+        const rechUlt=!!ult&&(g.rechazos||[]).some(x=>x.pdfVersion===ult.version);
+        if(ult&&!rechUlt)ac+=B('agrConfirmarOpen','Registrar OC','primary');
       }
       if(g.confirmacion&&hp('facturas_emitir')){if(!g.numeroFactura||!g.fechaFactura)ac+=B('facturaEditar','Datos de factura','primary');else ac+=B('agrRecibir','Enviar a facturación','primary');}
     }
@@ -455,9 +455,23 @@ Object.assign(ACT,{
     formM({title:`Importes y tarifas · ${d.id}${r.numeroFactura?' · '+r.numeroFactura:''}`,summary:`${dif}${r.pdfVersion?`<h3 style="margin:6px 0">Autorizado por el cliente — reporte v${r.pdfVersion}${r.confirmada?'':' (aún sin confirmar)'}</h3>${tabla(r.autorizadas,r.totalAutorizado)}`:'<div class="mute">Todavía no hay un reporte del cliente generado.</div>'}<h3 style="margin:12px 0 6px">Tarifario vigente hoy (solo consulta)</h3>${tabla(r.vigentes,r.totalVigente)}${r.facturado?`<h3 style="margin:12px 0 6px">Facturado</h3><div>Total: <b>${qfmt(r.facturado.total)}</b></div>`:''}`,ancho:'980px',noCancel:true,ok:'Cerrar',act:'closeModal'});
   },
   async agrConfirmarOpen(d){
-    formM({title:`Registrar OC del cliente · ${d.id}`,text:'Escribe el número de OC que entregó el cliente. Quedan tu usuario, la fecha y la hora, la evidencia y la versión del reporte. Con la OC, Facturación puede continuar.',fields:[{k:'ot',label:'Número de OC',req:1}],data:{ot:''},ok:'REGISTRAR OC',okCls:'ok',act:'agrConfirmarOk',id:d.id});
+    const g=DB.agrupaciones.find(x=>x.id===d.id)||{};
+    const cli=(g.pdfs||[]).filter(p=>p.tipo==='CLIENTE'),ult=cli[cli.length-1];
+    const yaEv=!!ult&&(g.evidenciasAutorizacion||[]).some(e=>e.pdfVersion===ult.version);
+    formM({title:`Registrar OC del cliente · ${d.id}`,
+      text:`Escribe el número de OC y adjunta su evidencia en este mismo paso. Quedan tu usuario, la fecha y la hora, y la versión del reporte.${yaEv?' Ya hay una evidencia para este reporte; si adjuntas otra, se conserva como evidencia adicional.':' La evidencia es obligatoria para registrar la OC.'}`,
+      fields:[{k:'ot',label:'Número de OC',req:1},{k:'archivo',label:`Evidencia de la OC (captura, correo u orden de trabajo; imagen o PDF)${yaEv?' — opcional':''}`,type:'file',req:!yaEv},{k:'nota',label:'Nota (opcional)'}],
+      data:{ot:'',archivo:'',nota:''},ok:'REGISTRAR OC Y EVIDENCIA',okCls:'ok',act:'agrConfirmarOk',id:d.id});
   },
-  async agrConfirmarOk(d){const r=await run(()=>API.confirmarCliente(S.user.id,d.id,{ot:S.modal.data.ot}),`Agrupación ${d.id}: OC registrada. Facturación ya puede continuar.`,true);if(r.ok){afterWrite();}},
+  async agrConfirmarOk(d){
+    const m=S.modal.data;
+    const g=DB.agrupaciones.find(x=>x.id===d.id)||{};
+    const cli=(g.pdfs||[]).filter(p=>p.tipo==='CLIENTE'),ult=cli[cli.length-1];
+    const yaEv=!!ult&&(g.evidenciasAutorizacion||[]).some(e=>e.pdfVersion===ult.version);
+    if(!m.archivo&&!yaEv){S.modal.err='Adjunta la evidencia de la OC para registrarla.';render();return;}
+    if(m.archivo){const up=await run(()=>API.agrAdjuntarEvidencia(S.user.id,d.id,{archivo:m.archivo,nota:m.nota}),'Evidencia de la OC adjuntada.',true);if(!up.ok)return;}
+    const r=await run(()=>API.confirmarCliente(S.user.id,d.id,{ot:m.ot}),`Agrupación ${d.id}: OC y evidencia registradas. Facturación ya puede continuar.`,true);if(r.ok){afterWrite();}
+  },
   async agrRecibir(d){const r=await run(()=>API.enviarFactura(S.user.id,d.id),g=>`Agrupación ${g.id} en facturación (factura ${g.numeroFactura}). Registra el envío de la factura con su comprobante cuando la envíes.`);if(r.ok)afterWrite();},
   async agrDetalle(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;

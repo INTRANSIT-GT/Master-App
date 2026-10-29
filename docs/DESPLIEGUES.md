@@ -78,3 +78,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Se retiraron los botones **Historial** e **Importes** de la tabla de facturación y del panel de la agrupación; los importes siguen consultándose desde **Ver viajes**.
 - La vista comercial y Tarifas usan un ancho máximo de **1900 px** en escritorio, y la tabla principal reduce su ancho mínimo para aprovechar mejor la ventana.
 - **API:** sin cambios (v95). **Front/SW:** v1.2.1.
+
+## 2026-10-29 · Registrar OC con su evidencia en un solo paso
+
+- El botón **Registrar OC** abre un único formulario con el número de OC y el archivo de evidencia; ya no hay que adjuntar la evidencia en un paso previo.
+- Si el reporte ya tiene evidencia vigente, el archivo es opcional; si no, es obligatorio. El botón aparece con solo tener el PDF del cliente vigente y no rechazado.
+- **API:** sin cambios. **Front/SW:** v1.2.2.
