@@ -4,21 +4,38 @@
    ===================================================================== */
 
 /* ---- Finanzas (Gerencia) ---- */
-/* Documento de la orden de pago a proveedor (se genera al emitirla). */
-function ordenPagoPDF(o){
+/* Documento de la orden de pago a proveedor (se genera al emitirla).
+   Mismo formato visual que los PDF de OC; las columnas son las del pago OPL. */
+async function ordenPagoPDF(o){
   const lib=window.jspdf||{};if(!lib.jsPDF)throw new Error('No se pudo generar el PDF (jsPDF no disponible).');
-  const doc=new lib.jsPDF({unit:'pt',format:'letter'});
-  const ver=v=>v==null?'':('Q '+Number(v).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}));
-  doc.setFontSize(16);doc.text('ORDEN DE PAGO A PROVEEDOR',40,50);
-  doc.setFontSize(11);
-  doc.text('Orden: '+o.id,40,80);doc.text('Proveedor (OPL): '+o.proveedor,40,98);
-  doc.text('Fecha: '+fmtDate(o.fechaEmision),40,116);doc.text('Total: '+ver(o.importe),40,134);
-  let y=162;doc.setFontSize(10);
-  doc.text('Viaje',40,y);doc.text('Cliente',120,y);doc.text('Proyecto',260,y);doc.text('Importe',430,y);y+=15;
-  o.viajeIds.forEach(id=>{const t=DB.trips.find(x=>x.id===id)||{};const cli=(PROYECTOS.find(p=>p.id===t.proyecto)||{}).cliente||t.proyecto||'';
-    doc.text('#'+id,40,y);doc.text(String(cli).slice(0,24),120,y);doc.text(String(t.proyectoCat||'').slice(0,26),260,y);doc.text(ver(o.importesViaje[id]),430,y);y+=15;
-    if(y>720){doc.addPage();y=52;}});
-  y+=6;doc.setFontSize(11);doc.text('TOTAL: '+ver(o.importe),400,y);
+  const doc=new lib.jsPDF({orientation:'landscape',unit:'pt',format:'a4',compress:true});
+  const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=34,AZ=[0,86,151];
+  const logo=await expLogo();
+  if(logo){const lw=118,lh=lw*logo.h/logo.w;doc.addImage(logo.url,'PNG',M,28,lw,lh);}
+  doc.setFont('helvetica','normal').setFontSize(8).setTextColor(90);
+  doc.text(`Fecha de generación: ${expFechaHora(new Date().toISOString())}`,W-M,36,{align:'right'});
+  doc.text(`Emitida por: ${expPq(S.user&&S.user.nombre)}`,W-M,47,{align:'right'});
+  doc.setFont('helvetica','bold').setFontSize(16).setTextColor(...AZ).text(`Orden de pago a proveedor · ${o.id}`,M,92);
+  doc.setFont('helvetica','normal').setFontSize(10).setTextColor(40);
+  doc.text(expPq(`Proveedor (OPL): ${o.proveedor}`),M,110);
+  doc.text(`Fecha: ${fmtDate(o.fechaEmision)}`,M+360,110);
+  doc.text(`Viajes: ${(o.viajeIds||[]).length}`,M+520,110);
+  doc.text(`Total: ${expQ(o.importe)}`,W-M,110,{align:'right'});
+  const cols=[['cliente','Cliente'],['shipment','Shipment'],['placa','Placa'],['ruta','Ruta'],['tarifa','Tarifa']];
+  const body=(o.viajeIds||[]).map(id=>{
+    const t=DB.trips.find(x=>x.id===id)||{};
+    const j=J(t);
+    return [j.cliente||t.proyecto||'',t.shipment||'',j.f&&j.f.placa?j.f.placa:(t.unidadId||''),rutaTxt(t.rutaId),expQ(o.importesViaje&&o.importesViaje[id])];
+  });
+  doc.autoTable({theme:'grid',startY:122,head:[cols.map(c=>c[1])],body,foot:[['Total','','','',expQ(o.importe)]],showFoot:'lastPage',
+    styles:{font:'helvetica',fontSize:8,cellPadding:3,lineColor:[208,215,222],lineWidth:.5},
+    headStyles:{fillColor:AZ,textColor:255,fontStyle:'bold',halign:'center',valign:'middle'},
+    footStyles:{fillColor:[232,242,250],textColor:[0,60,110],fontStyle:'bold'},
+    columnStyles:{4:{halign:'right'}},margin:{left:M,right:M,bottom:34},
+    didParseCell:h=>{h.cell.text=h.cell.text.map(expPq);}});
+  const n=doc.getNumberOfPages();
+  for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont('helvetica','normal').setFontSize(7.5).setTextColor(120);
+    doc.text(`In Transit · innovative outsourcing  ·  ${o.id}`,M,H-16);doc.text(`Página ${i} de ${n}`,W-M,H-16,{align:'right'});}
   return doc.output('datauristring');
 }
 const FINTABS=[{k:'res',l:'Resumen financiero'},{k:'mes',l:'Viajes por mes'},{k:'prov',l:'Proveedores'},{k:'ord',l:'Órdenes de pago'},{k:'fact',l:'Facturación e ingresos'},{k:'pil',l:'Pilotos'}];
@@ -252,7 +269,7 @@ Object.assign(ACT,{
     if(provs.length!==1||!provs[0])return toast('Selecciona viajes de un solo proveedor (OPL).','err');
     const o=await run(async()=>{
       const ord=await API.crearOrdenPago(S.user.id,{proveedor:provs[0],viajeIds:ids});
-      try{const dataUrl=ordenPagoPDF(ord);await API.adjuntarDocumentoOrden(S.user.id,ord.id,{data:dataUrl,nombre:'Orden-'+ord.id+'.pdf'});}
+      try{const dataUrl=await ordenPagoPDF(ord);await API.adjuntarDocumentoOrden(S.user.id,ord.id,{data:dataUrl,nombre:'Orden-'+ord.id+'.pdf'});}
       catch(e){toast('La orden se creó, pero no se pudo adjuntar el documento: '+e.message,'err');}
       return ord;},null);
     if(o){S.opSel={};toast(`Orden ${o.id} emitida por ${qfmt(o.importe)}.`);afterWrite();}

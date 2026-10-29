@@ -84,3 +84,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - El botón **Registrar OC** abre un único formulario con el número de OC y el archivo de evidencia; ya no hay que adjuntar la evidencia en un paso previo.
 - Si el reporte ya tiene evidencia vigente, el archivo es opcional; si no, es obligatorio. El botón aparece con solo tener el PDF del cliente vigente y no rechazado.
 - **API:** sin cambios. **Front/SW:** v1.2.2.
+
+## 2026-10-29 · PDF de orden de pago OPL con el formato de OC
+
+- El PDF que se adjunta al emitir una orden de pago a proveedor (OPL) usa el mismo diseño que los PDF de OC: logo, encabezado, tabla con encabezado azul, total y pie de página.
+- Columnas del documento OPL: **Cliente, Shipment, Placa, Ruta y Tarifa**; se conserva el proveedor, la fecha, el total y el número de orden en el encabezado.
+- **API:** sin cambios. **Front/SW:** v1.2.4.
