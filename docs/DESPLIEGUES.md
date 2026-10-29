@@ -121,3 +121,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 
 - La selección de viajes por pagar (`opTog`), limpiar y el filtro «Solo con tarifa OPL» usan un refresco que guarda y repone la posición de `#main` y de las tablas.
 - **front/SW:** v1.2.8. Sin cambios de API.
+
+## 2026-10-29 · Link de contrato editable en clientes
+
+- El formulario de cliente incluye **Link del contrato** con validación de URL `http(s)` y máximo 300 caracteres; se guarda en el `extra` del cliente y se muestra en la columna «Link contrato».
+- Si se escribe sin `https://`, se completa automáticamente con `https://`.
+- **API v104**, **front/SW v1.2.9**.

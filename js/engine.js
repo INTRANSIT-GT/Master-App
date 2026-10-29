@@ -2343,17 +2343,20 @@ const API={
     const cred=String(d.creditoDias==null?'':d.creditoDias).trim();if(cred!==''&&!/^\d{1,3}$/.test(cred))deny('Días de crédito: número entero de 0 a 999.','VALIDACION');
     const dir=String(d.direccionFiscal||'').trim(),con=String(d.contacto||'').trim(),obs=String(d.observaciones||'').trim();
     if(dir.length>120||con.length>60||obs.length>200)deny('Algún texto excede el máximo permitido.','VALIDACION');
+    let link=String(d.linkContrato||'').trim();
+    if(link&&!/^https?:\/\//i.test(link))link='https://'+link;
+    if(link&&(!/^https?:\/\/[^\s]+$/i.test(link)||link.length>300))deny('Link del contrato no válido: debe ser una URL http(s) de máximo 300 caracteres.','VALIDACION');
     const norm=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
     const otros=DB.clientes.filter(c=>c.id!==id);
     if(!editando&&DB.clientes.some(c=>c.id===id))deny(`Ya existe un cliente con el código ${id}.`,'DUPLICADO');
     if(otros.some(c=>norm(c.nombre)===norm(nombre)))deny(`Ya existe un cliente con el nombre "${nombre}".`,'DUPLICADO');
     if(otros.some(c=>c.cliente===cl))deny(`El cliente "${cl}" del catálogo ya está registrado.`,'DUPLICADO');
     if(nit&&otros.some(c=>c.nit&&c.nit===nit))deny(`El identificador fiscal ${nit} ya está registrado en otro cliente.`,'DUPLICADO');
-    const datos={nombre,cliente:cl,proyectos:proy,nit,direccionFiscal:dir,correoFacturacion:correo,contacto:con,telefono:tel,creditoDias:cred,observaciones:obs,activo:d.activo!==false};
+    const datos={nombre,cliente:cl,proyectos:proy,nit,direccionFiscal:dir,correoFacturacion:correo,contacto:con,telefono:tel,creditoDias:cred,observaciones:obs,linkContrato:link,activo:d.activo!==false};
     const c=DB.clientes.find(x=>x.id===id);
     if(editando){
       if(!c)deny('Cliente no encontrado.','NO_EXISTE');
-      const etq={nombre:'Nombre',cliente:'Cliente (catálogo)',nit:'Identificador fiscal',direccionFiscal:'Dirección fiscal',correoFacturacion:'Correo de facturación',contacto:'Contacto',telefono:'Teléfono',creditoDias:'Días de crédito',observaciones:'Observaciones'};
+      const etq={nombre:'Nombre',cliente:'Cliente (catálogo)',nit:'Identificador fiscal',direccionFiscal:'Dirección fiscal',correoFacturacion:'Correo de facturación',contacto:'Contacto',telefono:'Teléfono',creditoDias:'Días de crédito',observaciones:'Observaciones',linkContrato:'Link del contrato'};
       Object.keys(etq).forEach(k=>{if(String(c[k]||'')!==String(datos[k]))auditAdd({entidad:'CLIENTE',accion:'Cliente modificado',campo:etq[k],anterior:c[k]||'(vacío)',nuevo:datos[k]||'(vacío)',por:A,ref:id});});
       if(c.proyectos.slice().sort().join()!==proy.slice().sort().join())auditAdd({entidad:'CLIENTE',accion:'Proyectos del cliente modificados',campo:'Proyectos',anterior:c.proyectos.join(', '),nuevo:proy.join(', '),por:A,ref:id});
       if((c.activo!==false)!==datos.activo)auditAdd({entidad:'CLIENTE',accion:datos.activo?'Cliente activado':'Cliente desactivado',campo:'Estado',anterior:datos.activo?'Inactivo':'Activo',nuevo:datos.activo?'Activo':'Inactivo',por:A,ref:id});
