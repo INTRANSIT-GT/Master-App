@@ -114,5 +114,5 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 
 - La fecha de la transferencia no puede ser posterior a hoy: se valida en el formulario (máximo del selector), antes de pedir los archivos y en el servidor.
 - La misma regla se aplica a los pagos directos a pilotos.
-- **API v99**, **front/SW v1.2.7**.
+- **API v100**, **front/SW v1.2.7**.
 - Nota: las órdenes ya registradas con fecha futura (OP-0010, OP-0014, OP-0015 y OP-0016) no se modifican automáticamente; son datos históricos/de prueba.
