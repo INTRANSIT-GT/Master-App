@@ -22,11 +22,11 @@ async function ordenPagoPDF(o){
   doc.text(`Viajes: ${(o.viajeIds||[]).length}`,M+520,110);
   doc.text(`Total: ${expQ(o.importe)}`,W-M,110,{align:'right'});
   const cols=[['cliente','Cliente'],['shipment','Shipment'],['placa','Placa'],['ruta','Ruta'],['tarifa','Tarifa']];
-  const body=(o.viajeIds||[]).map(id=>{
-    const t=DB.trips.find(x=>x.id===id)||{};
-    const j=J(t);
-    return [j.cliente||t.proyecto||'',t.shipment||'',j.f&&j.f.placa?j.f.placa:(t.unidadId||''),rutaTxt(t.rutaId),expQ(o.importesViaje&&o.importesViaje[id])];
+  const lineas=Array.isArray(o.lineas)&&o.lineas.length?o.lineas:(o.viajeIds||[]).map(id=>{
+    const t=DB.trips.find(x=>x.id===id)||{},j=J(t);
+    return {viajeId:id,cliente:j.cliente||t.proyecto||'',shipment:t.shipment||'',placa:j.f&&j.f.placa?j.f.placa:(t.unidadId||''),ruta:rutaTxt(t.rutaId),tarifa:o.importesViaje&&o.importesViaje[id]};
   });
+  const body=lineas.map(l=>[l.cliente||'',l.shipment||'',l.placa||'',l.ruta||'',expQ(l.tarifa!=null?l.tarifa:(o.importesViaje&&o.importesViaje[l.viajeId]))]);
   doc.autoTable({theme:'grid',startY:122,head:[cols.map(c=>c[1])],body,foot:[['Total','','','',expQ(o.importe)]],showFoot:'lastPage',
     styles:{font:'helvetica',fontSize:8,cellPadding:3,lineColor:[208,215,222],lineWidth:.5},
     headStyles:{fillColor:AZ,textColor:255,fontStyle:'bold',halign:'center',valign:'middle'},
@@ -62,7 +62,7 @@ function opOrdenesTable(ordenes,canPay){
   const pg=paginar('op',ordenes.slice().reverse());
   return `<div class="xlwrap"><table class="xl" style="min-width:1250px"><thead><tr><th>Orden</th><th>Proveedor</th><th>Viajes</th><th>Importe</th><th>Estado</th><th>Emitida</th><th>Documento</th><th>Pago · evidencia · factura del proveedor</th>${canPay?'<th class="stkR">Acciones</th>':''}</tr></thead><tbody>
     ${pg.filas.map(o=>{const pag=o.fase==='PAGADA';return `<tr class="${o.estado==='ANULADA'?'dim':''}"><td><b>${o.id}</b></td><td>${esc(o.proveedor)}</td><td>${o.viajeIds.slice(0,6).map(i=>`<button class="linkbtn" data-act="detalle" data-id="${i}">#${i}</button>`).join(' ')}${o.viajeIds.length>6?' <span class="mute">…</span>':''} <b class="mute">[${o.viajeIds.length}]</b></td><td style="text-align:right">${qfmt(o.importe)}</td><td>${chip(o.estado==='ANULADA'?'neutral':(pag?'done':'progress'),o.estado==='ANULADA'?'Anulada':(pag?'Pagada':'Emitida'))}</td><td>${o.fechaEmision?fmtDate(o.fechaEmision):'—'}</td>
-    <td>${o.emision&&o.emision.documentoUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.emision.documentoUrl)}">Ver documento</button>`:(o.emision?'<span class="mute">sin documento</span>':'—')}</td>
+    <td>${o.emision?`<button class="linkbtn" data-act="opDoc" data-id="${o.id}">Ver documento</button>`:'—'}</td>
     <td>${pag&&o.transferencia?`${fmtDate(o.transferencia.fecha)} · ${qfmt(o.transferencia.monto)} · ${esc(o.transferencia.referencia)}${o.transferencia.evidenciaUrl||o.transferencia.facturaUrl?'<br>':''}${o.transferencia.evidenciaUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.transferencia.evidenciaUrl)}">Evidencia</button> `:''}${o.transferencia.facturaUrl?`<button class="linkbtn" data-act="opAbrir" data-url="${esc(o.transferencia.facturaUrl)}">Factura proveedor</button>`:''}`:'<span class="mute">Pendiente de pago</span>'}${o.anulada?`<br><span class="mute">Anulada por ${esc(o.anulada.por)} · “${esc(o.anulada.motivo)}”</span>`:''}</td>
     ${canPay?`<td class="stkR"><div class="acts-wrap">${o.estado==='ANULADA'?'<span class="mute">—</span>':(o.fase==='EMITIDA'?`<button class="btn sm ok" data-act="opTransferOpen" data-id="${o.id}">Registrar pago</button><button class="btn sm fix" data-act="opAnularOpen" data-id="${o.id}">Anular</button>`:'<span class="mute">Pagada</span>')}</div></td>`:''}</tr>`;}).join('')}
     </tbody></table></div>${paginador('op',pg)}`;
@@ -262,6 +262,11 @@ Object.assign(ACT,{
   async opTog(d){S.opSel=S.opSel||{};S.opSel[d.id]=!S.opSel[d.id];render();},
   async opClear(){S.opSel={};render();},
   async opAbrir(d){const u=urlSegura(d.url);if(u)window.open(u,'_blank','noopener');else toast('El archivo no tiene un enlace válido.','err');},
+  async opDoc(d){
+    const o=DB.ordenesPago.find(x=>x.id===d.id);if(!o)return;
+    try{const data=await ordenPagoPDF(o);const a=document.createElement('a');a.href=data;a.download='Orden-'+o.id+'.pdf';a.rel='noopener';document.body.appendChild(a);a.click();a.remove();}
+    catch(e){toast('No se pudo generar el documento: '+e.message,'err');}
+  },
   async opEmitir(){
     const sel=S.opSel||{},ids=Object.keys(sel).filter(id=>sel[id]);
     if(!ids.length)return;

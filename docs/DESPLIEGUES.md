@@ -102,3 +102,10 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - La migración `030_origen_destino_texto.sql` ahora es idempotente: detecta si `master.lugares` y las columnas `lugar_*` existen antes de consultarlas.
 - Si la vista previa de Supabase reejecuta la migración después de que 029 ya eliminó `master.lugares`, conserva el texto viejo y no falla.
 - No cambia el esquema de producción ya migrado.
+
+## 2026-10-29 · Datos completos en el PDF de órdenes OPL
+
+- La orden de pago guarda ahora una copia congelada por viaje: **cliente, Shipment, placa, ruta y tarifa**. El PDF ya no depende de que esos viajes estén en la ventana cargada de `DB.trips`.
+- Las 14 órdenes existentes se rellenaron con esos datos desde la base.
+- **Ver documento** genera el PDF desde la orden actual; así las órdenes históricas también muestran la información. El documento adjunto de las órdenes nuevas se genera con los mismos datos.
+- **API v96**, **front/SW v1.2.6**.

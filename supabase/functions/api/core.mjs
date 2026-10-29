@@ -1830,7 +1830,7 @@ const API={
     if(!prov)deny('Selecciona el proveedor (OPL).','VALIDACION');
     if(!ids.length)deny('Selecciona al menos un viaje para la orden de pago.','VALIDACION');
     if(new Set(ids).size!==ids.length)deny('Hay viajes repetidos en la selección.','VALIDACION');
-    const importes={};let tot=0;
+    const importes={},lineas=[];let tot=0;
     ids.forEach(id=>{
       const t=DB.trips.find(x=>x.id===id);
       if(!t)deny(`El viaje ${id} no existe.`,'NO_EXISTE');
@@ -1841,9 +1841,14 @@ const API={
       if(!(imp>0))deny(`El viaje ${id} no tiene tarifa de OPL (proveedor).`,'SIN_TARIFA_OPL');
       if(DB.ordenesPago.some(o=>o.estado==='ACTIVA'&&o.viajeIds.includes(id)))deny(`El viaje ${id} ya está en una orden de pago activa.`,'YA_EN_ORDEN');
       importes[id]=imp;tot+=imp;
+      /* Copia congelada para el documento: la ventana de viajes del snapshot no siempre contiene
+         los viajes históricos que ya están en una orden de pago. */
+      const r=DB.rutas.find(x=>x.id===t.rutaId);
+      const f=(typeof FLOTA!=='undefined'?FLOTA:[]).find(x=>x.unidad===t.unidadId);
+      lineas.push({viajeId:id,cliente:ocClienteNombre(t.proyecto),clienteId:t.proyecto,shipment:t.shipment||'',placa:(f&&f.placa)||t.unidadId||'',ruta:r?(r.codigo?(r.codigo+' · '):'')+(r.origen||'')+(r.destino?' → '+r.destino:''):(t.rutaId||''),tarifa:imp});
     });
     const en=nowIso(),nOp=(Number(DB.seq.op)||0)+1;DB.seq.op=nOp;
-    const o={id:'OP-'+pad4(nOp),proveedor:prov,viajeIds:ids,fase:'EMITIDA',importe:r2(tot),importesViaje:importes,
+    const o={id:'OP-'+pad4(nOp),proveedor:prov,viajeIds:ids,fase:'EMITIDA',importe:r2(tot),importesViaje:importes,lineas,
       fechaEmision:dLoc(en),emision:{porId:A.id,por:A.nombre,en,fecha:dLoc(en),documento:null},transferencia:null,
       estado:'ACTIVA',creadoPorId:A.id,creadoPor:A.nombre,creadoEn:en,anulada:null,correcciones:[]};
     DB.ordenesPago.push(o);
