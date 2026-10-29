@@ -96,3 +96,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - `render()` conserva ahora la posición vertical y horizontal de todas las tablas (`.xlwrap` y `.pmwrap`) cuando se vuelve a dibujar la misma pantalla.
 - Aplica a selecciones de viajes, OPL, permisos y cualquier lista que se refresque al marcar, filtrar o cambiar datos; ya no vuelve al principio.
 - **API:** sin cambios. **Front/SW:** v1.2.5.
+
+## 2026-10-29 · Corregir Supabase Preview (migración 030)
+
+- La migración `030_origen_destino_texto.sql` ahora es idempotente: detecta si `master.lugares` y las columnas `lugar_*` existen antes de consultarlas.
+- Si la vista previa de Supabase reejecuta la migración después de que 029 ya eliminó `master.lugares`, conserva el texto viejo y no falla.
+- No cambia el esquema de producción ya migrado.
