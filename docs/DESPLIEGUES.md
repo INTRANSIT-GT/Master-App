@@ -55,7 +55,7 @@ El código vive en GitHub; aquí se anota qué se ejecutó en el entorno y cuán
 - **Migración aplicada:** `038_consolidar_facturacion.sql`; Gerencia Comercial recibe acceso a la pantalla nueva de Facturación.
 - **Menú:** se retira la sección vieja «Facturación» (`comercial`); quedan **Asistente Comercial** (agrupa, reporte y OT) y **Facturación** (factura y cobro). Ya no hay tres accesos parecidos.
 - **OT visible:** en la lista del Asistente aparece el botón directo **Registrar OT** cuando el reporte y la evidencia ya están cargados.
-- **API desplegada:** versión **91**; **front v1.1.3** (el Asistente ve «Agrupar y generar OT», «Pendientes de gestión» solo muestra viajes sin agrupar ni OC, y la lista conserva el scroll al marcar).
+- **API desplegada:** versión **93**; **front v1.1.4** (no se agrupa un viaje sin tarifa; los viajes de una agrupación preparada sin reporte/OT aparecen en Tarifas para corregir; «Pendientes de gestión» solo muestra libres y la lista conserva el scroll).
 
 ## Cómo anotar
 

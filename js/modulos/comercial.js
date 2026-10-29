@@ -372,6 +372,8 @@ Object.assign(ACT,{
     const ts=S.sel.map(id=>DB.trips.find(t=>t.id===id)).filter(Boolean);if(!ts.length)return;
     const esAsist=S.view==='analista',cli=ts[0].proyecto;
     if(ts.some(t=>t.proyecto!==cli)){toast(`No se pueden ${esAsist?'agrupar':'facturar'} juntos viajes de clientes diferentes.`,'err');return;}
+    const sinTar=ts.filter(t=>nn(t.tarifaCliente)==null);
+    if(sinTar.length){toast(`No se puede agrupar: ${sinTar.map(t=>'#'+t.id).join(', ')} sin tarifa de cobro. Aplica o crea la tarifa en Tarifas.`,'err');return;}
     const nombre=(PROYECTOS.find(p=>p.id===cli)||{}).cliente,ids=ts.map(t=>t.id),tot=ts.reduce((a,t)=>a+(nn(t.tarifaCliente)||0),0);
     formM({title:esAsist?(ts.length===1?'Agrupar viaje y generar OT':'Agrupar viajes y generar OT'):(ts.length===1?'Facturar un solo viaje':'Facturar viajes agrupados'),
       text:esAsist?`Cliente: <b>${esc(nombre)}</b> · ${ts.length} ${ts.length===1?'viaje':'viajes'}. Se crea el grupo; después generas el reporte para el cliente y registras la OT.`:`Cliente: <b>${esc(nombre)}</b> · ${ts.length} ${ts.length===1?'viaje (factura individual, sin agrupar)':'viajes (se facturan juntos)'}`,

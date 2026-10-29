@@ -720,8 +720,16 @@ function ajusteOplDelViaje(t,tar){
   return {falta:false,aplica:true,base:r2(base),precioMem:mem?precio:'',memFecha:mem?mem.fecha:'',factor,ajuste,total:r2(base+ajuste)};
 }
 /* Aplica la tarifa vigente al viaje. El importe del cliente = base + ajuste por combustible (MEM). */
+/* Un viaje reservado por una agrupación todavía se puede tarifar si la agrupación está
+   preparada, activa, sin reporte y sin OT. Así se corrige una tarifa faltante antes de generar el PDF. */
+function tarifaEditable(t){
+  if(!t.agrupacionId)return true;
+  const g=DB.agrupaciones.find(x=>x.id===t.agrupacionId);
+  return !!g&&g.fase==='PREPARADA'&&g.estado==='ACTIVA'&&!g.confirmacion&&!(g.pdfs||[]).length;
+}
 function aplicarUna(A,t){
-  if(t.estado!=='ACEPTADO'||t.agrupacionId)return {err:'Solo se aplica tarifa a viajes aceptados que aún no estén facturados.'};
+  if(t.estado!=='ACEPTADO')return {err:'Solo se aplica tarifa a viajes aceptados que aún no estén facturados.'};
+  if(!tarifaEditable(t))return {err:'El viaje ya está en una agrupación con reporte u OT: descarta esa agrupación para cambiar su tarifa.'};
   {const oc=ocDeViaje(t.id);if(oc)return {err:`El viaje está en la orden de compra ${oc.id}: su tarifa ya no se reaplica (los importes de la orden se conservan).`};}
   const r=tarifaPara(t);if(r.err)return r;
   const d=ajusteDelViaje(t,r.t);
@@ -1410,6 +1418,7 @@ const API={
       if(t.proyecto!==cliente)deny(`El viaje ${id} pertenece a otro cliente (${t.proyecto}). Una factura solo puede contener viajes de ${cliente}.`,'CLIENTE_DISTINTO');
       if(t.agrupacionId||['FACTURADO','COBRADO'].includes(t.estado))deny(`El viaje ${id} ya está asociado a la factura ${t.agrupacionId}. Para reasignarlo hay que anular esa factura (permiso restringido).`,'YA_FACTURADO');
       if(t.estado!=='ACEPTADO'||!t.liqAprobadaEn||!puedeVer(A,t))deny(`El viaje ${id} no es elegible para facturación: no está aceptado.`,'NO_ELEGIBLE');
+      if(!oc){const mt=ocMotivoTarifa(t);if(mt)deny(`No se puede agrupar el viaje ${id}: ${mt} Aplica o crea la tarifa en Tarifas antes de agrupar.`,'SIN_TARIFA');}
       if(oc){
         const mt=ocMotivoTarifa(t);if(mt)deny(`${OC_TARIFA_MSG}: #${t.noViaje||t.id} (No. de Transporte ${t.shipment||'—'}) · ${ocClienteNombre(t.proyecto)} · ${t.proyectoCat}: ${mt}`,'TARIFA_PENDIENTE');
         const ln=oc.lineas.find(l=>l.viajeId===id);
@@ -1994,14 +2003,14 @@ const API={
   });},
   aplicarTarifasPendientes(uid,ids){return exec(uid,'aplicarTarifasPendientes','',A=>{
     need(A,'tarifa_registrar','aplicar tarifas a los viajes');
-    const lista=(Array.isArray(ids)&&ids.length?ids:DB.trips.filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId).map(t=>t.id));
+    const lista=(Array.isArray(ids)&&ids.length?ids:DB.trips.filter(t=>t.estado==='ACEPTADO'&&tarifaEditable(t)).map(t=>t.id));
     const ok=[],sin=[];
     lista.forEach(id=>{const t=DB.trips.find(x=>x.id===id);if(!t||!puedeVer(A,t)){sin.push({id,motivo:'Sin acceso o inexistente.'});return;}const r=aplicarUna(A,t);if(r.err)sin.push({id,motivo:r.err});else ok.push(id);});
     return {aplicadas:ok,sinTarifa:sin};
   });},
   viajesSinTarifa(uid){
     const A=actor(uid);need(A,'comercial_ver','ver el módulo Comercial');
-    return DB.trips.filter(t=>t.estado==='ACEPTADO'&&!t.agrupacionId&&(nn(t.tarifaCliente)==null||nn(t.tarifaOpl)==null)&&puedeVer(A,t)).map(t=>{const r=tarifaPara(t);const faltaOpl=nn(t.tarifaOpl)==null&&nn(t.tarifaCliente)!=null;return {id:t.id,cliente:t.proyecto,proyecto:t.proyectoCat,motivo:r.err||(faltaOpl?'Sin tarifa de proveedor (OPL) en la tarifa vigente.':'Hay una tarifa vigente: falta aplicarla.'),disponible:!r.err};});
+    return DB.trips.filter(t=>t.estado==='ACEPTADO'&&tarifaEditable(t)&&(nn(t.tarifaCliente)==null||nn(t.tarifaOpl)==null)&&puedeVer(A,t)).map(t=>{const r=tarifaPara(t);const faltaOpl=nn(t.tarifaOpl)==null&&nn(t.tarifaCliente)!=null;return {id:t.id,cliente:t.proyecto,proyecto:t.proyectoCat,motivo:r.err||(faltaOpl?'Sin tarifa de proveedor (OPL) en la tarifa vigente.':'Hay una tarifa vigente: falta aplicarla.'),disponible:!r.err};});
   },
 
   /* ----- rutas ----- */
