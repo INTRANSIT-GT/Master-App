@@ -1790,6 +1790,7 @@ const API={
     if(!FIN.includes(t.estado))deny('Solo se registran pagos de viajes finalizados.','ESTADO_INVALIDO');
     const monto=nn(d.monto);if(monto==null||monto<=0)deny('El monto del pago debe ser mayor a cero.','VALIDACION');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha||''))deny('Fecha de pago no válida.','VALIDACION');
+    if(d.fecha>dLoc(nowIso()))deny('La fecha del pago no puede ser posterior a hoy: no se registran pagos anticipados.','FECHA_FUTURA');
     const ref=String(d.referencia||'').trim();if(ref.length<3||ref.length>40)deny('La referencia del pago es obligatoria (3 a 40 caracteres).','VALIDACION');
     let ob,ben;
     if(tipo==='PROVEEDOR')deny('El pago a un proveedor se hace con una ORDEN DE PAGO (Finanzas → Órdenes de pago), no viaje por viaje.','USA_ORDEN_PAGO');
@@ -1872,6 +1873,7 @@ const API={
     if(o.estado!=='ACTIVA')deny('La orden está anulada.','ESTADO_INVALIDO');
     if(o.fase!=='EMITIDA')deny('Esta orden de pago ya está pagada.','ESTADO_INVALIDO');
     const f=String((d&&d.fecha)||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(f))deny('Fecha de la transferencia no válida.','VALIDACION');
+    if(f>dLoc(nowIso()))deny('La fecha de la transferencia no puede ser posterior a hoy: no se registran pagos anticipados.','FECHA_FUTURA');
     const monto=nn(d&&d.monto);if(monto==null||monto<=0)deny('El monto pagado debe ser mayor a cero.','VALIDACION');
     /* La orden se paga completa: lo transferido debe ser el importe de la orden (tolerancia de un centavo por redondeo).
        Un pago parcial no cierra la orden ni marca los viajes como pagados: para pagar otro monto hay que anular la

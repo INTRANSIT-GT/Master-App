@@ -281,9 +281,10 @@ Object.assign(ACT,{
   },
   async opTransferOpen(d){const o=DB.ordenesPago.find(x=>x.id===d.id);if(!o)return;
     formM({title:`Registrar pago al proveedor · ${o.id}`,text:`${esc(o.proveedor)} · ${(o.viajeIds||[]).length} viaje(s) · <b>${qfmt(o.importe)}</b>.<br>La orden se paga completa: el monto debe ser <b>${qfmt(o.importe)}</b> (si el pago fuera distinto, anula la orden y emítela de nuevo).<br>Se cierra con <b>dos archivos</b>: la evidencia de la transferencia y la factura del proveedor.`,
-      fields:[{k:'fecha',label:'Fecha de la transferencia',type:'date',req:1},{k:'monto',label:'Monto pagado (Q)',type:'number',req:1},{k:'referencia',label:'Referencia / número de transferencia',req:1},{k:'evidencia',label:'Evidencia de la transferencia (foto o PDF)',type:'file'},{k:'factura',label:'Factura del proveedor (foto o PDF)',type:'file'}],
+      fields:[{k:'fecha',label:'Fecha de la transferencia',type:'date',req:1,max:todayStr(),hint:'No puede ser posterior a hoy: no se registran pagos anticipados.'},{k:'monto',label:'Monto pagado (Q)',type:'number',req:1},{k:'referencia',label:'Referencia / número de transferencia',req:1},{k:'evidencia',label:'Evidencia de la transferencia (foto o PDF)',type:'file'},{k:'factura',label:'Factura del proveedor (foto o PDF)',type:'file'}],
       data:{fecha:todayStr(),monto:o.importe,referencia:'',evidencia:'',factura:''},ok:'REGISTRAR PAGO',okCls:'ok',act:'opTransferOk',id:o.id});},
   async opTransferOk(d){const m=S.modal.data,id=S.modal.id;
+    if(m.fecha>todayStr()){S.modal.err='La fecha de la transferencia no puede ser posterior a hoy: no se registran pagos anticipados.';render();return;}
     if(!m.evidencia){S.modal.err='Adjunta la evidencia de la transferencia.';render();return;}
     if(!m.factura){S.modal.err='Adjunta la factura del proveedor.';render();return;}
     const ext=x=>/^data:application\/pdf/.test(x)?'.pdf':'.png';
@@ -292,7 +293,7 @@ Object.assign(ACT,{
   async opAnularOk(d){const r=await run(()=>API.anularOrdenPago(S.user.id,d.id,S.modal.data.motivo),`Orden ${d.id} anulada.`,true);if(r.ok)afterWrite();},
   async pagoOpen(d){
     const pil=d.tipo==='PILOTO';
-    formM({title:pil?`Pago a piloto · viaje #${d.id}`:`Pago a proveedor · viaje #${d.id}`,text:'Registra un pago realizado. Un importe calculado no cuenta como pagado hasta que se registre aquí con su referencia.',fields:[{k:'monto',label:'Monto pagado (Q)',type:'number',req:1},{k:'fecha',label:'Fecha del pago',type:'date',req:1},{k:'referencia',label:'Referencia del pago',req:1}],data:{monto:'',fecha:todayStr(),referencia:''},ok:'REGISTRAR PAGO',okCls:'ok',act:'pagoOk',id:d.id,tipo:d.tipo});
+    formM({title:pil?`Pago a piloto · viaje #${d.id}`:`Pago a proveedor · viaje #${d.id}`,text:'Registra un pago realizado. Un importe calculado no cuenta como pagado hasta que se registre aquí con su referencia.',fields:[{k:'monto',label:'Monto pagado (Q)',type:'number',req:1},{k:'fecha',label:'Fecha del pago',type:'date',req:1,max:todayStr(),hint:'No puede ser posterior a hoy.'},{k:'referencia',label:'Referencia del pago',req:1}],data:{monto:'',fecha:todayStr(),referencia:''},ok:'REGISTRAR PAGO',okCls:'ok',act:'pagoOk',id:d.id,tipo:d.tipo});
   },
   async pagoOk(d){const m=S.modal.data,tipo=S.modal.tipo;const r=await run(()=>API.registrarPago(S.user.id,{tipo,viajeId:d.id,monto:m.monto,fecha:m.fecha,referencia:m.referencia}),p=>`Pago ${p.id} registrado.`,true);if(r.ok)afterWrite();},
   async anularPagoOpen(d){formM({title:`Anular pago ${d.id}`,text:'El pago se conserva marcado como anulado y deja de contar en los saldos.',fields:[{k:'motivo',label:'Motivo',type:'textarea',req:1}],ok:'ANULAR PAGO',okCls:'fix',act:'anularPagoOk',id:d.id});},

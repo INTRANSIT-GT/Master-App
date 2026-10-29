@@ -109,3 +109,10 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Las 14 órdenes existentes se rellenaron con esos datos desde la base.
 - **Ver documento** genera el PDF desde la orden actual; así las órdenes históricas también muestran la información. El documento adjunto de las órdenes nuevas se genera con los mismos datos.
 - **API v98**, **front/SW v1.2.6**.
+
+## 2026-10-29 · Bloquear pagos anticipados en órdenes OPL
+
+- La fecha de la transferencia no puede ser posterior a hoy: se valida en el formulario (máximo del selector), antes de pedir los archivos y en el servidor.
+- La misma regla se aplica a los pagos directos a pilotos.
+- **API v99**, **front/SW v1.2.7**.
+- Nota: las órdenes ya registradas con fecha futura (OP-0010, OP-0014, OP-0015 y OP-0016) no se modifican automáticamente; son datos históricos/de prueba.
