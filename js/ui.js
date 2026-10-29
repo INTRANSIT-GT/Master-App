@@ -9,7 +9,7 @@ Object.assign(ICON,{
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>',
   moon:'<path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/>'
 });
-const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:'',cb:null,cbq:'',opSoloOpl:false,opSel:{},pag:{}};
+const S={edit:null,user:null,view:'login',param:null,tab:{},form:null,draft:{},modal:null,menu:false,flash:false,q:'',fEstado:'',fProy:'',tProy:'',fCli:'',fPcat:'',fCom:'PEND',sel:[],from:null,loginErr:'',loginU:'',_lv:null,_lp:null,verif:null,aEnt:'',aRech:false,sortL:null,sortF:null,fDesde:'',fHasta:'',fProv:'',autoFail:{},fcCli:'',fcPcat:'',fcMes:'',fcSem:'',fcFecha:'',fcDesde:'',fcHasta:'',fcFechas:[],fcQ:'',fcEstado:'ENV',fcBase:'envio',tfQ:'',tfCli:'',tfPcat:'',tfCap:'',tfEst:'',rtQ:'',rtRuta:'',rtOri:'',rtDes:'',rtCli:'',rtPcat:'',rtEst:'',cb:null,cbq:'',opSoloOpl:false,opSel:{},pag:{},refrescando:false,tEst:''};
 const hp=p=>hasPerm(S.user,p);
 const vis=()=>API.listarViajes(S.user.id).slice().sort((a,b)=>b.id.localeCompare(a.id));
 const mine=t=>asignado(S.user,t);
@@ -665,7 +665,7 @@ function fieldM(f,data){
   if(f.type==='checks'){const op=f.optsFn?f.optsFn(data):(f.opts||[]);return `<div class="fgroup"><label>${f.label}${f.req?' <span class="mute">*</span>':''}</label><div class="chips">${op.length?op.map(o=>`<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mfm="${f.k}" value="${esc(o.id)}" ${(val||[]).includes(o.id)?'checked':''}> ${esc(o.nombre)}</label>`).join(''):'<span class="mute">Primero elige el cliente para ver sus proyectos</span>'}</div></div>`;}
   if(f.type==='file')return `${W}${lab}<input type="file" id="${id}" data-mfile="${f.k}" accept="image/*,application/pdf">${val?`<span class="hint">✓ Archivo cargado</span>`:''}</div>`;
   if(f.datalist){const op=f.datalist(data)||[],idl='dl_'+f.k;return `${W}${lab}<input type="text" id="${id}" data-mf="${f.k}" value="${esc(val)}" list="${idl}" autocomplete="off" placeholder="${esc(f.ph||'')}" ${f.ro?'readonly':''}>${f.hint?`<span class="hint">${f.hint}</span>`:''}<datalist id="${idl}">${op.map(x=>`<option value="${esc(x)}"></option>`).join('')}</datalist></div>`;}
-  return `${W}${lab}<input type="${f.type||'text'}" id="${id}" data-mf="${f.k}" value="${esc(val)}" autocomplete="off" ${f.ro?'readonly':''} ${f.type==='number'?'step="any" min="0" inputmode="decimal"':''}>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
+  return `${W}${lab}<input type="${f.type||'text'}" id="${id}" data-mf="${f.k}" value="${esc(val)}" autocomplete="off" ${f.ro?'readonly':''} ${f.type==='date'&&f.max?`max="${esc(f.max)}"`:''} ${f.type==='number'?'step="any" min="0" inputmode="decimal"':''}>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
 }
 function liveHTML(f){
   return f.length?`<div class="alertbox" role="alert" style="margin:10px 0"><b>Falta completar para poder enviar:</b><ul style="margin:4px 0 0 18px;padding:0">${f.map(x=>`<li>${esc(x.msg)}</li>`).join('')}</ul></div>`:`<div class="alertbox okb" style="margin:10px 0"><b>Información completa:</b> ya puedes enviar.</div>`;
@@ -705,6 +705,7 @@ function headerHTML(){
   const u=S.user;
   const botonMenu=(esMovil()&&navItems().length>=2)?`<button class="navbtn" data-act="navToggle" aria-label="Abrir menú" aria-expanded="${S.nav?'true':'false'}">${icon('menu',22)}</button>`:'';
   return `<header class="top">${botonMenu}<div class="brand"><span class="isotile"><img src="${ISOLOGO}" alt="In Transit"></span><span>Control de viajes<small>In Transit · innovative outsourcing</small></span></div><span class="spacer"></span>${(BACKEND.modo==='demo'&&!SIN_DEMO)?'<span class="demotag" title="Los datos son de demostración y viven solo en este navegador">Modo demostración</span>':''}
+    <button class="bell" data-act="refrescarBase" ${S.refrescando?'disabled aria-busy="true"':''} aria-label="Actualizar datos desde Supabase" title="${S.refrescando?'Actualizando…':'Actualizar datos desde Supabase'}">${icon('refresh',20)}</button>
     <button class="bell" data-act="notifOpen" aria-label="Notificaciones${notifData().filter(n=>!n.leida).length?' ('+notifData().filter(n=>!n.leida).length+' sin leer)':''}">${icon('bell',20)}${notifData().filter(n=>!n.leida).length?`<span class="bcount">${notifData().filter(n=>!n.leida).length}</span>`:''}</button>
     <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(rolL(u.rol))}${cliLista(u)}</span></span></button></header>`;
 }
@@ -725,7 +726,7 @@ function aplicarTema(){
 const ADM_MODULOS=[
   {t:'VIAJES',    items:[{v:'nuevo'},{v:'liquidaciones'},{v:'todos'},{v:'viajes',l:'Viajes por estado'}]},
   {t:'TORRE',     items:[{v:'torre',k:'torre',l:'Viajes',tab:['torre','curso']},{v:'torre',k:'horarios',l:'Horarios y fechas',ic:'clock',tab:['torre','todos']},{v:'torre',k:'general',l:'Vista general',ic:'list',tab:['torre','todos']}]},
-  {t:'COMERCIAL', items:[{v:'comercial'},{v:'analista'},{v:'factcom'},{v:'proyectos'},{v:'tarifas'},{v:'finanzas'},{v:'catalogos'}]},
+  {t:'COMERCIAL', items:[{v:'analista'},{v:'factcom'},{v:'proyectos'},{v:'tarifas'},{v:'finanzas'},{v:'catalogos'}]},
   {t:'OPL',       items:[{v:'opl',l:'Proveedores'}]},
   {t:'FLOTAS',    items:[{v:'catalogos',k:'pilotos',l:'Pilotos',ic:'users',tab:['cat','pil']}]},
   {t:'ADMINISTRACIÓN', items:[{v:'rutas'},{v:'usuarios'},{v:'auditoria'},{v:'modelo'}]}   /* pantallas que existen y no pertenecen a los otros módulos: siguen accesibles */
@@ -775,9 +776,12 @@ function render(){
   if(!S.user||S.view==='login'){root.innerHTML=bannerHTML()+loginHTML()+menuHTML();return;}
   if(!allowed(S.view)){S.view=homeOf(S.user);S.param=null;}
   const prev=$('#main'),keep=prev&&S._lv===S.view&&S._lp===S.param,st=keep?prev.scrollTop:0;
+  /* Todas las listas conservan su posición al re-renderizar (marcar una casilla, filtrar, etc.):
+     antes solo Comercial lo hacía y las demás volvían al principio de la tabla. */
+  const wraps=keep?Array.from(prev.querySelectorAll('.xlwrap,.pmwrap')).map(w=>[w.scrollTop,w.scrollLeft]):[];
   root.innerHTML=bannerHTML()+headerHTML()+`<div class="body">${navHTML()}${movil&&S.nav?'<div class="mback" data-act="navClose"></div>':''}<main id="main" class="main">${VIEWS[S.view]()}</main></div>`+modalHTML()+menuHTML();
   S._lv=S.view;S._lp=S.param;
-  if(keep){const m=$('#main');if(m)m.scrollTop=st;}
+  if(keep){const m=$('#main');if(m)m.scrollTop=st;const nw=m?Array.from(m.querySelectorAll('.xlwrap,.pmwrap')):[];nw.forEach((w,i)=>{if(wraps[i]){w.scrollTop=wraps[i][0];w.scrollLeft=wraps[i][1];}});}
   reponer();
 }
 function toast(msg,type){
@@ -797,6 +801,29 @@ function go(view,param){
 /* =====================================================================
    ACCIONES  (cada una llama a API.*, que valida de nuevo todo)
    ===================================================================== */
+/* Reconstruye solo la lista comercial conservando el scroll de la tabla: al marcar una casilla
+   no debe saltar al inicio, porque normalmente se seleccionan viajes contiguos. */
+/* Refresco explícito para listas que no usan el refresco parcial de Comercial: guarda la posición
+   de la página y de todas las tablas antes de reconstruir la pantalla. */
+function refrescarLista(){
+  const main=document.getElementById('main');if(!main){render();return;}
+  const st=main.scrollTop,sl=main.scrollLeft;
+  const wraps=Array.from(main.querySelectorAll('.xlwrap,.pmwrap')).map(w=>[w.scrollTop,w.scrollLeft]);
+  render();
+  const m=document.getElementById('main');if(!m)return;
+  m.scrollTop=st;m.scrollLeft=sl;
+  const nw=Array.from(m.querySelectorAll('.xlwrap,.pmwrap'));
+  nw.forEach((w,i)=>{if(wraps[i]){w.scrollTop=wraps[i][0];w.scrollLeft=wraps[i][1];}});
+}
+function refrescarComercial(){
+  const vb=document.getElementById('vb');if(!vb)return;
+  const wraps=Array.from(document.querySelectorAll('#vb .xlwrap')).map(w=>[w.scrollTop,w.scrollLeft]);
+  const main=document.getElementById('main'),mt=main?main.scrollTop:0;
+  vb.innerHTML=BODY.comercial();
+  const nw=Array.from(vb.querySelectorAll('.xlwrap'));
+  nw.forEach((w,i)=>{if(wraps[i]){w.scrollTop=wraps[i][0];w.scrollLeft=wraps[i][1];}});
+  if(main)main.scrollTop=mt;
+}
 async function run(fn,ok,modalErr){
   try{const r=await fn();if(ok)toast(typeof ok==='function'?ok(r):ok);return {ok:true,r};}
   catch(e){
@@ -953,6 +980,16 @@ const ACT={
   async tproy(d){S.tProy=d.v;render();},
   async fproy(d){S.fProy=d.v;render();},
   async reintentarCatalogos(){try{await BACKEND.refrescar();toast('Datos actualizados desde el servidor.');}catch(e){toast(e.message||'No se pudo actualizar desde el servidor.','err');}render();},
+  async refrescarBase(){
+    if(S.refrescando)return;
+    if(BACKEND.modo!=='supabase'){toast(BACKEND.modo==='demo'?'Estás en modo demostración: no hay una base Supabase que actualizar.':'La conexión con Supabase no está configurada.','err');return;}
+    S.refrescando=true;render();
+    try{
+      await BACKEND.refrescar();
+      if(!allowed(S.view)){S.view=homeOf(S.user);S.param=null;}
+      S.refrescando=false;refrescarLista();toast('Datos actualizados desde Supabase.');
+    }catch(e){S.refrescando=false;render();toast(e.message||'No se pudo actualizar desde Supabase.','err');}
+  },
   async pagina(d){S.pag[d.k]=Math.max(1,Number(d.p)||1);render();topScroll();},
   async festado(d){S.fEstado=d.v;render();},
   async backdrop(d,el,e){if(e.target===el){S.modal=null;render();}},
@@ -1072,13 +1109,13 @@ app.addEventListener('change',async e=>{
     else{const a=S.modal.data[k]||[];S.modal.data[k]=t.checked?[...new Set([...a,t.value])]:a.filter(x=>x!==t.value);}
     if(S.modal.rerender&&S.modal.rerender.includes(k)){if(k==='clientes'&&S.modal.data.proyectos){const valid=new Set();(S.modal.data.clientes||[]).forEach(c=>(PROYECTOS_X[c]||[]).forEach(p=>valid.add(p)));if(valid.size)S.modal.data.proyectos=S.modal.data.proyectos.filter(p=>valid.has(p));}render();return;}
     return;}
-  if(t.dataset.sel){const id=t.dataset.sel;S.sel=t.checked?[...new Set([...S.sel,id])]:S.sel.filter(x=>x!==id);$('#vb').innerHTML=BODY.comercial();return;}
+  if(t.dataset.sel){const id=t.dataset.sel;S.sel=t.checked?[...new Set([...S.sel,id])]:S.sel.filter(x=>x!==id);refrescarComercial();return;}
   if(t.dataset.selall){
     const pend=comFiltered().filter(x=>x.estado==='ACEPTADO');
     if(!t.checked){S.sel=S.sel.filter(id=>!pend.some(x=>x.id===id));}
     else if(new Set(pend.map(x=>x.proyecto)).size>1){toast('Filtra por un cliente para seleccionar todos: no se pueden mezclar clientes.','err');}
     else S.sel=[...new Set([...S.sel,...pend.map(x=>x.id)])];
-    $('#vb').innerHTML=BODY.comercial();return;
+    refrescarComercial();return;
   }
   if(t.dataset.ocsel||t.dataset.ocselall||t.dataset.occol){ACT.ocCambio(t);return;}
   if(t.dataset.torreest){ACT.torreEstatusSel(t);return;}

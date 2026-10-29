@@ -127,3 +127,22 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - El formulario de cliente incluye **Link del contrato** con validación de URL `http(s)` y máximo 300 caracteres; se guarda en el `extra` del cliente y se muestra en la columna «Link contrato».
 - Si se escribe sin `https://`, se completa automáticamente con `https://`.
 - **API v104**, **front/SW v1.2.9**.
+
+## 2026-10-29 · Botón de actualización desde Supabase
+
+- Se agregó un botón circular junto a la campana de notificaciones para volver a cargar el snapshot de Supabase.
+- Mientras actualiza se deshabilita; al terminar conserva la pantalla y el scroll. Sirve para ver viajes u otros datos creados por otra persona después de abrir la página.
+- **front/SW v1.3.0**. Sin cambios de API.
+
+## 2026-10-29 · Asistente Comercial puede aplicar tarifas
+
+- El permiso `tarifa_registrar` ahora está habilitado por defecto para **Asistente Comercial** y Gerencia Comercial.
+- En **Usuarios y permisos → Permisos de acción por rol** aparece en el grupo **Tarifas** como **«Aplicar la tarifa vigente a los viajes»**.
+- Se aplicó la migración `040_permiso_aplicar_tarifas.sql`.
+- **API v108**, **front/SW v1.3.2**.
+
+## 2026-10-29 · Restauración tras force-push
+
+- El remoto fue reescrito con el commit «Torre control vista general» y eliminó cambios anteriores. Se restauraron: botón de actualización desde Supabase, conservación de scroll, bloqueo de fechas futuras, permiso de aplicación de tarifas para Asistente Comercial, retiro del módulo OC y link de contrato.
+- Se conservó la nueva vista general de Torre y su PDF.
+- **API v110**, **front/SW v1.3.3**.
