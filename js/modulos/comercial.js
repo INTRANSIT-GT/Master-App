@@ -366,7 +366,7 @@ VIEWS.factcom=()=>comView('factcom');
 Object.assign(ACT,{
   async cbToggle(d){S.cb=S.cb===d.k?null:d.k;S.cbq='';render();const i=document.querySelector('.cb[data-cb="'+d.k+'"] .cb-q');if(i)i.focus();},
   async cbPick(d){if(d.k==='rtCat'){S.rtOrig='';S.rtDest='';}if(String(d.k).startsWith('m:')){const M=curModel();if(M)aplicarCampo(M,d.k.slice(2),d.v);}else S[d.k]=d.v;S.cb=null;S.cbq='';render();},
-  async selClear(){S.sel=[];$('#vb').innerHTML=BODY.comercial();},
+  async selClear(){S.sel=[];refrescarComercial();},
   async facturaOpen(){
     const ts=S.sel.map(id=>DB.trips.find(t=>t.id===id)).filter(Boolean);if(!ts.length)return;
     const esAsist=S.view==='analista',cli=ts[0].proyecto;

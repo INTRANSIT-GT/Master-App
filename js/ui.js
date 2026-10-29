@@ -797,6 +797,17 @@ function go(view,param){
 /* =====================================================================
    ACCIONES  (cada una llama a API.*, que valida de nuevo todo)
    ===================================================================== */
+/* Reconstruye solo la lista comercial conservando el scroll de la tabla: al marcar una casilla
+   no debe saltar al inicio, porque normalmente se seleccionan viajes contiguos. */
+function refrescarComercial(){
+  const vb=document.getElementById('vb');if(!vb)return;
+  const wraps=Array.from(document.querySelectorAll('#vb .xlwrap')).map(w=>[w.scrollTop,w.scrollLeft]);
+  const main=document.getElementById('main'),mt=main?main.scrollTop:0;
+  vb.innerHTML=BODY.comercial();
+  const nw=Array.from(vb.querySelectorAll('.xlwrap'));
+  nw.forEach((w,i)=>{if(wraps[i]){w.scrollTop=wraps[i][0];w.scrollLeft=wraps[i][1];}});
+  if(main)main.scrollTop=mt;
+}
 async function run(fn,ok,modalErr){
   try{const r=await fn();if(ok)toast(typeof ok==='function'?ok(r):ok);return {ok:true,r};}
   catch(e){
@@ -1072,13 +1083,13 @@ app.addEventListener('change',async e=>{
     else{const a=S.modal.data[k]||[];S.modal.data[k]=t.checked?[...new Set([...a,t.value])]:a.filter(x=>x!==t.value);}
     if(S.modal.rerender&&S.modal.rerender.includes(k)){if(k==='clientes'&&S.modal.data.proyectos){const valid=new Set();(S.modal.data.clientes||[]).forEach(c=>(PROYECTOS_X[c]||[]).forEach(p=>valid.add(p)));if(valid.size)S.modal.data.proyectos=S.modal.data.proyectos.filter(p=>valid.has(p));}render();return;}
     return;}
-  if(t.dataset.sel){const id=t.dataset.sel;S.sel=t.checked?[...new Set([...S.sel,id])]:S.sel.filter(x=>x!==id);$('#vb').innerHTML=BODY.comercial();return;}
+  if(t.dataset.sel){const id=t.dataset.sel;S.sel=t.checked?[...new Set([...S.sel,id])]:S.sel.filter(x=>x!==id);refrescarComercial();return;}
   if(t.dataset.selall){
     const pend=comFiltered().filter(x=>x.estado==='ACEPTADO');
     if(!t.checked){S.sel=S.sel.filter(id=>!pend.some(x=>x.id===id));}
     else if(new Set(pend.map(x=>x.proyecto)).size>1){toast('Filtra por un cliente para seleccionar todos: no se pueden mezclar clientes.','err');}
     else S.sel=[...new Set([...S.sel,...pend.map(x=>x.id)])];
-    $('#vb').innerHTML=BODY.comercial();return;
+    refrescarComercial();return;
   }
   if(t.dataset.ocsel||t.dataset.ocselall||t.dataset.occol){ACT.ocCambio(t);return;}
   if(t.dataset.torreest){ACT.torreEstatusSel(t);return;}
