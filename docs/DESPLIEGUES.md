@@ -220,3 +220,8 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - **Dato de prueba:** se agregó `ARR-0029` a `master.flota` con capacidad temporal **40** y `tipo` RAS S. Reemplazar cuando se cargue la flota real.
 - **Migración aplicada:** `supabase/migrations/042_capacidad_arrastre_prueba.sql`. **API desplegada.** **Front/SW v1.4.7**.
 - **Verificado:** una solicitud con origen/destino y sin capacidad se crea con capacidad vacía; una solicitud sin origen se rechaza; la validación de ruta sin capacidad funciona.
+## 2026-10-30 · Tarifas para varias capacidades
+- La creación de tarifa ahora muestra las capacidades como **casillas**: se puede marcar una o varias y se crea la misma tarifa (mismo importe, OPL, combustible y vigencia) por cada capacidad seleccionada.
+- Solo cambia el **ID de tarifa** y la **capacidad**; el servidor valida todas las capacidades primero y no crea ninguna si una ya existe o se cruza la vigencia.
+- **API desplegada:** incluye `crearTarifas` en `ops.mjs` y en el motor. **Front/SW v1.4.8**.
+- **Verificado:** se crearon dos tarifas para capacidades `22` y `28` con el mismo importe; un segundo intento fue rechazado como duplicado. Las tarifas de prueba se eliminaron.

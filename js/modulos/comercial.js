@@ -514,12 +514,12 @@ Object.assign(ACT,{
         fields:[{k:'importe',label:'Importe cliente (Q)',type:'number',req:1},{k:'qDieselPactado',label:'Q diésel pactado cliente (opcional · activa el ajuste por combustible)',type:'number'},{k:'combustiblePct',label:'% de combustible cliente (opcional · 0 a 100)',type:'number'},{k:'importeOpl',label:'Importe proveedor / OPL (Q, opcional)',type:'number'},{k:'dieselPactadoOpl',label:'Q diésel pactado proveedor (opcional)',type:'number'},{k:'combustiblePctOpl',label:'% de combustible proveedor (opcional · 0 a 100)',type:'number'},{k:'vigenteDesde',label:'Vigente desde',type:'date',req:1},{k:'vigenteHasta',label:'Vigente hasta (opcional)',type:'date'},{k:'motivo',label:'Motivo del cambio (opcional)',type:'textarea'}],
         data:{importe:t.importe,qDieselPactado:t.qDieselPactado==null?'':t.qDieselPactado,combustiblePct:t.combustiblePct==null?'':t.combustiblePct,importeOpl:t.importeOpl==null?'':t.importeOpl,dieselPactadoOpl:t.dieselPactadoOpl==null?'':t.dieselPactadoOpl,combustiblePctOpl:t.combustiblePctOpl==null?'':t.combustiblePctOpl,vigenteDesde:t.vigenteDesde,vigenteHasta:t.vigenteHasta,motivo:''},ok:'GUARDAR CAMBIOS',act:'tarifaSave',id:t.id});
     }else{
-      formM({title:'Nueva tarifa',text:'La tarifa aplica solo a la combinación cliente, proyecto, ruta y capacidad que elijas. Aparecen las rutas validadas (en tarifación), las que esperan aprobación y las activas (para otra capacidad).',
+      formM({title:'Nueva tarifa',text:'La tarifa aplica a la combinación cliente, proyecto y ruta. Marca una o varias capacidades: se creará una tarifa igual por cada capacidad marcada, cambiando solo su ID y su capacidad.',
         fields:[{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},
           {k:'rutaId',label:'Ruta',type:'select',req:1,optsFn:x=>optRutaTarifa(x.cliente,x.proyecto),ph:'Primero elige el cliente y el proyecto',hint:'<span style="color:var(--warn)">Ámbar</span>: ruta sin tarifa · <span style="color:var(--fix)">naranja</span>: le falta tarifa para alguna capacidad de la flota.'},
-          {k:'capacidad',label:'Capacidad',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad'},
+          {k:'capacidades',label:'Capacidades',type:'checks',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),hint:'Marca una o varias. Se crearán tarifas separadas con el mismo importe y vigencia.'},
           {k:'importe',label:'Importe cliente (Q)',type:'number',req:1},{k:'qDieselPactado',label:'Q diésel pactado cliente (opcional · activa el ajuste por combustible)',type:'number'},{k:'combustiblePct',label:'% de combustible cliente (opcional · 0 a 100)',type:'number'},{k:'importeOpl',label:'Importe proveedor / OPL (Q, opcional)',type:'number'},{k:'dieselPactadoOpl',label:'Q diésel pactado proveedor (opcional)',type:'number'},{k:'combustiblePctOpl',label:'% de combustible proveedor (opcional · 0 a 100)',type:'number'},{k:'vigenteDesde',label:'Vigente desde',type:'date',req:1},{k:'vigenteHasta',label:'Vigente hasta (opcional)',type:'date'}],
-        data:{cliente:optsClientes().length===1?optsClientes()[0].id:'',proyecto:'',rutaId:'',capacidad:'',importe:'',qDieselPactado:'',combustiblePct:'',importeOpl:'',dieselPactadoOpl:'',combustiblePctOpl:'',vigenteDesde:todayStr(),vigenteHasta:''},rerender:['cliente','proyecto'],ok:'GUARDAR TARIFA',act:'tarifaSave',id:''});
+        data:{cliente:optsClientes().length===1?optsClientes()[0].id:'',proyecto:'',rutaId:'',capacidades:[],importe:'',qDieselPactado:'',combustiblePct:'',importeOpl:'',dieselPactadoOpl:'',combustiblePctOpl:'',vigenteDesde:todayStr(),vigenteHasta:''},rerender:['cliente','proyecto'],ok:'GUARDAR TARIFA',act:'tarifaSave',id:''});
     }
   },
   /* Desde Rutas: abre la tarifa ya apuntando a la ruta que espera tarifación. */
@@ -528,10 +528,17 @@ Object.assign(ACT,{
     await ACT.tarifaOpen({});
     if(!S.modal)return;
     S.modal.data.cliente=r.cliente;S.modal.data.proyecto=r.proyecto;S.modal.data.rutaId=r.id;
-    S.modal.data.capacidad=r.capacidad||'';   /* La capacidad es de la tarifa: si la ruta no la trae, se elige aquí. */
+    S.modal.data.capacidades=r.capacidad?[r.capacidad]:[];   /* La capacidad es de la tarifa: si la ruta no la trae, se elige aquí. */
     render();
   },
-  async tarifaSave(d){const m=S.modal.data;const r=await run(()=>d.id?API.editarTarifa(S.user.id,d.id,m):API.crearTarifa(S.user.id,m),t=>d.id?`Tarifa ${t.id} actualizada.`:`Tarifa ${t.id} creada.`,true);if(r.ok)afterWrite();},
+  async tarifaSave(d){
+    const m=S.modal.data;
+    if(d.id){const re=await run(()=>API.editarTarifa(S.user.id,d.id,m),t=>`Tarifa ${t.id} actualizada.`,true);if(re.ok)afterWrite();return;}
+    const caps=Array.isArray(m.capacidades)?m.capacidades:[];
+    if(!caps.length){S.modal.err='Marca al menos una capacidad.';render();return;}
+    const r=await run(()=>API.crearTarifas(S.user.id,m),x=>{const ts=x.tarifas||[];return `${ts.length} tarifa${ts.length===1?'':'s'} creada${ts.length===1?'':'s'}: ${ts.map(t=>`${t.id} (${t.capacidad})`).join(', ')}.`;},true);
+    if(r.ok)afterWrite();
+  },
   async tarifaEstado(d){const t=DB.tarifas.find(x=>x.id===d.id);if(!t)return;await run(()=>API.cambiarEstadoTarifa(S.user.id,d.id,!t.activa,''),x=>`Tarifa ${x.id} ${x.activa?'activada':'desactivada'}. El historial se conserva.`);render();},
   async cliLimpiar(){S.cliFiltro='';render();},
   async fcQuitarViaje(){S.fcViaje='';render();},

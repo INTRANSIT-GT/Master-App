@@ -184,6 +184,32 @@ Object.assign(API,{
     auditAdd({entidad:'TARIFA',accion:'Tarifa creada',campo:'Importe',nuevo:'Q '+t.importe,por:A,ref:`${t.id} · ${t.cliente} · ${t.proyecto} · ${rutaNombre(t.rutaId)} · ${t.capacidad} · desde ${t.vigenteDesde}`});
     return t;
   });},
+  /* Crea la misma tarifa para varias capacidades. Valida todas antes de crear la primera:
+     si una capacidad ya tiene tarifa o se cruza la vigencia, no se crea ninguna. */
+  crearTarifas(uid,d){return exec(uid,'crearTarifas','',A=>{
+    need(A,'tarifas_crear','crear tarifas');
+    const caps=[...new Set((Array.isArray(d&&d.capacidades)?d.capacidades:[]).map(x=>String(x==null?'':x).trim()).filter(Boolean))];
+    if(!caps.length)deny('Selecciona al menos una capacidad.','VALIDACION');
+    const base=Object.assign({},d);delete base.capacidades;delete base.capacidad;
+    const validados=caps.map(c=>{
+      const v=validarTarifa(Object.assign({},base,{capacidad:c}),null);
+      const dup=DB.tarifas.find(x=>x.cliente===v.cliente&&x.proyecto===v.proyecto&&x.rutaId===v.rutaId&&x.capacidad===v.capacidad&&x.vigenteDesde===v.vigenteDesde);
+      if(dup)deny(`Ya existe una tarifa con esa ruta, capacidad ${c} y fecha de vigencia (${dup.id}). Edítala en vez de crear otra.`,'TARIFA_DUPLICADA');
+      return v;
+    });
+    const r=DB.rutas.find(x=>x.id===validados[0].rutaId),out=[];
+    validados.forEach(v=>{
+      const t=Object.assign({id:'TAR-'+pad4(DB.seq.tar++),activa:r&&r.estado==='ACTIVA',creadoPorId:A.id,creadoPor:A.nombre,creadoEn:nowIso(),modificadoPor:'',modificadoEn:''},v);
+      DB.tarifas.push(t);out.push(t);
+      auditAdd({entidad:'TARIFA',accion:'Tarifa creada',campo:'Importe',nuevo:'Q '+t.importe,por:A,ref:`${t.id} · ${t.cliente} · ${t.proyecto} · ${rutaNombre(t.rutaId)} · ${t.capacidad} · desde ${t.vigenteDesde}`});
+    });
+    if(r&&r.estado==='EN_TARIFACION'){
+      r.estado='PENDIENTE_APROBACION';
+      auditAdd({entidad:'RUTA',accion:'Tarifas definidas para ruta',campo:'Estado',anterior:'En tarifación',nuevo:'Pendiente de aprobaciones',por:A,ref:r.id});
+      notificar(A,{tipo:'RUTA_APROBACION',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Ruta pendiente de aprobación: ${r.codigo||r.nombre}`,detalle:{ruta:r.nombre,codigo:r.codigo||'',proyecto:r.proyecto,cliente:r.cliente,tarifas:out.map(t=>`${t.id} · ${t.capacidad}`).join(', '),importe:out[0].importe,fecha:nowIso()}});
+    }
+    return {tarifas:out};
+  });},
   editarTarifa(uid,id,d){return exec(uid,'editarTarifa','',A=>{
     need(A,'tarifas_editar','editar tarifas');
     const t=DB.tarifas.find(x=>x.id===id);if(!t)deny('La tarifa no existe.','NO_EXISTE');
