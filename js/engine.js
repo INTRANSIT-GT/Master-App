@@ -412,7 +412,7 @@ const pagadoFmt=n=>n;
 /* ---------- Ayudas de rutas, tarifas y avisos ---------- */
 /* La capacidad depende del equipo: si hay arrastre con capacidad registrada, manda el arrastre;
    si no, la unidad. Un cabezal sin arrastre no tiene capacidad propia. */
-const esEquipoArrastre=f=>{let x=f&&f.extra;if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}}if(!x||typeof x!=='object')x={};return !!f&&(x.esEquipo===true||/^RAS/i.test(String(f.tipo||''))||/^TC/i.test(String(f.placa||''))||/^TC/i.test(String(f.unidad||''))||/^(furgon|remolque|semiremolque|dollytrailer|plataforma)$/i.test(String(f.tipo||'').replace(/\s+/g,'')));};
+const esEquipoArrastre=f=>{let x=f&&f.extra;for(let i=0;i<4;i++){if(Array.isArray(x)){x=x.length?x[x.length-1]:{};continue;}if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}continue;}break;}if(!x||typeof x!=='object'||Array.isArray(x))x={};return !!f&&(x.esEquipo===true||/^RAS/i.test(String(f.tipo||''))||/^TC/i.test(String(f.placa||''))||/^TC/i.test(String(f.unidad||''))||/^(furgon|remolque|semiremolque|dollytrailer|plataforma)$/i.test(String(f.tipo||'').replace(/\s+/g,'')));};
 function capacidadEquipo(unidadId,placaArrastre){
   const arrTxt=String(placaArrastre==null?'':placaArrastre).trim();
   const U=FLOTA.find(f=>f.unidad===unidadId||f.placa===unidadId)||null;

@@ -241,3 +241,8 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Se quitó el botón **Editar** de esa lista y el servidor rechaza `guardarCatalogo` para `arrastre`; la fuente de verdad es Fleetio.
 - La lista de arrastres del formulario de viaje usa únicamente esos equipos de Fleetio; los códigos históricos que no estén en Fleetio no se ofrecen para viajes nuevos (si un viaje antiguo los tiene, se conserva su valor al editar).
 - **Front/SW v1.5.1; API desplegada.**
+### Corrección 2026-10-30 · `extra` acumulado impedía ver los arrastres
+- El sync estaba guardando `master.flota.extra` como **arreglo de textos JSON** (un elemento por corrida) porque usaba `master.flota.extra || excluded.extra` al hacer upsert. El filtro de equipos solo entendía objeto/string y descartaba los 96.
+- Se cambió el upsert del sync a `extra=excluded.extra` y se hizo el lector tolerante a arreglos anidados/strings en `ui.js`, `engine.js` y `transporte.js`.
+- Se ejecutó el sync: **49 vehículos, 96 equipos, 98 mantenimientos, 1,864 gastos**; los equipos vuelven a aparecer en el formulario de viaje y en Catálogos, sin botón Editar.
+- **Front/SW v1.5.2; API y sync desplegados.**

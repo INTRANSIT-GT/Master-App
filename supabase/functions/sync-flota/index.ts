@@ -202,7 +202,7 @@ Deno.serve(async (req: Request) => {
     await sql`update master.flota set tango = '' where coalesce(tango,'') <> '' and unidad not in ${sql(cmi.length ? cmi : [""])}`;
 
     const COLS_E = ["unidad", "placa", "tipo", "capacidad", "extra"];
-    const updE = "placa=excluded.placa, tipo=excluded.tipo, capacidad=excluded.capacidad, extra=master.flota.extra || excluded.extra";
+    const updE = "placa=excluded.placa, tipo=excluded.tipo, capacidad=excluded.capacidad, extra=excluded.extra";
     for (const c of trozos(equipoRows, 500)) await sql`insert into master.flota ${sql(c, ...COLS_E)} on conflict (unidad) do update set ${sql.unsafe(updE)}`;
 
     const COLS_M = ["id_mantenimiento", "unidad", "fleetio_vehicle_id", "fecha", "referencia", "estado", "proveedor", "medidor", "subtotal", "mano_obra", "repuestos", "total", "notas", "actualizado"];

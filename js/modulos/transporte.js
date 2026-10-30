@@ -197,7 +197,7 @@ function actualizarCapacidadRuta(M){
 const esPilotoDeUnidad=(pilotoId,unidad)=>{const P=PILOTOS.find(p=>p.id===pilotoId);return !!(P&&unidad&&String(P.unidad||'')===unidad);};
 /* Equipos de arrastre disponibles: SOLO los Tools/Equipment sincronizados desde Fleetio.
    El catálogo editable de Catálogos ya no alimenta esta lista. */
-const esEquipoFleetio=f=>{let x=f&&f.extra;if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}}return !!(x&&typeof x==='object'&&x.esEquipo===true);};
+const esEquipoFleetio=f=>{let x=f&&f.extra;for(let i=0;i<4;i++){if(Array.isArray(x)){x=x.length?x[x.length-1]:{};continue;}if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}continue;}break;}return !!(x&&typeof x==='object'&&!Array.isArray(x)&&x.esEquipo===true);};
 function arrastresDisponibles(){
   const set=new Set();
   FLOTA.forEach(f=>{if(esEquipoFleetio(f)){const p=String(f.placa||f.unidad||'').trim();if(p)set.add(p);}});

@@ -548,7 +548,7 @@ VIEWS.todos=()=>`<div class="inner">${pageHead('Todos los viajes','Sin filtro de
 
 
 function fleTabla(h,rows,key){const pg=paginar(key||'fle',rows);return `<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${pg.filas.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${paginador(key||'fle',pg)}`;}
-function flotaMeta(f){let x=f&&f.extra;if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}}return x||{};}
+function flotaMeta(f){let x=f&&f.extra;for(let i=0;i<4;i++){if(Array.isArray(x)){x=x.length?x[x.length-1]:{};continue;}if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}continue;}break;}return (x&&typeof x==='object'&&!Array.isArray(x))?x:{};}
 function flePanel(){
   const d=S.fle;
   const equipos=FLOTA.filter(f=>flotaMeta(f).esEquipo).sort((a,b)=>String(a.unidad).localeCompare(String(b.unidad),'es'));
