@@ -11,7 +11,7 @@ const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), '
 const MIGRACIONES = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
   '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql',
   '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql', '025_indices_viajes.sql',
-  '026_viajes_sin_ruta.sql', '027_reportes_ayuda.sql', '028_ayuda_proyectos.sql', '029_lugares.sql', '030_origen_destino_texto.sql', '031_bucket_manuales.sql', '032_pilotos_documentos.sql', '033_acceso_modulos_secciones.sql'];   /* 019: las listas del sistema (OPL, orígenes, tipos) viven en master.catalogos */
+  '026_viajes_sin_ruta.sql', '027_reportes_ayuda.sql', '028_ayuda_proyectos.sql', '029_lugares.sql', '030_origen_destino_texto.sql', '031_bucket_manuales.sql', '032_pilotos_documentos.sql', '033_acceso_modulos_secciones.sql', '041_ruta_capacidad_km.sql'];   /* 019: las listas del sistema (OPL, orígenes, tipos) viven en master.catalogos */
 
 const db = new PGlite();
 await db.exec('set search_path = master, public');   /* las tablas viven en el esquema master (integración AP_VIAJES) */
@@ -194,12 +194,12 @@ const ev = await comoUsuario('ped', async tx => (await tx.query('select count(*)
 T('51 Almacenamiento: Pedro ve la evidencia de su viaje y Bryan no', ev === 1 && ev2 === 0, [ev, ev2]);
 
 /* ---- 7. Rutas nuevas, validación y notificaciones ---- */
-const sol = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'Ruta nueva Escuintla', origenProp: 'CEDIS Mixco', destinoProp: 'Escuintla centro' });
+const sol = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'Ruta nueva Escuintla', capacidad: '10 Ton', km: 42.5, origenProp: 'CEDIS Mixco', destinoProp: 'Escuintla centro' });
 T('52 Encargado/IMPLAN solicita una ruta nueva: queda PENDIENTE', sol.ok && (await q1('select estado from rutas where id=$1', [sol.result?.id]))[0].estado === 'PENDIENTE', sol);
 const nt = await q1('select destinatarios from notificaciones order by id desc limit 1');
 T('53 Genera la notificación para las dos gerencias', nt[0] && nt[0].destinatarios.includes('GERENTE_COMERCIAL') && nt[0].destinatarios.includes('GERENTE_TRANSPORTE'), nt);
 T('54 Otro proyecto o cliente: solicitud rechazada', (await api('imp', 'solicitarRuta', { cliente: 'CMI', proyecto: 'ABASA', nombre: 'X ruta' })).ok === false && (await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'LV', nombre: 'X ruta' })).ok === false);
-const val = await api('ale', 'validarRuta', sol.result.id, { codigo: 'COL-099', origenId: 'CP', destinoId: 'D-C2' });
+const val = await api('ale', 'validarRuta', sol.result.id, { codigo: 'COL-099', origenId: 'CP', destinoId: 'D-C2', capacidad: '10 Ton', km: 45 });
 T('55 Comercial valida la ruta: queda En tarifación con código', val.ok && (await q1('select estado,codigo from rutas where id=$1', [sol.result.id]))[0].estado === 'EN_TARIFACION' && (await q1('select codigo from rutas where id=$1', [sol.result.id]))[0].codigo === 'COL-099', val);
 
 /* ---- 8. Usuarios: alta con cuenta de acceso solo para la administradora ---- */
@@ -350,8 +350,8 @@ const impSql = (await q1("select count(*)::int n from viajes v where v.cliente_i
 T('106 El perfil limitado informa «en la base» solo sus viajes visibles', snImpR.ok && snImp.ventana && snImp.ventana.enBase === impSql, [snImp.ventana && snImp.ventana.enBase, impSql]);
 /* El código de la ruta lo asigna el sistema: el usuario no tiene que inventarlo al solicitar, validar ni registrar. */
 await db.exec(`insert into master.destinos(id,nombre,cliente_id) values ('D-C3','Colgate 3','COLGATE'),('D-C4','Colgate 4','COLGATE') on conflict do nothing`);
-const solR = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'CP → Bodega Central' });
-const valR = await api('gtr', 'validarRuta', solR.result.id, { origenId: 'CP', destinoId: 'D-C3' });
+const solR = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'CP → Bodega Central', capacidad: '10 Ton', km: 25 });
+const valR = await api('gtr', 'validarRuta', solR.result.id, { origenId: 'CP', destinoId: 'D-C3', capacidad: '10 Ton', km: 25 });
 T('113 Al validar una ruta sin escribir código, el sistema lo asigna (sigla del cliente + correlativo)', valR.ok && /^COL-\d{3,4}$/.test(valR.result.codigo), [valR.ok, valR.code, valR.message, valR.result && valR.result.codigo]);
 const regR = await api('adm', 'registrarRuta', { nombre: 'CP → Colgate Sur', cliente: 'COLGATE', proyecto: 'COLGATE', origenId: 'CP', destinoId: 'D-C4' });
 T('114 Al registrar una ruta del catálogo sin código, también se asigna solo y no repite el anterior', regR.ok && /^COL-\d{3,4}$/.test(regR.result.codigo) && regR.result.codigo !== valR.result.codigo, regR);

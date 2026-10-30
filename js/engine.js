@@ -441,10 +441,10 @@ function notificar(A,o){
   return n;
 }
 function crearRutaPendiente(A,o){
-  const r={id:'R-'+pad4(DB.seq.rut++),codigo:'',nombre:o.nombre,cliente:o.cliente,proyecto:o.proyecto,origen:'',destino:'',estado:'PENDIENTE',origenProp:o.origenProp||'',destinoProp:o.destinoProp||'',fuente:o.fuente,solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:'',validadaEn:'',aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:o.viajeRef||''};
+  const r={id:'R-'+pad4(DB.seq.rut++),codigo:'',nombre:o.nombre,cliente:o.cliente,proyecto:o.proyecto,origen:'',destino:'',estado:'PENDIENTE',origenProp:o.origenProp||'',destinoProp:o.destinoProp||'',fuente:o.fuente,solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:'',validadaEn:'',aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:o.viajeRef||'',capacidad:o.capacidad||'',km:o.km==null||o.km===''?null:Number(o.km)};
   DB.rutas.push(r);
   auditAdd({entidad:'RUTA',accion:'Ruta nueva solicitada',campo:'Ruta',nuevo:o.nombre,por:A,ref:`${r.id} · ${o.cliente} · ${o.proyecto}`});
-  notificar(A,{tipo:'RUTA_PENDIENTE',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Ruta nueva pendiente de validación: ${o.nombre}`,detalle:{proyecto:o.proyecto,cliente:o.cliente,ruta:o.nombre,origen:o.origenProp||'(no indicado)',destino:o.destinoProp||'(no indicado)',solicitadoPor:A.nombre,fecha:r.solicitadaEn,viaje:o.viajeRef||''}});
+  notificar(A,{tipo:'RUTA_PENDIENTE',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Ruta nueva pendiente de validación: ${o.nombre}`,detalle:{proyecto:o.proyecto,cliente:o.cliente,ruta:o.nombre,origen:o.origenProp||'(no indicado)',destino:o.destinoProp||'(no indicado)',capacidad:r.capacidad||'(no indicada)',km:r.km==null?'(no indicados)':`${r.km} km`,solicitadoPor:A.nombre,fecha:r.solicitadaEn,viaje:o.viajeRef||''}});
   return r;
 }
 /* Código de ruta automático: la sigla del cliente (3 letras) más un correlativo (COL-001, COL-002…).
@@ -466,6 +466,20 @@ function textoLugar(v,campo){
   if(t.length>120)deny(`El ${campo} admite máximo 120 caracteres.`,'VALIDACION');
   return t;
 }
+function capacidadRuta(v){
+  const c=String(v==null?'':v).trim();
+  if(!c)deny('Selecciona la capacidad de la unidad para esta ruta.','VALIDACION');
+  if(!capsCat().includes(c))deny('Capacidad no válida (catálogo de la flota).','VALIDACION');
+  return c;
+}
+function kmRuta(dato){
+  const valor=String(dato==null?'':dato).trim();
+  if(!valor)deny('Escribe los KM de la ruta.','VALIDACION');
+  const n=Number(valor);
+  if(!Number.isFinite(n)||n<=0)deny('Los KM de la ruta deben ser mayores que cero.','VALIDACION');
+  if(n>100000)deny('Los KM de la ruta no pueden superar 100,000.','VALIDACION');
+  return Math.round(n*100)/100;
+}
 function validarRutaDatos(d){
   const cliente=d.cliente;if(!DB.clientes.find(c=>c.id===cliente))deny('Cliente no válido.','VALIDACION');
   if(!proyectosDe(cliente).includes(d.proyecto))deny('Proyecto no válido para el cliente.','VALIDACION');
@@ -476,7 +490,12 @@ function validarRutaDatos(d){
   const origen=textoLugar(d.origen,'origen'),destino=textoLugar(d.destino,'destino');
   const igual=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
   if(DB.rutas.some(r=>r.id!==d.id&&r.estado!=='RECHAZADA'&&r.cliente===cliente&&r.proyecto===d.proyecto&&igual(r.origen,origen)&&igual(r.destino,destino)))deny('Ya existe una ruta con ese origen y destino en el proyecto.','DUPLICADO');
-  return {codigo,nombre,cliente,proyecto:d.proyecto,origen,destino};
+  const capacidad=String(d.capacidad==null?'':d.capacidad).trim();
+  if(capacidad&&!capsCat().includes(capacidad))deny('Capacidad no válida (catálogo de la flota).','VALIDACION');
+  const kmTxt=String(d.km==null?'':d.km).trim();
+  let km=null;
+  if(kmTxt){const n=Number(kmTxt);if(!Number.isFinite(n)||n<=0||n>100000)deny('Los KM de la ruta deben ser mayores que cero y no superar 100,000.','VALIDACION');km=Math.round(n*100)/100;}
+  return {codigo,nombre,cliente,proyecto:d.proyecto,origen,destino,capacidad,km};
 }
 function rutaOK(cliente,proyecto,rid){
   const r=DB.rutas.find(x=>x.id===rid);

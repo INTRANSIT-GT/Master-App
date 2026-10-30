@@ -11,7 +11,7 @@ const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), '
 const BASE = ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql',
   '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '017_roles_departamentos.sql', '018_rol_proyectos.sql',
   '019_catalogos.sql', '020_arrastres.sql', '021_fecha_entrega_anterior.sql', '024_permisos_gerente_transporte.sql', '025_indices_viajes.sql',
-  '026_viajes_sin_ruta.sql', '027_reportes_ayuda.sql', '028_ayuda_proyectos.sql', '029_lugares.sql', '030_origen_destino_texto.sql', '031_bucket_manuales.sql', '032_pilotos_documentos.sql', '033_acceso_modulos_secciones.sql'];
+  '026_viajes_sin_ruta.sql', '027_reportes_ayuda.sql', '028_ayuda_proyectos.sql', '029_lugares.sql', '030_origen_destino_texto.sql', '031_bucket_manuales.sql', '032_pilotos_documentos.sql', '033_acceso_modulos_secciones.sql', '041_ruta_capacidad_km.sql'];
 let ok = 0, mal = 0; const filas = [];
 const T = (n, c, x) => { c ? ok++ : mal++; filas.push((c ? 'OK   ' : 'FAIL ') + n + (!c && x !== undefined ? '  ← ' + (typeof x === 'string' ? x : JSON.stringify(x)).slice(0, 500) : '')); };
 const uuid = () => crypto.randomUUID();

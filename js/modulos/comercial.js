@@ -528,7 +528,7 @@ Object.assign(ACT,{
     await ACT.tarifaOpen({});
     if(!S.modal)return;
     S.modal.data.cliente=r.cliente;S.modal.data.proyecto=r.proyecto;S.modal.data.rutaId=r.id;
-    if(!S.modal.data.capacidad)S.modal.data.capacidad=capsCat()[0]||'';
+    S.modal.data.capacidad=r.capacidad||S.modal.data.capacidad||capsCat()[0]||'';
     render();
   },
   async tarifaSave(d){const m=S.modal.data;const r=await run(()=>d.id?API.editarTarifa(S.user.id,d.id,m):API.crearTarifa(S.user.id,m),t=>d.id?`Tarifa ${t.id} actualizada.`:`Tarifa ${t.id} creada.`,true);if(r.ok)afterWrite();},

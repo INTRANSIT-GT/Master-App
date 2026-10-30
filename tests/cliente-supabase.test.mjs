@@ -21,7 +21,7 @@ await db.exec(`create role anon nologin; create role authenticated nologin; crea
   create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security; grant usage on schema storage to authenticated; grant select, insert on storage.objects to authenticated;`);
-for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql', '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '019_catalogos.sql', '020_arrastres.sql']) await db.exec(leer('supabase/migrations/' + f));
+for (const f of ['001_esquema.sql', '002_seguridad_rls.sql', '003_almacenamiento.sql', '004_permisos_base.sql', '006_flota_fleetio.sql', '007_flujo_operativo.sql', '008_contabilidad.sql', '016_ordenes_pago.sql', '023_corregir_estados_rls.sql', '019_catalogos.sql', '020_arrastres.sql', '041_ruta_capacidad_km.sql']) await db.exec(leer('supabase/migrations/' + f));
 const U = {}, EMAIL = {};
 const mk = async (k, usuario, nombre, rol, proyectos = []) => { U[k] = uuid(); EMAIL[usuario + '@intransit.test'] = U[k]; await db.query('insert into auth.users(id,email) values ($1,$2)', [U[k], usuario + '@intransit.test']);
   await db.query('insert into master.perfiles(id,usuario,email,nombre,rol,proyectos) values ($1,$2,$3,$4,$5,$6)', [U[k], usuario, usuario + '@intransit.test', nombre, rol, proyectos]); };

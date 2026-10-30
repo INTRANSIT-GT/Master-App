@@ -7,7 +7,7 @@ import fs from 'node:fs'; import path from 'node:path'; import crypto from 'node
 import { ejecutar } from './supabase/functions/api/handler.mjs';
 const raíz = path.dirname(new URL(import.meta.url).pathname);
 const sqlDe = f => fs.readFileSync(path.join(raíz, 'supabase/migrations', f), 'utf8');
-const MIG = ['001_esquema.sql','002_seguridad_rls.sql','003_almacenamiento.sql','004_permisos_base.sql','006_flota_fleetio.sql','007_flujo_operativo.sql','008_contabilidad.sql','016_ordenes_pago.sql','023_corregir_estados_rls.sql','017_roles_departamentos.sql','018_rol_proyectos.sql','019_catalogos.sql','020_arrastres.sql','021_fecha_entrega_anterior.sql','024_permisos_gerente_transporte.sql','025_indices_viajes.sql'];
+const MIG = ['001_esquema.sql','002_seguridad_rls.sql','003_almacenamiento.sql','004_permisos_base.sql','006_flota_fleetio.sql','007_flujo_operativo.sql','008_contabilidad.sql','016_ordenes_pago.sql','023_corregir_estados_rls.sql','017_roles_departamentos.sql','018_rol_proyectos.sql','019_catalogos.sql','020_arrastres.sql','021_fecha_entrega_anterior.sql','024_permisos_gerente_transporte.sql','025_indices_viajes.sql', '041_ruta_capacidad_km.sql'];
 const db = new PGlite();
 await db.exec('set search_path = master, public');
 await db.exec(`create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;

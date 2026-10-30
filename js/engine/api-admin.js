@@ -18,12 +18,13 @@ Object.assign(API,{
     const nombre=String(d.nombre||'').trim();if(nombre.length<3||nombre.length>80)deny('Escribe el nombre o la referencia de la ruta (3 a 80 caracteres).','VALIDACION');
     const op=String(d.origenProp||'').trim(),dp=String(d.destinoProp||'').trim();if(op.length>80||dp.length>80)deny('Origen y destino: máximo 80 caracteres.','VALIDACION');
     if(DB.rutas.some(r=>!['RECHAZADA'].includes(r.estado)&&r.cliente===cliente&&r.proyecto===proy&&r.nombre.toLowerCase()===nombre.toLowerCase()))deny('Ya hay una ruta pendiente con esa referencia en este proyecto.','DUPLICADO');
-    return crearRutaPendiente(A,{cliente,proyecto:proy,nombre,origenProp:op,destinoProp:dp,fuente:'SOLICITUD'});
+    const capacidad=capacidadRuta(d&&d.capacidad), km=kmRuta(d&&d.km);
+    return crearRutaPendiente(A,{cliente,proyecto:proy,nombre,origenProp:op,destinoProp:dp,capacidad,km,fuente:'SOLICITUD'});
   });},
   registrarRuta(uid,d){return exec(uid,'registrarRuta','',A=>{
     need(A,'rutas_gestionar','registrar rutas en el catálogo');
     const v=validarRutaDatos(d);
-    const r={id:'R-'+pad4(DB.seq.rut++),codigo:v.codigo,nombre:v.nombre,cliente:v.cliente,proyecto:v.proyecto,origen:v.origen,destino:v.destino,estado:'EN_TARIFACION',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:A.nombre,validadaEn:nowIso(),aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:''};
+    const r={id:'R-'+pad4(DB.seq.rut++),codigo:v.codigo,nombre:v.nombre,cliente:v.cliente,proyecto:v.proyecto,origen:v.origen,destino:v.destino,estado:'EN_TARIFACION',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:A.nombre,validadaEn:nowIso(),aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:'',capacidad:v.capacidad,km:v.km};
     DB.rutas.push(r);
     auditAdd({entidad:'RUTA',accion:'Ruta registrada para tarifación',campo:'Ruta',nuevo:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`,por:A,ref:r.id});
     return r;
@@ -32,15 +33,16 @@ Object.assign(API,{
     need(A,'rutas_validar','validar o asignar rutas');
     const r=DB.rutas.find(x=>x.id===id);if(!r)deny('La ruta no existe.','NO_EXISTE');
     if(r.estado!=='PENDIENTE')deny('Solo se validan rutas pendientes.','ESTADO_INVALIDO');
-    const v=validarRutaDatos({codigo:d&&d.codigo,nombre:r.nombre,cliente:r.cliente,proyecto:r.proyecto,origen:d&&d.origen,destino:d&&d.destino});
-    r.codigo=v.codigo;r.origen=v.origen;r.destino=v.destino;r.estado='EN_TARIFACION';r.validadaPor=A.nombre;r.validadaEn=nowIso();
+    const capacidad=capacidadRuta((d&&d.capacidad)||r.capacidad), km=kmRuta((d&&d.km)||r.km);
+    const v=validarRutaDatos({codigo:d&&d.codigo,nombre:r.nombre,cliente:r.cliente,proyecto:r.proyecto,origen:d&&d.origen,destino:d&&d.destino,capacidad,km});
+    r.codigo=v.codigo;r.origen=v.origen;r.destino=v.destino;r.capacidad=v.capacidad;r.km=v.km;r.estado='EN_TARIFACION';r.validadaPor=A.nombre;r.validadaEn=nowIso();
     auditAdd({entidad:'RUTA',accion:'Ruta validada',campo:'Estado',anterior:'Pendiente',nuevo:'En tarifación',por:A,ref:`${r.id} · ${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`});
     DB.trips.filter(t=>t.rutaId===r.id).forEach(t=>{
       const ao=t.origen,ad=t.destino;t.origen=r.origen;t.destino=r.destino;
       auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Ruta asignada: origen y destino completados',campo:'Origen',anterior:ao?nombreOrigen(ao):'(pendiente)',nuevo:nombreOrigen(r.origen),por:A,ref:r.id});
       auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Ruta asignada: origen y destino completados',campo:'Destino',anterior:ad?nombreDestino(ad):'(pendiente)',nuevo:nombreDestino(r.destino),por:A,ref:r.id});
     });
-    notificar(A,{tipo:'RUTA_TARIFACION',destinatarios:['GERENTE_COMERCIAL'],asunto:`Ruta lista para definir tarifa: ${r.codigo}`,detalle:{ruta:r.nombre,codigo:r.codigo,proyecto:r.proyecto,cliente:r.cliente,origen:nombreOrigen(r.origen),destino:nombreDestino(r.destino)}});
+    notificar(A,{tipo:'RUTA_TARIFACION',destinatarios:['GERENTE_COMERCIAL'],asunto:`Ruta lista para definir tarifa: ${r.codigo}`,detalle:{ruta:r.nombre,codigo:r.codigo,proyecto:r.proyecto,cliente:r.cliente,origen:nombreOrigen(r.origen),destino:nombreDestino(r.destino),capacidad:r.capacidad,km:r.km}});
     return r;
   });},
   rechazarRuta(uid,id,motivo){return exec(uid,'rechazarRuta','',A=>{

@@ -181,6 +181,15 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Se recalcula al cambiar la unidad o la fecha; el servidor vuelve a asignarlo al crear el viaje.
 - **front/SW v1.3.10**; API actualizado.
 
+
+## 2026-10-30 · Capacidad de unidad y KM en la solicitud de ruta
+- La solicitud de ruta nueva (desde Rutas y desde «NUEVA RUTA» en el viaje) pide **capacidad de la unidad** y **KM de la ruta**.
+- Los datos se guardan en `rutas`, se muestran en el catálogo y se envían a Comercial para la tarifa.
+- Al validar o registrar una ruta se revisan ambos datos; la tarifa parte de la capacidad indicada.
+- **Migración aplicada:** `041_ruta_capacidad_km.sql` en `bocgzjupocnvjehklxhs`.
+- **API desplegada** con el modelo y las validaciones; **front/SW v1.4.3**.
+- **Verificado:** una solicitud con capacidad `22` y `12.5 km` se guardó y se validó con `15.5 km`; una solicitud sin capacidad se rechazó.
+
 ## 2026-10-30 · Refactor modular del motor, formulario y API
 - `fieldsHTML()` dividido en `formCtx`, `clienteFieldsHTML`, `planFieldsHTML`, `unidadFieldsHTML`, `rutaFieldsHTML`, `tiemposFieldsHTML` y `gastosFieldsHTML`.
 - `js/engine.js` conserva la base; `js/engine/permisos.js` contiene permisos, roles, secciones y campos base; los 90 métodos de `API` viven en `js/engine/api-sesion.js`, `api-snapshot.js`, `api-viajes.js`, `api-comercial.js`, `api-finanzas.js` y `api-admin.js`.

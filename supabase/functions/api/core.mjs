@@ -601,10 +601,10 @@ function notificar(A,o){
   return n;
 }
 function crearRutaPendiente(A,o){
-  const r={id:'R-'+pad4(DB.seq.rut++),codigo:'',nombre:o.nombre,cliente:o.cliente,proyecto:o.proyecto,origen:'',destino:'',estado:'PENDIENTE',origenProp:o.origenProp||'',destinoProp:o.destinoProp||'',fuente:o.fuente,solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:'',validadaEn:'',aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:o.viajeRef||''};
+  const r={id:'R-'+pad4(DB.seq.rut++),codigo:'',nombre:o.nombre,cliente:o.cliente,proyecto:o.proyecto,origen:'',destino:'',estado:'PENDIENTE',origenProp:o.origenProp||'',destinoProp:o.destinoProp||'',fuente:o.fuente,solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:'',validadaEn:'',aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:o.viajeRef||'',capacidad:o.capacidad||'',km:o.km==null||o.km===''?null:Number(o.km)};
   DB.rutas.push(r);
   auditAdd({entidad:'RUTA',accion:'Ruta nueva solicitada',campo:'Ruta',nuevo:o.nombre,por:A,ref:`${r.id} · ${o.cliente} · ${o.proyecto}`});
-  notificar(A,{tipo:'RUTA_PENDIENTE',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Ruta nueva pendiente de validación: ${o.nombre}`,detalle:{proyecto:o.proyecto,cliente:o.cliente,ruta:o.nombre,origen:o.origenProp||'(no indicado)',destino:o.destinoProp||'(no indicado)',solicitadoPor:A.nombre,fecha:r.solicitadaEn,viaje:o.viajeRef||''}});
+  notificar(A,{tipo:'RUTA_PENDIENTE',destinatarios:['GERENTE_COMERCIAL','GERENTE_TRANSPORTE'],asunto:`Ruta nueva pendiente de validación: ${o.nombre}`,detalle:{proyecto:o.proyecto,cliente:o.cliente,ruta:o.nombre,origen:o.origenProp||'(no indicado)',destino:o.destinoProp||'(no indicado)',capacidad:r.capacidad||'(no indicada)',km:r.km==null?'(no indicados)':`${r.km} km`,solicitadoPor:A.nombre,fecha:r.solicitadaEn,viaje:o.viajeRef||''}});
   return r;
 }
 /* Código de ruta automático: la sigla del cliente (3 letras) más un correlativo (COL-001, COL-002…).
@@ -626,6 +626,20 @@ function textoLugar(v,campo){
   if(t.length>120)deny(`El ${campo} admite máximo 120 caracteres.`,'VALIDACION');
   return t;
 }
+function capacidadRuta(v){
+  const c=String(v==null?'':v).trim();
+  if(!c)deny('Selecciona la capacidad de la unidad para esta ruta.','VALIDACION');
+  if(!capsCat().includes(c))deny('Capacidad no válida (catálogo de la flota).','VALIDACION');
+  return c;
+}
+function kmRuta(dato){
+  const valor=String(dato==null?'':dato).trim();
+  if(!valor)deny('Escribe los KM de la ruta.','VALIDACION');
+  const n=Number(valor);
+  if(!Number.isFinite(n)||n<=0)deny('Los KM de la ruta deben ser mayores que cero.','VALIDACION');
+  if(n>100000)deny('Los KM de la ruta no pueden superar 100,000.','VALIDACION');
+  return Math.round(n*100)/100;
+}
 function validarRutaDatos(d){
   const cliente=d.cliente;if(!DB.clientes.find(c=>c.id===cliente))deny('Cliente no válido.','VALIDACION');
   if(!proyectosDe(cliente).includes(d.proyecto))deny('Proyecto no válido para el cliente.','VALIDACION');
@@ -636,7 +650,12 @@ function validarRutaDatos(d){
   const origen=textoLugar(d.origen,'origen'),destino=textoLugar(d.destino,'destino');
   const igual=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
   if(DB.rutas.some(r=>r.id!==d.id&&r.estado!=='RECHAZADA'&&r.cliente===cliente&&r.proyecto===d.proyecto&&igual(r.origen,origen)&&igual(r.destino,destino)))deny('Ya existe una ruta con ese origen y destino en el proyecto.','DUPLICADO');
-  return {codigo,nombre,cliente,proyecto:d.proyecto,origen,destino};
+  const capacidad=String(d.capacidad==null?'':d.capacidad).trim();
+  if(capacidad&&!capsCat().includes(capacidad))deny('Capacidad no válida (catálogo de la flota).','VALIDACION');
+  const kmTxt=String(d.km==null?'':d.km).trim();
+  let km=null;
+  if(kmTxt){const n=Number(kmTxt);if(!Number.isFinite(n)||n<=0||n>100000)deny('Los KM de la ruta deben ser mayores que cero y no superar 100,000.','VALIDACION');km=Math.round(n*100)/100;}
+  return {codigo,nombre,cliente,proyecto:d.proyecto,origen,destino,capacidad,km};
 }
 function rutaOK(cliente,proyecto,rid){
   const r=DB.rutas.find(x=>x.id===rid);
@@ -1130,7 +1149,7 @@ Object.assign(API,{
     if(!clientesAsig(A).includes(cliente))deny('No tienes asignado ese cliente: no puedes crear viajes para él.');
     const P0=PILOTOS.find(p=>p.id===(d&&d.pilotoId));
     if(P0&&P0.activo===false)deny('El piloto está dado de baja: elige otro.','VALIDACION');
-    const keys=[...DATA_KEYS,...TIEMPO_KEYS,...DVKEYS,'rutaRef','sinRuta','desvio','desvioDestino'];
+    const keys=[...DATA_KEYS,...TIEMPO_KEYS,...DVKEYS,'rutaRef','sinRuta','desvio','desvioDestino','rutaCapacidad','rutaKm'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origen'||k==='destino'?'El origen y el destino se toman de la ruta del viaje.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
     /* El viaje nace Planificado: los demás estados los produce el flujo paso a paso (en ruta, entregado,
@@ -1155,11 +1174,12 @@ Object.assign(API,{
     Object.keys(dvT).forEach(k=>{const m=valKey(cliente,k,dvT[k]);if(m)deny(m,'VALIDACION');});
     if(dvT.dvIngresoBodega&&dvT.dvInicioDescarga&&dvT.dvInicioDescarga<dvT.dvIngresoBodega)deny('Desvío: el inicio de descarga no puede ser antes del ingreso a bodega.','VALIDACION');
     if(dvT.dvInicioDescarga&&dvT.dvFinDescarga&&dvT.dvFinDescarga<dvT.dvInicioDescarga)deny('Desvío: el fin de descarga no puede ser antes del inicio de descarga.','VALIDACION');
-    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestino'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
-    let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
+    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestino'||k==='rutaCapacidad'||k==='rutaKm'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
+    let ruta=null,pend=v.rutaId==='NO_ASIGNADA',capPend='',kmPend=null;
     if(sinRuta){if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para registrar un viaje SIN RUTA selecciona el proyecto.','VALIDACION');}
-    else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');}
+    else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');capPend=capacidadRuta(v.rutaCapacidad);kmPend=kmRuta(v.rutaKm);}
     else {ruta=DB.rutas.find(r=>r.id===v.rutaId);if(!ruta||ruta.cliente!==cliente)deny('La ruta no corresponde al cliente elegido.','VALIDACION');v.proyectoCat=ruta.proyecto;}
+    delete v.rutaCapacidad;delete v.rutaKm;
     const clave=pend?'ref:'+v.rutaRef.toLowerCase():v.rutaId;
     const dup=v.fechaPlan&&v.pilotoId&&DB.trips.find(t=>t.fechaPlan===v.fechaPlan&&t.pilotoId===v.pilotoId&&((pend&&t.rutaRef&&('ref:'+t.rutaRef.toLowerCase())===clave)||(!pend&&t.rutaId===clave)));
     if(dup)deny(`Este viaje ya existe (#${dup.id}): misma fecha y hora plan, piloto y ruta.`,'DUPLICADO');
@@ -1167,7 +1187,7 @@ Object.assign(API,{
     if(gAd.length)v.gastosAdicionales=gAd;else delete v.gastosAdicionales;
     const id=String(DB.seq.trip++).padStart(6,'0');
     let rutaId=v.rutaId;
-    if(pend){const rr=crearRutaPendiente(A,{cliente,proyecto:v.proyectoCat,nombre:v.rutaRef,fuente:'VIAJE',viajeRef:id});rutaId=rr.id;}
+    if(pend){const rr=crearRutaPendiente(A,{cliente,proyecto:v.proyectoCat,nombre:v.rutaRef,capacidad:capPend,km:kmPend,fuente:'VIAJE',viajeRef:id});rutaId=rr.id;}
     const P=PILOTOS.find(p=>p.id===v.pilotoId);
     const t=Object.assign({id,proyecto:cliente,unidadId:P?P.unidad:'',estado:'PLANIFICADO',creadoPor:A.nombre,creadoPorId:A.id,creadoEn:nowIso(),comentarioRevision:'',rechazos:0,duplicadoAprobado:false,liqIntentos:0,liqActualId:'',liqAprobadaEn:'',agrupacionId:'',numeroFactura:'',tarifaCliente:'',tarifaId:'',costoProveedor:''},v,{rutaId,origen:ruta?ruta.origen:'',destino:ruta?ruta.destino:'',rutaRef:pend?v.rutaRef:''});
     if(!t.unidadId)t.unidadId=P?P.unidad:'';            /* si no se eligió placa, se usa la unidad del piloto */
@@ -2048,12 +2068,13 @@ Object.assign(API,{
     const nombre=String(d.nombre||'').trim();if(nombre.length<3||nombre.length>80)deny('Escribe el nombre o la referencia de la ruta (3 a 80 caracteres).','VALIDACION');
     const op=String(d.origenProp||'').trim(),dp=String(d.destinoProp||'').trim();if(op.length>80||dp.length>80)deny('Origen y destino: máximo 80 caracteres.','VALIDACION');
     if(DB.rutas.some(r=>!['RECHAZADA'].includes(r.estado)&&r.cliente===cliente&&r.proyecto===proy&&r.nombre.toLowerCase()===nombre.toLowerCase()))deny('Ya hay una ruta pendiente con esa referencia en este proyecto.','DUPLICADO');
-    return crearRutaPendiente(A,{cliente,proyecto:proy,nombre,origenProp:op,destinoProp:dp,fuente:'SOLICITUD'});
+    const capacidad=capacidadRuta(d&&d.capacidad), km=kmRuta(d&&d.km);
+    return crearRutaPendiente(A,{cliente,proyecto:proy,nombre,origenProp:op,destinoProp:dp,capacidad,km,fuente:'SOLICITUD'});
   });},
   registrarRuta(uid,d){return exec(uid,'registrarRuta','',A=>{
     need(A,'rutas_gestionar','registrar rutas en el catálogo');
     const v=validarRutaDatos(d);
-    const r={id:'R-'+pad4(DB.seq.rut++),codigo:v.codigo,nombre:v.nombre,cliente:v.cliente,proyecto:v.proyecto,origen:v.origen,destino:v.destino,estado:'EN_TARIFACION',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:A.nombre,validadaEn:nowIso(),aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:''};
+    const r={id:'R-'+pad4(DB.seq.rut++),codigo:v.codigo,nombre:v.nombre,cliente:v.cliente,proyecto:v.proyecto,origen:v.origen,destino:v.destino,estado:'EN_TARIFACION',origenProp:'',destinoProp:'',fuente:'CATALOGO',solicitadaPorId:A.id,solicitadaPor:A.nombre,solicitadaEn:nowIso(),validadaPor:A.nombre,validadaEn:nowIso(),aprobacionComercial:null,aprobacionTransporte:null,rechazo:null,viajeRef:'',capacidad:v.capacidad,km:v.km};
     DB.rutas.push(r);
     auditAdd({entidad:'RUTA',accion:'Ruta registrada para tarifación',campo:'Ruta',nuevo:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`,por:A,ref:r.id});
     return r;
@@ -2062,15 +2083,16 @@ Object.assign(API,{
     need(A,'rutas_validar','validar o asignar rutas');
     const r=DB.rutas.find(x=>x.id===id);if(!r)deny('La ruta no existe.','NO_EXISTE');
     if(r.estado!=='PENDIENTE')deny('Solo se validan rutas pendientes.','ESTADO_INVALIDO');
-    const v=validarRutaDatos({codigo:d&&d.codigo,nombre:r.nombre,cliente:r.cliente,proyecto:r.proyecto,origen:d&&d.origen,destino:d&&d.destino});
-    r.codigo=v.codigo;r.origen=v.origen;r.destino=v.destino;r.estado='EN_TARIFACION';r.validadaPor=A.nombre;r.validadaEn=nowIso();
+    const capacidad=capacidadRuta((d&&d.capacidad)||r.capacidad), km=kmRuta((d&&d.km)||r.km);
+    const v=validarRutaDatos({codigo:d&&d.codigo,nombre:r.nombre,cliente:r.cliente,proyecto:r.proyecto,origen:d&&d.origen,destino:d&&d.destino,capacidad,km});
+    r.codigo=v.codigo;r.origen=v.origen;r.destino=v.destino;r.capacidad=v.capacidad;r.km=v.km;r.estado='EN_TARIFACION';r.validadaPor=A.nombre;r.validadaEn=nowIso();
     auditAdd({entidad:'RUTA',accion:'Ruta validada',campo:'Estado',anterior:'Pendiente',nuevo:'En tarifación',por:A,ref:`${r.id} · ${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`});
     DB.trips.filter(t=>t.rutaId===r.id).forEach(t=>{
       const ao=t.origen,ad=t.destino;t.origen=r.origen;t.destino=r.destino;
       auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Ruta asignada: origen y destino completados',campo:'Origen',anterior:ao?nombreOrigen(ao):'(pendiente)',nuevo:nombreOrigen(r.origen),por:A,ref:r.id});
       auditAdd({entidad:'RUTA',viajeId:t.id,accion:'Ruta asignada: origen y destino completados',campo:'Destino',anterior:ad?nombreDestino(ad):'(pendiente)',nuevo:nombreDestino(r.destino),por:A,ref:r.id});
     });
-    notificar(A,{tipo:'RUTA_TARIFACION',destinatarios:['GERENTE_COMERCIAL'],asunto:`Ruta lista para definir tarifa: ${r.codigo}`,detalle:{ruta:r.nombre,codigo:r.codigo,proyecto:r.proyecto,cliente:r.cliente,origen:nombreOrigen(r.origen),destino:nombreDestino(r.destino)}});
+    notificar(A,{tipo:'RUTA_TARIFACION',destinatarios:['GERENTE_COMERCIAL'],asunto:`Ruta lista para definir tarifa: ${r.codigo}`,detalle:{ruta:r.nombre,codigo:r.codigo,proyecto:r.proyecto,cliente:r.cliente,origen:nombreOrigen(r.origen),destino:nombreDestino(r.destino),capacidad:r.capacidad,km:r.km}});
     return r;
   });},
   rechazarRuta(uid,id,motivo){return exec(uid,'rechazarRuta','',A=>{

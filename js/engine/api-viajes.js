@@ -8,7 +8,7 @@ Object.assign(API,{
     if(!clientesAsig(A).includes(cliente))deny('No tienes asignado ese cliente: no puedes crear viajes para él.');
     const P0=PILOTOS.find(p=>p.id===(d&&d.pilotoId));
     if(P0&&P0.activo===false)deny('El piloto está dado de baja: elige otro.','VALIDACION');
-    const keys=[...DATA_KEYS,...TIEMPO_KEYS,...DVKEYS,'rutaRef','sinRuta','desvio','desvioDestino'];
+    const keys=[...DATA_KEYS,...TIEMPO_KEYS,...DVKEYS,'rutaRef','sinRuta','desvio','desvioDestino','rutaCapacidad','rutaKm'];
     Object.keys(d).forEach(k=>{if(k!=='cliente'&&!keys.includes(k))deny(k==='origen'||k==='destino'?'El origen y el destino se toman de la ruta del viaje.':`Campo no permitido: ${k}.`,'CAMPO_NO_EDITABLE');});
     const v={};keys.forEach(k=>{v[k]=d[k]==null?'':(typeof d[k]==='string'?d[k].trim():d[k]);});
     /* El viaje nace Planificado: los demás estados los produce el flujo paso a paso (en ruta, entregado,
@@ -33,11 +33,12 @@ Object.assign(API,{
     Object.keys(dvT).forEach(k=>{const m=valKey(cliente,k,dvT[k]);if(m)deny(m,'VALIDACION');});
     if(dvT.dvIngresoBodega&&dvT.dvInicioDescarga&&dvT.dvInicioDescarga<dvT.dvIngresoBodega)deny('Desvío: el inicio de descarga no puede ser antes del ingreso a bodega.','VALIDACION');
     if(dvT.dvInicioDescarga&&dvT.dvFinDescarga&&dvT.dvFinDescarga<dvT.dvInicioDescarga)deny('Desvío: el fin de descarga no puede ser antes del inicio de descarga.','VALIDACION');
-    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestino'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
-    let ruta=null,pend=v.rutaId==='NO_ASIGNADA';
+    keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestino'||k==='rutaCapacidad'||k==='rutaKm'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
+    let ruta=null,pend=v.rutaId==='NO_ASIGNADA',capPend='',kmPend=null;
     if(sinRuta){if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para registrar un viaje SIN RUTA selecciona el proyecto.','VALIDACION');}
-    else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');}
+    else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');capPend=capacidadRuta(v.rutaCapacidad);kmPend=kmRuta(v.rutaKm);}
     else {ruta=DB.rutas.find(r=>r.id===v.rutaId);if(!ruta||ruta.cliente!==cliente)deny('La ruta no corresponde al cliente elegido.','VALIDACION');v.proyectoCat=ruta.proyecto;}
+    delete v.rutaCapacidad;delete v.rutaKm;
     const clave=pend?'ref:'+v.rutaRef.toLowerCase():v.rutaId;
     const dup=v.fechaPlan&&v.pilotoId&&DB.trips.find(t=>t.fechaPlan===v.fechaPlan&&t.pilotoId===v.pilotoId&&((pend&&t.rutaRef&&('ref:'+t.rutaRef.toLowerCase())===clave)||(!pend&&t.rutaId===clave)));
     if(dup)deny(`Este viaje ya existe (#${dup.id}): misma fecha y hora plan, piloto y ruta.`,'DUPLICADO');
@@ -45,7 +46,7 @@ Object.assign(API,{
     if(gAd.length)v.gastosAdicionales=gAd;else delete v.gastosAdicionales;
     const id=String(DB.seq.trip++).padStart(6,'0');
     let rutaId=v.rutaId;
-    if(pend){const rr=crearRutaPendiente(A,{cliente,proyecto:v.proyectoCat,nombre:v.rutaRef,fuente:'VIAJE',viajeRef:id});rutaId=rr.id;}
+    if(pend){const rr=crearRutaPendiente(A,{cliente,proyecto:v.proyectoCat,nombre:v.rutaRef,capacidad:capPend,km:kmPend,fuente:'VIAJE',viajeRef:id});rutaId=rr.id;}
     const P=PILOTOS.find(p=>p.id===v.pilotoId);
     const t=Object.assign({id,proyecto:cliente,unidadId:P?P.unidad:'',estado:'PLANIFICADO',creadoPor:A.nombre,creadoPorId:A.id,creadoEn:nowIso(),comentarioRevision:'',rechazos:0,duplicadoAprobado:false,liqIntentos:0,liqActualId:'',liqAprobadaEn:'',agrupacionId:'',numeroFactura:'',tarifaCliente:'',tarifaId:'',costoProveedor:''},v,{rutaId,origen:ruta?ruta.origen:'',destino:ruta?ruta.destino:'',rutaRef:pend?v.rutaRef:''});
     if(!t.unidadId)t.unidadId=P?P.unidad:'';            /* si no se eligió placa, se usa la unidad del piloto */
