@@ -67,9 +67,9 @@ function tabs(key,list,active,ts){
   return `<div class="tabs" role="tablist">${list.map(x=>`<button role="tab" aria-selected="${x.k===active}" data-act="tab" data-k="${key}" data-v="${x.k}">${x.l}${x.f?`<span class="c">${ts?cnt(ts,x.f):0}</span>`:''}</button>`).join('')}</div>`;
 }
 function tripCard(t){
-  const j=J(t);
+  const j=J(t),atr=atrasoLiquidacion(t);
   return `<article class="tcard" role="button" tabindex="0" data-act="detalle" data-id="${t.id}">
-    <div class="tc-top"><span class="num">Viaje #${t.id}</span><span class="bgs">${badge(t.estado)}</span></div>
+    <div class="tc-top"><span class="num">Viaje #${t.id}</span><span class="bgs">${badge(t.estado)}${atr.atrasado?` <span class="badge" style="--tone:var(--fix)">FUERA DE TIEMPO · ${atr.dias} d</span>`:''}</span></div>
     <div class="tc-proj"><span class="pchip sm">${esc(j.proyectoNombre)}</span>${t.estado==='EN_RUTA'?`<span><span class="pulse"></span><span data-since="${since(t)}">${elapsed(since(t))}</span></span>`:`<span class="mute">Plan ${fmtL(t.fechaPlan)}</span>`}</div>
     ${vroute(j)}
     <dl class="meta"><dt>Piloto</dt><dd>${esc(j.piloto)}</dd><dt>Unidad / placa</dt><dd>${esc(j.f.unidad)} · ${esc(j.f.placa)}</dd></dl>
@@ -154,8 +154,11 @@ function inicioAvisos(u,ts){
   let sin=0;if(hp('comercial_ver')){try{sin=API.viajesSinTarifa(u.id).length;}catch(e){sin=0;}}
   const liq=hp('liq_aprobar')?ts.filter(t=>t.estado==='LIQUIDADO').length:0;
   const fix=(hp('liq_enviar')||hp('viajes_editar_datos'))?cnt(ts,t=>t.estado==='RECHAZADO'):0;
+  const venc=ts.filter(t=>atrasoLiquidacion(t).atrasado);
+  const vencDias=venc.length?Math.max(...venc.map(t=>atrasoLiquidacion(t).dias)):0;
   const aDestino=allowed('todos')?'todos':'viajes';
   const a=[];
+  if(venc.length&&allowed('viajes'))a.push({n:venc.length,t:'Viajes fuera de tiempo',d:`Liquidación vencida · prioridad · hasta ${vencDias} día${vencDias===1?'':'s'}`,v:'viajes',tab:'atrasado'});
   if(fix)a.push({n:fix,t:'Viajes rechazados',d:'Ver comentarios y corregir',v:aDestino,est:'RECHAZADO'});
   if(val)a.push({n:val,t:'Rutas por validar',d:'Definir código, origen y destino',v:'rutas',est:'PENDIENTE'});
   if(tar)a.push({n:tar,t:'Rutas sin tarifa',d:'Definir la tarifa del cliente',v:'rutas',est:'EN_TARIFACION'});
@@ -168,15 +171,15 @@ function inicioAvisos(u,ts){
 function avisosHTML(u,ts){
   const a=inicioAvisos(u,ts);
   if(!a.length)return `<section class="section"><h2>Resumen de pendientes</h2><div class="card" style="display:flex;gap:10px;align-items:center">${icon('check',20)}<span><b>Todo al día.</b> No tienes pendientes que corregir.</span></div></section>`;
-  return `<section class="section"><h2>Resumen de pendientes</h2><div class="kpigrid" role="list">${a.map(x=>`<button class="kpi fk ka" role="listitem" data-act="irAlerta" data-v="${x.v}" ${x.est?`data-est="${x.est}"`:''} title="${esc(x.t)} · ${esc(x.d)}" aria-label="${esc(x.n+' '+x.t+'. '+x.d)}"><span class="n">${icon('alert',20)}${x.n}</span><span class="l">${esc(x.t)}</span><span class="s">${esc(x.d)}</span></button>`).join('')}</div></section>`;
+  return `<section class="section"><h2>Resumen de pendientes</h2><div class="kpigrid" role="list">${a.map(x=>`<button class="kpi fk ka" role="listitem" data-act="irAlerta" data-v="${x.v}" ${x.est?`data-est="${x.est}"`:''} ${x.tab?`data-tab="${x.tab}"`:''} title="${esc(x.t)} · ${esc(x.d)}" aria-label="${esc(x.n+' '+x.t+'. '+x.d)}"><span class="n">${icon('alert',20)}${x.n}</span><span class="l">${esc(x.t)}</span><span class="s">${esc(x.d)}</span></button>`).join('')}</div></section>`;
 }
 function inicioAcciones(u,ts){
   const cls=clientesAsig(u).map(id=>PROYECTOS.find(p=>p.id===id)).filter(Boolean);
-  const fix=cnt(ts,t=>t.estado==='RECHAZADO');
+  const fix=cnt(ts,t=>t.estado==='RECHAZADO'),venc=cnt(ts,t=>atrasoLiquidacion(t).atrasado);
   const filtro=!hp('viajes_ver_todos')&&cls.length?`<div class="projline" style="margin-bottom:10px">${comboHTML('inicioProy',S.inicioProy||'',[{id:'',nombre:'Todos mis proyectos'},...cls.map(p=>({id:p.id,nombre:p.nombre+' · '+p.cliente}))],'Buscar proyecto')}<span class="mute">Solo ves la información de tu proyecto</span></div>`:'';
   const b=[],ok=v=>!INICIO_COMPLETO.includes(u.rol)||allowed(v);
   if(hp('viajes_crear')&&ok('nuevo'))b.push(`<button class="bigbtn main1" data-act="nav" data-v="nuevo"><span class="ico">${icon('plus',24)}</span><span><b>NUEVO VIAJE</b><br><span class="h">Registrar un viaje</span></span></button>`);
-  if(hp('viajes_ver')&&ok('viajes'))b.push(`<button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES Y LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta · ${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>`);
+  if(hp('viajes_ver')&&ok('viajes'))b.push(`<button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES Y LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta · ${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados${venc?` · ${venc} fuera de tiempo`:''}</span></span></button>`);
   return `${filtro}${b.length?`<div class="bigbtns">${b.join('')}</div>`:''}`;
 }
 function inicioResto(ts){
@@ -342,14 +345,15 @@ function ventanaBar(){
 const VENTANA_MESES_PANTALLA=3;
 function viajesTable(list,key='viajes'){
   if(!list.length)return empty('No hay viajes en esta pestaña','Cuando un viaje cambie de estado aparecerá aquí.');
-  const pg=paginar(key,list);
+  const orden=list.slice().sort((a,b)=>{const aa=atrasoLiquidacion(a),bb=atrasoLiquidacion(b);if(aa.atrasado!==bb.atrasado)return aa.atrasado?-1:1;if(aa.atrasado&&bb.atrasado)return bb.dias-aa.dias;return 0;});
+  const pg=paginar(key,orden);
   /* Los Shipment duplicados se cuentan UNA vez por pantalla: antes se recorría toda la tabla de viajes por cada
      fila dibujada, y con miles de viajes eso se notaba en cada render. */
   const cuenta=new Map();
   for(const t of DB.trips){const s=String(t.shipment||'').trim().toLowerCase();if(!s||s.startsWith('dup-'))continue;cuenta.set(s,(cuenta.get(s)||0)+1);}
   const esDup=t=>{const s=String(t.shipment||'').trim().toLowerCase();return !!s&&!s.startsWith('dup-')&&(cuenta.get(s)||0)>1;};
   return ventanaBar()+`<div class="xlwrap"><table class="xl" style="min-width:1400px"><thead><tr><th class="stk">Viaje</th><th>Fecha plan</th><th>Cliente</th><th>Proyecto</th><th>Ruta</th><th>Piloto</th><th>Unidad · placa</th><th>Estado</th><th class="stkR">Acciones</th></tr></thead><tbody>
-  ${pg.filas.map(t=>{const j=J(t),dup=esDup(t);return `<tr><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td class="${dup?'warnl':''}">${badge(t.estado)}${dup?' <b>Shipment duplicado</b>':''}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
+  ${pg.filas.map(t=>{const j=J(t),dup=esDup(t),atr=atrasoLiquidacion(t);return `<tr class="${atr.atrasado?'warnrow':''}"><td class="stk"><button class="linkbtn" data-act="detalle" data-id="${t.id}">#${t.id}</button></td><td>${fmtL(t.fechaPlan)}</td><td>${esc(j.cliente)}</td><td>${esc(t.proyectoCat)}</td><td style="white-space:normal;min-width:220px">${rutaHTML(t)}</td><td>${esc(j.piloto)}</td><td>${esc(j.f.unidad)} · ${esc(j.f.placa)}</td><td class="${dup?'warnl':''}">${badge(t.estado)}${atr.atrasado?`<br><span class="badge" style="--tone:var(--fix)">FUERA DE TIEMPO · ${atr.dias} d</span>`:''}${dup?' <b>Shipment duplicado</b>':''}</td><td class="stkR">${accionesViaje(t)}</td></tr>`;}).join('')}
   </tbody></table></div>${paginador(key,pg)}`;
 }
 
@@ -444,7 +448,7 @@ const moneyCard=(t)=>{
 VIEWS.detalle=()=>{
   let t;try{t=API.viaje(S.user.id,S.param);}catch(e){return `<div class="inner">${empty('Viaje no disponible','No existe o no tienes acceso a este viaje.')}</div>`;}
   if(S.edit&&S.edit.id===t.id)return editView(t);
-  const j=J(t),f=j.f,fromLbl=S.from&&NAVLBL[S.from.view]?NAVLBL[S.from.view][0]:'Volver';
+  const atrL=atrasoLiquidacion(t),j=J(t),f=j.f,fromLbl=S.from&&NAVLBL[S.from.view]?NAVLBL[S.from.view][0]:'Volver';
   const dash='<span class="mute" style="font-weight:500">—</span>',v=x=>x!==''&&x!=null?esc(x):dash;
   const kvr=(k,x)=>`<dt>${k}</dt><dd>${x}</dd>`;
   const tr=(l,por,en)=>`<dt>${l}</dt><dd>${por?`${esc(por)} <span class="mute" style="font-weight:500">· ${fmtDT(en)}</span>`:dash}</dd>`;
@@ -475,7 +479,8 @@ VIEWS.detalle=()=>{
         ${hp('comercial_agrupar')?'<div class="mute" style="margin-top:8px;font-size:13px">Datos del viaje: solo lectura para tu perfil.</div>':`<h3 style="margin:14px 0 0;font-size:14px">Tiempos calculados</h3><div id="durs_box">${dursHTML(t)}</div>`}</div>`;
   return `<div class="inner">
     <button class="btn ghost sm" data-act="back" style="margin-bottom:12px">${icon('back',16)} ${esc(fromLbl)}</button>
-    ${pageHead('Viaje #'+t.id,`<span class="pchip sm">${esc(j.proyectoNombre)}</span> &nbsp;${esc(j.cliente)}`,`<span class="bgs">${badge(t.estado)}</span>${editBtn}`)}
+    ${pageHead('Viaje #'+t.id,`<span class="pchip sm">${esc(j.proyectoNombre)}</span> &nbsp;${esc(j.cliente)}`,`<span class="bgs">${badge(t.estado)}</span>${atrL.atrasado?`<span class="badge" style="--tone:var(--fix)">FUERA DE TIEMPO</span>`:''}${editBtn}`)}
+    ${atrL.atrasado?`<div class="alertbox" style="margin-bottom:14px;padding:14px 16px" role="alert"><b>Fuera de tiempo · prioridad alta</b><div style="margin:6px 0;font-size:15px">Este viaje debía estar liquidado antes del <b>${fmtDate(dstr(atrL.limite))}</b>. Lleva <b>${atrL.dias} día${atrL.dias===1?'':'s'}</b> de atraso.</div><span class="mute" style="font-size:13px">La semana se cuenta por la fecha planificada. Liquidarlo lo antes posible.</span></div>`:''}
     ${t.estado==='RECHAZADO'?`<div class="alertbox" style="margin-bottom:14px;padding:14px 16px"><b>Rechazo #${t.rechazos||1}</b><div style="margin:6px 0;font-size:16px">${esc(t.comentarioRevision)}</div><span class="mute" style="font-size:13px">${esc(t.revisadoPor)} · ${fmtDT(t.revisadoEn)}</span></div>`:''}
     ${t.desvio?`<div class="alertbox info" style="margin-bottom:14px"><b>Desvío</b> hacia ${esc(nombreDestino(t.desvioDestinoId))}${t.desvioPor?` · registrado por ${esc(t.desvioPor)}`:''}${t.desvioEn?` · ${fmtDT(t.desvioEn)}`:''}</div>`:''}
     ${t.sinRuta?`<div class="alertbox info" style="margin-bottom:14px"><b>Registrado SIN RUTA</b>${t.sinRutaPor?` por ${esc(t.sinRutaPor)}`:''}${t.sinRutaEn?` · ${fmtDT(t.sinRutaEn)}`:''}${t.rutaId?'. Después se le asignó una ruta.':'. Todavía no tiene ruta asignada.'}</div>`:''}
@@ -969,10 +974,11 @@ const ACT={
   async kpi(d){S.fEstado=d.v;S.fProy='';S.q='';go(allowed('todos')?'todos':homeOf(S.user));},
   /* Cuadros del Inicio: solo llevan a la pantalla donde se corrige, con el filtro ya puesto. */
   async irAlerta(d){
-    S.q='';S.fProy='';S.fCli='';S.fPcat='';S.fDesde='';S.fHasta='';S.fProv='';
+    S.q='';S.fProy='';S.fCli='';S.fPcat='';S.fDesde='';S.fHasta='';S.fProv='';S.sortL=null;S.pag.liq=1;
     if(d.v==='rutas'){S.rtEst=d.est||'';S.rtCli='';S.rtPcat='';S.rtQ='';S.rtRuta='';S.rtOri='';S.rtDes='';S.rtCat='';S.rtOrig='';S.rtDest='';S.pag.rutas=1;}
     if(d.v==='tarifas'){S.tfQ='';S.tfCli='';S.tfPcat='';S.tfCap='';S.tfEst='';S.pag.tar=1;}
     if(d.v==='todos'||d.v==='viajes'){S.fEstado=d.est||'';S.pag.todos=1;S.pag.viajes=1;}
+    if(d.v==='viajes'&&d.tab)S.tab.viajes=d.tab;
     go(d.v);
   },
   async tab(d){S.tab[d.k]=d.v;S.q='';render();if(d.k==='cat'&&d.v==='fle'&&!S.fle)ACT.fleLoad();},

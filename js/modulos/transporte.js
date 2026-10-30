@@ -10,6 +10,7 @@ const VT=[
   {k:'plan',l:'Planificados',f:t=>t.estado==='PLANIFICADO',d:'Viajes iniciales: requieren cliente y ruta; se completan antes de salir.'},
   {k:'ruta',l:'En ruta',f:t=>t.estado==='EN_RUTA',d:'Viajes en recorrido con los datos operativos completos.'},
   {k:'entregado',l:'Por liquidar',f:t=>t.estado==='ENTREGADO',d:'Viajes entregados que esperan la fotografía de liquidación.'},
+  {k:'atrasado',l:'Fuera de tiempo',f:t=>atrasoLiquidacion(t).atrasado,d:'Liquidación vencida: el viaje debía liquidarse antes del lunes siguiente a su semana planificada.'},
   {k:'liquidado',l:'Por validar',f:t=>t.estado==='LIQUIDADO',d:'Liquidaciones enviadas, pendientes de aceptación o devolución.'},
   {k:'rechazado',l:'Rechazados',f:t=>t.estado==='RECHAZADO',d:'Rechazados con comentarios. Operaciones los corrige y vuelve a liquidar; se conserva cada rechazo.'},
   {k:'aceptado',l:'Aceptados',f:t=>t.estado==='ACEPTADO',d:'Historial de viajes aceptados, listos para facturación.'},
@@ -26,7 +27,7 @@ VIEWS.viajes=()=>{
     <select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
     <label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde)}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta)}"></label>
     <button class="btn sm" data-act="limpiarFiltros">Limpiar filtros</button></div>`;
-  const conLiquidacion=['entregado','liquidado','rechazado','aceptado'].includes(k);
+  const conLiquidacion=['entregado','atrasado','liquidado','rechazado','aceptado'].includes(k);
   const body=conLiquidacion?liqTable(liqFilter(list),k):viajesTable(liqFilter(list),'viajes');
   return `<div class="inner" style="max-width:none">${pageHead('VIAJES',sub,hp('viajes_crear')?`<button class="btn primary" data-act="nav" data-v="nuevo">${icon('plus',18)} Nuevo viaje</button>`:'')}
     ${tabs('viajes',VT,k,ts)}<div class="tabdesc">${cur.d}</div>${filtros}<div id="vb">${body}</div></div>`;
@@ -512,17 +513,24 @@ const LQ_COLS=[['id','ID viaje',t=>t.id],['cliente','Cliente',t=>J(t).cliente||'
 function liqTable(list,k){
   const def=(k==='apr'||k==='aceptado')?{k:'revision',dir:-1}:{k:'fecha',dir:1},so=S.sortL||def;
   const col=LQ_COLS.find(c=>c[0]===so.k)||LQ_COLS[4];
-  const rows=list.slice().sort((a,b)=>{const x=col[2](a),y=col[2](b);return (x<y?-1:x>y?1:0)*so.dir||a.id.localeCompare(b.id);});
+  const rows=list.slice().sort((a,b)=>{
+    if(!S.sortL&&['entregado','rechazado','atrasado'].includes(k)){
+      const aa=atrasoLiquidacion(a),bb=atrasoLiquidacion(b);
+      if(aa.atrasado!==bb.atrasado)return aa.atrasado?-1:1;
+      if(aa.atrasado&&bb.atrasado)return bb.dias-aa.dias||a.id.localeCompare(b.id);
+    }
+    const x=col[2](a),y=col[2](b);return (x<y?-1:x>y?1:0)*so.dir||a.id.localeCompare(b.id);
+  });
   if(!rows.length)return empty('No hay liquidaciones con estos filtros','Cambia la búsqueda, el cliente, el proyecto o las fechas, o limpia los filtros.');
   const revisor=hp('liq_aprobar')||hp('liq_devolver');
   const pg=paginar('liq',rows);
   return `<div class="mute" style="margin-bottom:8px">${rows.length} ${rows.length===1?'liquidación':'liquidaciones'}</div><div class="xlwrap"><table class="xl" style="min-width:1150px"><thead><tr>${LQ_COLS.map(c=>`<th aria-sort="${so.k===c[0]?(so.dir>0?'ascending':'descending'):'none'}"><button class="thbtn" data-act="sortL" data-k="${c[0]}">${c[1]} <span aria-hidden="true">${so.k===c[0]?(so.dir>0?'▲':'▼'):'↕'}</span></button></th>`).join('')}<th>Acciones</th></tr></thead><tbody>
   ${pg.filas.map(t=>{
-    const ls=liqsOf(t),lq=ls[ls.length-1],dec=ls.filter(x=>x.decision).pop();
+    const ls=liqsOf(t),lq=ls[ls.length-1],dec=ls.filter(x=>x.decision).pop(),atr=atrasoLiquidacion(t);
     let acts=lq&&lq.evidencia?`<button class="btn sm" data-act="photoEv" data-id="${t.id}" data-ev="${lq.evidenciaId}">Ver evidencia</button> `:'';
     if(t.estado==='LIQUIDADO'&&revisor)acts+=(hp('liq_aprobar')?`<button class="btn sm ok" data-act="aprobarAsk" data-id="${t.id}">Aceptar</button> `:'')+(hp('liq_devolver')?`<button class="btn sm fix" data-act="devolverOpen" data-id="${t.id}">Rechazar</button>`:'');
     else if(['ENTREGADO','RECHAZADO'].includes(t.estado)&&hp('liq_enviar')&&mine(t))acts+=`<button class="btn sm primary" data-act="detalle" data-id="${t.id}">${t.estado==='RECHAZADO'?'Corregir y liquidar':'Liquidar'}</button>`;
-    return `<tr role="button" tabindex="0" data-act="detalle" data-id="${t.id}"><td><b>#${t.id}</b></td><td>${esc(J(t).cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(J(t).piloto)}</td><td>${fmtDate(planD(t))}</td><td>${badge(t.estado)}</td><td>${t.enviadoEn?fmtDT(t.enviadoEn):'—'}</td>
+    return `<tr class="${atr.atrasado?'warnrow':''}" role="button" tabindex="0" data-act="detalle" data-id="${t.id}"><td><b>#${t.id}</b></td><td>${esc(J(t).cliente)}</td><td>${esc(t.proyectoCat)}</td><td>${esc(J(t).piloto)}</td><td>${fmtDate(planD(t))}</td><td>${badge(t.estado)}${atr.atrasado?`<br><span class="badge" style="--tone:var(--fix)">FUERA DE TIEMPO · ${atr.dias} d</span>`:''}</td><td>${t.enviadoEn?fmtDT(t.enviadoEn):'—'}</td>
     <td style="white-space:normal;min-width:210px">${dec?`<b>${dec.decision==='APROBADA'?'Aprobada':'Devuelta'}</b> · ${esc(dec.revisor)}<br><span class="mute">${fmtDT(dec.revisionEn)}</span>${dec.comentario?`<br><span class="mute">“${esc(dec.comentario.slice(0,70))}”</span>`:''}`:'<span class="mute">Sin revisar</span>'}</td><td style="white-space:nowrap">${acts}</td></tr>`;}).join('')}
   </tbody></table></div>${paginador('liq',pg)}`;
 }

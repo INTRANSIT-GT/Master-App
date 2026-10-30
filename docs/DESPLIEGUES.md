@@ -207,3 +207,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Se agregó `npm run check:core` y el workflow `.github/workflows/check-core.yml` para detectar desalineación entre `js/engine.js` y `core.mjs`.
 - Grafo Graphify regenerado con PostgreSQL: 1,743 nodos, 2,580 relaciones y 428 nodos/629 relaciones del esquema real.
 - **front/SW v1.4.0**.
+## 2026-10-30 · Alerta de liquidación fuera de tiempo
+- Se agrega una alerta calculada (sin migración) para los viajes cuya semana planificada ya venció: el plazo termina el **lunes siguiente a las 23:59**, hora local.
+- Cuenta como pendiente mientras el viaje esté en `PLANIFICADO`, `EN_RUTA`, `ENTREGADO` o `RECHAZADO`; deja de alertar cuando se envía la liquidación (`LIQUIDADO`) o pasa a un estado posterior.
+- **Comentario del usuario:** los viajes no duran más de 2 días en terminar y la mayoría dura un día; por eso también se alertan los viajes planificados y en ruta, no solo los entregados o rechazados.
+- Inicio muestra el cuadro **Viajes fuera de tiempo**; Viajes y liquidaciones agrega la pestaña **Fuera de tiempo**, ordena primero los más atrasados, marca la fila y muestra el atraso en el detalle.
+- **Front/SW v1.4.6**. Sin cambios de API ni de base de datos.

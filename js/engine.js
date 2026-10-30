@@ -699,6 +699,35 @@ function semanaIso(f){
   const n=String(semana).padStart(2,'0');
   return {semana,anio,texto:'Semana '+n,textoAnio:'Semana '+n+' · '+anio};
 }
+/* Alerta de liquidación fuera de tiempo.
+   Comentario del usuario (2026-10-30): los viajes no duran más de 2 días en terminar; la mayoría dura un día.
+   Por eso la alerta también aplica a PLANIFICADO y EN_RUTA, no solo a ENTREGADO/RECHAZADO.
+   La semana se toma de fechaPlan (o creadoEn si falta) y vence el lunes siguiente a las 23:59 locales. */
+const LIQ_VENCIDA_ESTADOS=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
+function fechaBaseLiquidacion(t){
+  const fuentes=[t&&t.fechaPlan,t&&t.creadoEn];
+  for(const v of fuentes){
+    const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v||''));
+    if(!m)continue;
+    const d=new Date(+m[1],+m[2]-1,+m[3]);
+    if(!isNaN(d.getTime())&&d.getMonth()===+m[2]-1&&d.getDate()===+m[3])return d;
+  }
+  return null;
+}
+function limiteLiquidacion(t){
+  const base=fechaBaseLiquidacion(t);if(!base)return null;
+  const dow=(base.getDay()+6)%7;                       /* lunes = 0 */
+  return new Date(base.getFullYear(),base.getMonth(),base.getDate()-dow+7,23,59,59,999);
+}
+function atrasoLiquidacion(t){
+  const limite=limiteLiquidacion(t),estado=t&&t.estado;
+  if(!limite||!LIQ_VENCIDA_ESTADOS.includes(estado))return {atrasado:false,dias:0,limite,estado};
+  const ahora=new Date();
+  if(ahora<=limite)return {atrasado:false,dias:0,limite,estado};
+  const dia=x=>Date.UTC(x.getFullYear(),x.getMonth(),x.getDate());
+  const dias=Math.max(1,Math.floor((dia(ahora)-dia(limite))/86400000));
+  return {atrasado:true,dias,limite,estado};
+}
 /* Motivo por el que un viaje NO tiene tarifa de cobro válida ('' = válida). La tarifa del cliente ya incluye el
    ajuste por combustible (base + ajuste): nunca se suma otra vez. Sin ceros, sin valores por defecto ni inventados. */
 function ocMotivoTarifa(t){
