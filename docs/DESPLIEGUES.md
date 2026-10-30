@@ -229,3 +229,10 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Se quitó el checkbox de varias capacidades de **Nueva tarifa**: vuelve el selector de **una sola capacidad** y cada tarifa conserva su propio importe.
 - Motivo: el mismo importe para varias capacidades no es correcto cuando el precio depende de la capacidad; se evaluará más adelante con importes independientes por capacidad.
 - **Front/SW v1.4.9**. La operación `crearTarifas` queda sin uso en la interfaz para no romper sesiones con caché anterior; la creación normal usa `crearTarifa`.
+## 2026-10-30 · Equipos de arrastre desde Fleetio (Tools / Equipment)
+- `sync-flota` ahora consulta también `/equipment` de Fleetio y carga los **Tools** como equipos de arrastre en `master.flota`: Furgón, Remolque, Semi Remolque, Dolly Trailer y Plataforma. Excluye `Cabezal` para no duplicar vehículos.
+- La capacidad se toma de `custom_fields.cap_medida` (por ejemplo `RASTRA 24`) y, si falta, del modelo cuando expresa toneladas. Se cargan los 96 equipos y aparecen capacidades adicionales como `20`, `24`, `48` y `53`.
+- El equipo conserva la placa/nombre de Fleetio, tipo, estado, propietario y **vehículo vinculado**. La pestaña **FLEETIO** muestra la lista de equipos y el detalle del vínculo; las rutas pueden usar estos equipos como arrastre.
+- **Limitación de Fleetio:** la API no expone `service_entries` ni `expense_entries` por equipo (`/equipment/{id}/service_entries` responde 404). Los mantenimientos y gastos siguen llegando por `vehicle_id`; el vehículo vinculado del equipo es el que permite relacionarlos.
+- **sync-flota y API desplegadas.** **Front/SW v1.5.0**.
+- **Verificado:** sincronización con 49 vehículos, 96 equipos, 98 mantenimientos y 1,864 gastos; una tarifa con capacidad `24` fue aceptada.

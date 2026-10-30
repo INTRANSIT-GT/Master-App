@@ -200,7 +200,7 @@ const esPilotoDeUnidad=(pilotoId,unidad)=>{const P=PILOTOS.find(p=>p.id===piloto
 function arrastresDisponibles(){
   const set=new Set();
   (CAT.arrastre||[]).forEach(v=>{const s=String(v==null?'':v).trim();if(s)set.add(s);});
-  FLOTA.forEach(f=>{const p=String(f.placa||f.unidad||'').trim();if(p&&(/^RAS/i.test(String(f.tipo||''))||/^TC/i.test(p)))set.add(p);});
+  FLOTA.forEach(f=>{const p=String(f.placa||f.unidad||'').trim();if(p&&esEquipoArrastre(f))set.add(p);});
   DB.trips.forEach(t=>{const p=String(t.placaArrastre||'').trim();if(p)set.add(p);});
   return [...set].sort((a,b)=>a.localeCompare(b,'es'));
 }

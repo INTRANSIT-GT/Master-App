@@ -548,8 +548,10 @@ VIEWS.todos=()=>`<div class="inner">${pageHead('Todos los viajes','Sin filtro de
 
 
 function fleTabla(h,rows,key){const pg=paginar(key||'fle',rows);return `<div class="tablewrap scrollx"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${pg.filas.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${paginador(key||'fle',pg)}`;}
+function flotaMeta(f){let x=f&&f.extra;if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}}return x||{};}
 function flePanel(){
   const d=S.fle;
+  const equipos=FLOTA.filter(f=>flotaMeta(f).esEquipo).sort((a,b)=>String(a.unidad).localeCompare(String(b.unidad),'es'));
   const head=`<div class="row" style="align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap"><b>Flota · Fleetio</b><span class="spacer"></span>
     <button class="btn sm" data-act="fleLoad" ${d&&d.cargando?'disabled':''}>${d&&d.cargando?'Cargando…':'Consultar'}</button>
     ${BACKEND.modo==='supabase'&&hp('catalogos_ver')?`<button class="btn sm primary" data-act="fleSync" ${d&&d.cargando?'disabled':''}>Sincronizar con Fleetio</button>`:''}</div>`;
@@ -557,12 +559,16 @@ function flePanel(){
   if(!d)return `${nota}${head}<div class="mute">Pulsa «Consultar» para ver los mantenimientos y gastos traídos de Fleetio.</div>`;
   if(d.err)return `${nota}${head}<div class="alertbox warn">${esc(d.err)}</div>`;
   const fch=v=>esc(String(v||'').slice(0,10));
+  const te=equipos.length?fleTabla(['Equipo','Tipo','Capacidad','Estado','Vehículo vinculado','Propietario'],
+      equipos.map(f=>{const m=flotaMeta(f);return [esc(f.unidad),esc(f.tipo),esc(f.capacidad||'—'),esc(m.estado||'—'),esc(m.linkedVehicle||'—'),esc(m.propietario||'—')];}),'fleequ'):'<div class="mute">Sin equipos de arrastre. Pulsa «Sincronizar con Fleetio».</div>';
   const tm=d.mant.length?fleTabla(['Fecha','Unidad','Referencia','Estado','Proveedor','Mano de obra','Repuestos','Total','Notas'],
       d.mant.map(m=>[fch(m.fecha),esc(m.unidad),esc(m.referencia),esc(m.estado),esc(m.proveedor),m.mano_obra!=null?qfmt(m.mano_obra):'—',m.repuestos!=null?qfmt(m.repuestos):'—',m.total!=null?qfmt(m.total):'—',esc(m.notas)]),'flemant'):'<div class="mute">Sin mantenimientos.</div>';
   const tg=d.gast.length?fleTabla(['Fecha','Unidad','Tipo','Proveedor','Monto','Notas'],
       d.gast.map(g=>[fch(g.fecha),esc(g.unidad),esc(g.tipo),esc(g.proveedor),g.monto!=null?qfmt(g.monto):'—',esc(g.notas)]),'flegast'):'<div class="mute">Sin gastos.</div>';
-  return `${nota}${head}<div class="mute small" style="margin-bottom:10px">Mantenimientos: <b>${d.mant.length}</b> · Gastos: <b>${d.gast.length}</b></div>
-    <h3>Mantenimientos <span class="mute" style="font-weight:500">· servicio</span></h3>${tm}
+  return `${nota}${head}<div class="mute small" style="margin-bottom:10px">Equipos de arrastre: <b>${equipos.length}</b> · Mantenimientos por vehículo: <b>${d.mant.length}</b> · Gastos: <b>${d.gast.length}</b></div>
+    <h3>Equipos de arrastre <span class="mute" style="font-weight:500">· Tools / Equipment</span></h3>${te}
+    <div class="mute small" style="margin:6px 0 0">La API de Fleetio no expone mantenimientos por equipo; los mantenimientos y gastos se cargan por el vehículo vinculado.</div>
+    <h3 style="margin:18px 0 8px">Mantenimientos <span class="mute" style="font-weight:500">· servicio por vehículo</span></h3>${tm}
     <h3 style="margin:18px 0 8px">Gastos <span class="mute" style="font-weight:500">· egresos por unidad</span></h3>${tg}`;
 }
 /* ---- Catálogos · Pilotos: alta/baja y vigencia de documentos ---- */

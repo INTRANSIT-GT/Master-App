@@ -572,7 +572,7 @@ const pagadoFmt=n=>n;
 /* ---------- Ayudas de rutas, tarifas y avisos ---------- */
 /* La capacidad depende del equipo: si hay arrastre con capacidad registrada, manda el arrastre;
    si no, la unidad. Un cabezal sin arrastre no tiene capacidad propia. */
-const esEquipoArrastre=f=>!!f&&(/^RAS/i.test(String(f.tipo||''))||/^TC/i.test(String(f.placa||''))||/^TC/i.test(String(f.unidad||'')));
+const esEquipoArrastre=f=>{let x=f&&f.extra;if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}}if(!x||typeof x!=='object')x={};return !!f&&(x.esEquipo===true||/^RAS/i.test(String(f.tipo||''))||/^TC/i.test(String(f.placa||''))||/^TC/i.test(String(f.unidad||''))||/^(furgon|remolque|semiremolque|dollytrailer|plataforma)$/i.test(String(f.tipo||'').replace(/\s+/g,'')));};
 function capacidadEquipo(unidadId,placaArrastre){
   const arrTxt=String(placaArrastre==null?'':placaArrastre).trim();
   const U=FLOTA.find(f=>f.unidad===unidadId||f.placa===unidadId)||null;
@@ -587,7 +587,7 @@ function capacidadEquipo(unidadId,placaArrastre){
   return {capacidad:U?U.capacidad||'':'',fuente:U?'UNIDAD':'SIN_DATO',equipo:U?U.placa||U.unidad||'':''};
 }
 const capDe=t=>capacidadEquipo(t.unidadId,t.placaArrastre).capacidad;
-const capsCat=()=>[...new Set(FLOTA.map(f=>f.capacidad))].sort((a,b)=>parseFloat(a)-parseFloat(b));
+const capsCat=()=>[...new Set(FLOTA.map(f=>String(f.capacidad==null?'':f.capacidad).trim()).filter(Boolean))].sort((a,b)=>parseFloat(a)-parseFloat(b));
 /* El origen y el destino ya son el texto que se ve: se devuelve tal cual. */
 const nombreOrigen=v=>String(v==null?'':v);
 const nombreDestino=v=>String(v==null?'':v);

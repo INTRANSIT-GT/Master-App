@@ -117,8 +117,8 @@ Object.assign(ACT,{
     render();
   },
   async fleSync(){
-    const r=await run(()=>BACKEND.sincronizarFlota(),x=>`Fleetio: ${x.unidades} unidades, ${x.mantenimientos} mantenimientos, ${x.gastos} gastos sincronizados.`);
-    if(r.ok)ACT.fleLoad();
+    const r=await run(()=>BACKEND.sincronizarFlota(),x=>`Fleetio: ${x.unidades} vehículos, ${x.equipos||0} equipos de arrastre, ${x.mantenimientos} mantenimientos, ${x.gastos} gastos sincronizados.`);
+    if(r.ok){try{await BACKEND.refrescar();}catch(e){}ACT.fleLoad();}
   },
   async usuarioOpen(d){
     const u=d.id?DB.usuarios.find(x=>x.id===d.id):null;

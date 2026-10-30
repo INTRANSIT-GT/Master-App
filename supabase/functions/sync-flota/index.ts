@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
     if (perfil.rol !== "ADMIN") return json({ ok: false, message: "Solo la administración puede sincronizar la flota." }, 403);
 
     // 2) Traer de Fleetio.
-    const [vehicles, services, expenses] = await Promise.all([fleetioAll("/vehicles"), fleetioAll("/service_entries"), fleetioAll("/expense_entries")]);
+    const [vehicles, equipment, services, expenses] = await Promise.all([fleetioAll("/vehicles"), fleetioAll("/equipment"), fleetioAll("/service_entries"), fleetioAll("/expense_entries")]);
     const detalles = await mapLimit(vehicles, 4, (v: any) => fleetioPage(`/vehicles/${v.id}`, {}));
     const detById = new Map<number, any>();
     detalles.forEach((d: any) => { if (d && d.id != null) detById.set(Number(d.id), d); });
@@ -126,6 +126,37 @@ Deno.serve(async (req: Request) => {
         }),
       };
     }).filter((r: any) => r.unidad !== "");
+
+    // Tools de Fleetio = /equipment. Se excluye Cabezal para no duplicar vehículos.
+    const tiposEquipo = new Set(["furgon", "remolque", "semiremolque", "dollytrailer", "plataforma"]);
+    const nombreVehiculo = new Set(flotaRows.map((r: any) => r.unidad));
+    const capFleetio = (e: any): string => {
+      const c = txt(e.custom_fields && e.custom_fields.cap_medida).trim();
+      const m1 = c.match(/(\d+(?:[.,]\d+)?)/);
+      if (m1) return m1[1].replace(",", ".");
+      const m2 = txt(e.model).match(/(\d+(?:[.,]\d+)?)\s*(?:ton|toneladas?)/i);
+      return m2 ? m2[1].replace(",", ".") : "";
+    };
+    const equipoRows = equipment.map((e: any) => {
+      const tipo = txt(e.type_name).trim();
+      const key = norm(tipo);
+      const nombre = txt(e.name).trim();
+      if (!nombre || nombreVehiculo.has(nombre) || !tiposEquipo.has(key)) return null;
+      const linked = e.linked_vehicle || {};
+      const custom = e.custom_fields || {};
+      return {
+        unidad: nombre,
+        placa: nombre,
+        tipo,
+        capacidad: capFleetio(e),
+        extra: JSON.stringify({
+          fleetioEquipmentId: txt(e.id), nombre, tipoEquipo: tipo, estado: txt(e.status_name),
+          linkedVehicle: txt(linked.license_plate || linked.name), linkedVehicleId: txt(linked.id),
+          propietario: txt(custom.propietario), marca: txt(e.brand), modelo: txt(e.model),
+          capMedida: txt(custom.cap_medida), esEquipo: true, actualizado: ahora,
+        }),
+      };
+    }).filter((r: any) => r && r.unidad !== "");
 
     const mantRows = services.map((s: any) => ({
       id_mantenimiento: txt(s.id),
@@ -170,6 +201,10 @@ Deno.serve(async (req: Request) => {
       .map((r: any) => String(r.unidad));
     await sql`update master.flota set tango = '' where coalesce(tango,'') <> '' and unidad not in ${sql(cmi.length ? cmi : [""])}`;
 
+    const COLS_E = ["unidad", "placa", "tipo", "capacidad", "extra"];
+    const updE = "placa=excluded.placa, tipo=excluded.tipo, capacidad=excluded.capacidad, extra=master.flota.extra || excluded.extra";
+    for (const c of trozos(equipoRows, 500)) await sql`insert into master.flota ${sql(c, ...COLS_E)} on conflict (unidad) do update set ${sql.unsafe(updE)}`;
+
     const COLS_M = ["id_mantenimiento", "unidad", "fleetio_vehicle_id", "fecha", "referencia", "estado", "proveedor", "medidor", "subtotal", "mano_obra", "repuestos", "total", "notas", "actualizado"];
     const updM = COLS_M.filter((c) => c !== "id_mantenimiento").map((c) => `${c}=excluded.${c}`).join(", ");
     for (const c of trozos(mantRows, 500)) await sql`insert into master.mantenimientos ${sql(c, ...COLS_M)} on conflict (id_mantenimiento) do update set ${sql.unsafe(updM)}`;
@@ -178,7 +213,7 @@ Deno.serve(async (req: Request) => {
     const updG = COLS_G.filter((c) => c !== "id_gasto").map((c) => `${c}=excluded.${c}`).join(", ");
     for (const c of trozos(gastoRows, 500)) await sql`insert into master.gastos ${sql(c, ...COLS_G)} on conflict (id_gasto) do update set ${sql.unsafe(updG)}`;
 
-    return json({ ok: true, result: { unidades: flotaRows.length, mantenimientos: mantRows.length, gastos: gastoRows.length, ejecutado: ahora } });
+    return json({ ok: true, result: { unidades: flotaRows.length, equipos: equipoRows.length, mantenimientos: mantRows.length, gastos: gastoRows.length, ejecutado: ahora } });
   } catch (e) {
     return json({ ok: false, message: String((e as Error)?.message || e) }, 500);
   }
