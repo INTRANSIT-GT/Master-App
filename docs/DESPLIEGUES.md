@@ -225,3 +225,7 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Solo cambia el **ID de tarifa** y la **capacidad**; el servidor valida todas las capacidades primero y no crea ninguna si una ya existe o se cruza la vigencia.
 - **API desplegada:** incluye `crearTarifas` en `ops.mjs` y en el motor. **Front/SW v1.4.8**.
 - **Verificado:** se crearon dos tarifas para capacidades `22` y `28` con el mismo importe; un segundo intento fue rechazado como duplicado. Las tarifas de prueba se eliminaron.
+## 2026-10-30 · Se retira temporalmente la tarifa multicapacidad
+- Se quitó el checkbox de varias capacidades de **Nueva tarifa**: vuelve el selector de **una sola capacidad** y cada tarifa conserva su propio importe.
+- Motivo: el mismo importe para varias capacidades no es correcto cuando el precio depende de la capacidad; se evaluará más adelante con importes independientes por capacidad.
+- **Front/SW v1.4.9**. La operación `crearTarifas` queda sin uso en la interfaz para no romper sesiones con caché anterior; la creación normal usa `crearTarifa`.
