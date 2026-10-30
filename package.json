@@ -23,7 +23,8 @@
     "graph:update": "python -m graphify update .",
     "graph:report": "python -m graphify cluster-only .",
     "graph:query": "python -m graphify query",
-    "graph:god": "python -m graphify god-nodes --top 20"
+    "graph:god": "python -m graphify god-nodes --top 20",
+    "check:core": "node scripts/build-core.mjs && git diff --exit-code -- supabase/functions/api/core.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",

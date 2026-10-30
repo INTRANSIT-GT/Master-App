@@ -1042,8 +1042,15 @@ function ocDocumento(A,o,d,motivo){
 /* =====================================================================
    API  (única vía de lectura y escritura)
    ===================================================================== */
-const API={
-  /* ----- sesión ----- */
+const API={};
+
+
+/* =====================================================================
+   SIEMBRA: datos de demostración creados con la propia API (mismas reglas)
+   ===================================================================== */
+
+/* Dominio del motor · generado por separación de js/engine.js. */
+Object.assign(API,{
   login(usuario,clave){
     const u=DB.usuarios.find(x=>x.usuario===String(usuario||'').trim().toLowerCase()&&String(x.clave).toLowerCase()===String(clave||'').trim().toLowerCase());
     if(!u||!u.activo){
@@ -1056,6 +1063,10 @@ const API={
   permiso(uid,p){return hasPerm(DB.usuarios.find(x=>x.id===uid),p);},
 
   /* ----- lectura (siempre filtrada por alcance) ----- */
+});
+
+/* Dominio del motor · generado por separación de js/engine.js. */
+Object.assign(API,{
   listarViajes(uid){const A=actor(uid);return DB.trips.filter(t=>puedeVer(A,t)).map(t=>redact(A,t));},
   viaje(uid,id){const A=actor(uid);const t=DB.trips.find(x=>x.id===id);if(!t||!puedeVer(A,t))throw new ApiError('DENEGADO','No existe o no tienes acceso a este viaje.');return redact(A,t);},
   historial(uid,id,soloTiempos){
@@ -1105,6 +1116,11 @@ const API={
   },
 
   /* ----- viajes ----- */
+  agrupaciones(uid){const A=actor(uid);need(A,'comercial_ver','ver el módulo Comercial');return DB.agrupaciones.map(g=>redactAgr(A,g));},
+});
+
+/* Dominio del motor · generado por separación de js/engine.js. */
+Object.assign(API,{
   crearViaje(uid,d){return exec(uid,'crearViaje','',A=>{
     need(A,'viajes_crear','crear viajes');
     const cliente=d&&d.cliente,cl=DB.clientes.find(c=>c.id===cliente);
@@ -1169,7 +1185,6 @@ const API={
     }
     return t;
   });},
-
   editarViaje(uid,id,cambios,motivo){return exec(uid,'editarViaje',id,A=>{
     const t=getT(id);if(!puedeVer(A,t))deny('No tienes acceso a viajes de otro cliente.');
     const ks=Object.keys(cambios||{});if(!ks.length)return {cambios:0};
@@ -1238,7 +1253,6 @@ const API={
     t.notaPiloto=notaPilotoDe(t);                        /* se actualiza la constancia piloto/unidad */
     return {cambios:dif.length};
   });},
-
   iniciar(uid,id){return exec(uid,'iniciar',id,A=>{
     need(A,'viajes_iniciar','iniciar viajes');
     const t=getT(id);if(!asignado(A,t))deny('Solo el encargado asignado a este cliente puede iniciar el viaje.');
@@ -1250,7 +1264,6 @@ const API={
     if(!t.tSalida)setAuto(t,'tSalida',nowLoc(),A,'Automático al iniciar el viaje');
     return t;
   });},
-
   finalizar(uid,id){return exec(uid,'finalizar',id,A=>{
     need(A,'viajes_finalizar','finalizar viajes');
     const t=getT(id);if(!asignado(A,t))deny('Solo el encargado asignado a este cliente puede finalizar el viaje.');
@@ -1338,7 +1351,6 @@ const API={
     moveEstado(t,'LIQUIDADO',A,ciclo>1?'Liquidación reenviada (corregida)':'Liquidación enviada para validación','',`${lid} · ${eid} · ciclo ${ciclo}`);
     return t;
   });},
-
   aprobar(uid,id){return exec(uid,'aprobar',id,A=>{
     need(A,'liq_aprobar','aprobar liquidaciones');
     const t=getT(id);if(!puedeVer(A,t))deny('No tienes acceso a este viaje.');
@@ -1351,7 +1363,6 @@ const API={
     moveEstado(t,'ACEPTADO',A,'Viaje aceptado para facturación','',lq.id);
     return t;
   });},
-
   devolver(uid,id,comentario){return exec(uid,'devolver',id,A=>{
     need(A,'liq_devolver','devolver liquidaciones');
     const t=getT(id);if(!puedeVer(A,t))deny('No tienes acceso a este viaje.');
@@ -1380,6 +1391,10 @@ const API={
   /* ----- facturas (comercial) ----- */
   /* Fases: PREPARADA (datos en armado, sin enviar) → ENVIADA (enviada a facturación, validada) → EMITIDA (emitida oficialmente, con evidencia).
      La agrupación de varios viajes es OPCIONAL: un solo viaje se factura como modalidad INDIVIDUAL. */
+});
+
+/* Dominio del motor · generado por separación de js/engine.js. */
+Object.assign(API,{
   prepararFactura(uid,d){return exec(uid,'prepararFactura','',A=>{
     need(A,'comercial_agrupar','preparar facturas');
     const cliente=d&&d.cliente;
@@ -1427,7 +1442,6 @@ const API={
     { const g0=DB.agrupaciones[DB.agrupaciones.length-1];g0.historial=[];g0.pdfs=[];g0.evidenciasAutorizacion=[];g0.confirmacion=null;agrHist(g0,A,`Agrupación creada con ${ids.length} viaje(s)`+(nf?` · factura ${nf}`:''),{tipo:'CREACION',a:'Preparada'}); }
     return DB.agrupaciones[DB.agrupaciones.length-1];
   });},
-
   actualizarFactura(uid,agrId,d){return exec(uid,'actualizarFactura','',A=>{
     need(A,'facturas_emitir','registrar el número y la fecha de la factura');
     const g=DB.agrupaciones.find(x=>x.id===agrId);if(!g)deny('La factura no existe.','NO_EXISTE');
@@ -1442,7 +1456,6 @@ const API={
     if(ff!==g.fechaFactura){auditAdd({entidad:'AGRUPACION',accion:'Facturación: fecha de factura actualizada',campo:'Fecha de factura',anterior:g.fechaFactura||'(vacío)',nuevo:ff||'(vacío)',por:A,ref:g.id});g.fechaFactura=ff;}
     return g;
   });},
-
   enviarFactura(uid,agrId){return exec(uid,'enviarFactura','',A=>{
     need(A,'facturas_emitir','recibir agrupaciones en facturación');
     const g=DB.agrupaciones.find(x=>x.id===agrId);if(!g)deny('La factura no existe.','NO_EXISTE');
@@ -1460,7 +1473,6 @@ const API={
     g.viajeIds.forEach(id=>{const t=getT(id);t.numeroFactura=g.numeroFactura;moveEstado(t,'FACTURADO',A,'Factura asignada','',`${g.id} · ${g.numeroFactura}`);});
     return g;
   });},
-
   emitirFactura(uid,agrId,d){return exec(uid,'emitirFactura','',A=>{
     need(A,'facturas_emitir','marcar facturas como emitidas');
     const g=DB.agrupaciones.find(x=>x.id===agrId);if(!g)deny('La factura no existe.','NO_EXISTE');
@@ -1580,7 +1592,6 @@ const API={
     notificar(A,{tipo:'AGR_CONFIRMADA',destinatarios:['FACTURACION'],asunto:`Agrupación ${g.id} con OC ${ot}: lista para facturar`,detalle:{agrupacion:g.id,cliente:ocClienteNombre(g.cliente),ot,viajes:g.viajeIds.length,total:'Q '+r.total,registradaPor:A.nombre}});
     return redactAgr(A,g);
   });},
-
   registrarCobro(uid,agrId,d){return exec(uid,'registrarCobro','',A=>{
     need(A,'cobros_registrar','registrar cobros');
     const g=DB.agrupaciones.find(x=>x.id===agrId);if(!g)deny('La factura no existe.','NO_EXISTE');
@@ -1601,7 +1612,6 @@ const API={
     if(cobradoDe(g)>=g.importeFacturado-0.005)g.viajeIds.forEach(id=>{const t=getT(id);if(t.estado==='FACTURADO')moveEstado(t,'COBRADO',A,'Factura cobrada','',`${g.id} · ${c.id} · ${ref}`);});
     return c;
   });},
-
   corregirFactura(uid,agrId,numero,motivo){return exec(uid,'corregirFactura','',A=>{
     need(A,'comercial_corregir','corregir números de factura');
     const g=DB.agrupaciones.find(x=>x.id===agrId);if(!g)deny('La factura no existe.','NO_EXISTE');
@@ -1617,7 +1627,6 @@ const API={
     g.viajeIds.forEach(id=>{const t=getT(id);t.numeroFactura=nf;auditAdd({entidad:'AGRUPACION',viajeId:id,accion:'Número de factura corregido',campo:'Número de factura',anterior:ant,nuevo:nf,por:A,motivo:m,ref:g.id});});
     return g;
   });},
-
   anularAgrupacion(uid,agrId,motivo){return exec(uid,'anularAgrupacion','',A=>{
     const g=DB.agrupaciones.find(x=>x.id===agrId);if(!g)deny('La factura no existe.','NO_EXISTE');
     /* Una factura preparada todavía no es una factura: basta el permiso de armarlas para descartarla y
@@ -1768,6 +1777,16 @@ const API={
   });},
 
   /* ----- finanzas: costos, pagos y consulta ----- */
+  movimientosComerciales(uid){
+    const A=actor(uid);need(A,'comercial_ver','ver el módulo Comercial');
+    return DB.audit.filter(e=>e.entidad==='AGRUPACION').map(e=>({id:e.id,accion:e.accion,campo:e.campo,anterior:e.anterior,nuevo:e.nuevo,por:e.por,en:e.en,motivo:e.motivo,ref:e.ref}));
+  },
+
+  /* ----- tarifas ----- */
+});
+
+/* Dominio del motor · generado por separación de js/engine.js. */
+Object.assign(API,{
   registrarImportes(uid,id,d){return exec(uid,'registrarImportes',id,A=>{
     const t=getT(id);if(!puedeVer(A,t))deny('No tienes acceso a este viaje.');
     const ks=Object.keys(d||{});if(!ks.length)deny('No hay importes que registrar.','VALIDACION');
@@ -1791,7 +1810,6 @@ const API={
     });
     return {cambios:n};
   });},
-
   registrarPago(uid,d){return exec(uid,'registrarPago',(d&&d.viajeId)||'',A=>{
     need(A,'pagos_registrar','registrar pagos');
     const t=getT(d.viajeId);if(!puedeVer(A,t))deny('No tienes acceso a este viaje.');
@@ -1813,7 +1831,6 @@ const API={
     auditAdd({entidad:'FINANZAS',viajeId:t.id,accion:'Pago registrado',campo:tipo==='PROVEEDOR'?'Pago a proveedor':'Pago a piloto',nuevo:'Q '+p.monto,por:A,ref:`${p.id} · ${ref}`});
     return p;
   });},
-
   anularPago(uid,pagoId,motivo){return exec(uid,'anularPago','',A=>{
     need(A,'pagos_registrar','anular pagos');
     const p=DB.pagos.find(x=>x.id===pagoId);if(!p)deny('El pago no existe.','NO_EXISTE');
@@ -1916,19 +1933,11 @@ const API={
     auditAdd({entidad:'PAGO',accion:'Orden de pago anulada',campo:'Estado',anterior:'ACTIVA',nuevo:'ANULADA',por:A,motivo:m,ref:o.id});
     return o;
   });},
-
   resumenFinanciero(uid,f){
     const A=actor(uid); if(!hasPerm(A,'finanzas_ver')) need(A,'tarifas_opl_ver','consultar el control financiero (OPL)');
     return JSON.parse(JSON.stringify(finCalc(DB.trips,DB.agrupaciones,DB.pagos,f)));
   },
   pagosDeViaje(uid,id){const A=actor(uid);need(A,'finanzas_ver','consultar pagos');return DB.pagos.filter(p=>p.viajeId===id).map(p=>Object.assign({},p));},
-  agrupaciones(uid){const A=actor(uid);need(A,'comercial_ver','ver el módulo Comercial');return DB.agrupaciones.map(g=>redactAgr(A,g));},
-  movimientosComerciales(uid){
-    const A=actor(uid);need(A,'comercial_ver','ver el módulo Comercial');
-    return DB.audit.filter(e=>e.entidad==='AGRUPACION').map(e=>({id:e.id,accion:e.accion,campo:e.campo,anterior:e.anterior,nuevo:e.nuevo,por:e.por,en:e.en,motivo:e.motivo,ref:e.ref}));
-  },
-
-  /* ----- tarifas ----- */
   tarifas(uid){const A=actor(uid);need(A,'tarifas_ver','consultar tarifas');return DB.tarifas.map(t=>Object.assign({},t));},
   mem(uid){const A=actor(uid);need(A,'tarifas_ver','consultar la tabla MEM');return (DB.mem||[]).slice().sort((a,b)=>(a.fecha<b.fecha?-1:1));},
   precioMem(uid,fecha){const A=actor(uid);need(A,'tarifas_ver','consultar el precio MEM');const m=memPrecioParaFecha(fecha);return m?Object.assign({},m):null;},
@@ -2016,6 +2025,10 @@ const API={
   /* ----- rutas ----- */
   /* El conteo de viajes por ruta se arma en UNA pasada. Antes era rutas × viajes dentro del map, y esto
      corre en cada lectura de rutas (y en cada snapshot): con miles de rutas y viajes se vuelve el cuello de botella. */
+});
+
+/* Dominio del motor · generado por separación de js/engine.js. */
+Object.assign(API,{
   rutas(uid){
     const A=actor(uid);need(A,'rutas_ver','consultar rutas');
     const porRuta=new Map();
@@ -2240,7 +2253,6 @@ const API={
     auditAdd({entidad:'PERMISO',accion:'Permiso modificado',campo:`${ROLES[rol].label} · ${perm}`,anterior:r.habilitado?'Sí':'No',nuevo:hab?'Sí':'No',por:A});
     r.habilitado=hab;return r;
   });},
-
   guardarUsuario(uid,d){return exec(uid,'guardarUsuario','',A=>{
     need(A,'usuarios_gestionar','gestionar usuarios');
     if(!ROLES[d.rol])deny('Rol no válido.','VALIDACION');
@@ -2274,7 +2286,6 @@ const API={
     if(antes!==despues)auditAdd({entidad:'USUARIO',accion:'Acceso a clientes modificado',campo:'Clientes',anterior:antes||'(ninguno)',nuevo:despues||'(ninguno)',por:A,ref:u.id});
     syncRefs();return u;
   });},
-
   cambiarClave(uid,id,clave){return exec(uid,'cambiarClave','',A=>{
     need(A,'usuarios_gestionar','reasignar contraseñas de acceso');
     const u=DB.usuarios.find(x=>x.id===String(id||''));if(!u)deny('Usuario no encontrado.','NO_EXISTE');
@@ -2300,7 +2311,6 @@ const API={
     }
     return {id:u.id,usuario:u.usuario,activo:u.activo};
   });},
-
   guardarReglasTorre(uid,d){return exec(uid,'guardarReglasTorre','',A=>{
     need(A,'clientes_gestionar','administrar las reglas de Torre de Control');
     const c=DB.clientes.find(x=>x.id===(d&&d.cliente));if(!c)deny('Cliente no válido.','VALIDACION');
@@ -2308,7 +2318,6 @@ const API={
     auditAdd({entidad:'CLIENTE',accion:'Torre de Control: autorización '+(v?'otorgada':'retirada'),campo:'Torre avanza el estado',anterior:c.torreEstatus?'Sí':'No',nuevo:v?'Sí':'No',por:A,ref:c.id});
     c.torreEstatus=v;return c;
   });},
-
   guardarCliente(uid,d){return exec(uid,'guardarCliente','',A=>{
     need(A,'clientes_gestionar','administrar clientes y proyectos');
     const editando=!!d.existente;
@@ -2357,11 +2366,7 @@ const API={
     }
     syncRefs();return id;
   });},
-};
-
-/* =====================================================================
-   SIEMBRA: datos de demostración creados con la propia API (mismas reglas)
-   ===================================================================== */
+});
 
 return {API,ApiError,ROLES,PERMS,PERM_KEYS,PERM_DEFAULT,PROHIBIDO,ENV,CAT,PILOTOS,FLOTA,DESTINOS,ORIGENES,hasPerm,blankDB,syncRefs,estadoDocumentos,refrescarPilotos,
   getDB:()=>DB, setDB:d=>{DB=d;syncRefs();}};

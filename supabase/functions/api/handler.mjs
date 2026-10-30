@@ -3,11 +3,10 @@
    tomado del token verificado, y se guardan en UNA transacción. Si algo falla, no se guarda nada. */
 import { createEngine } from './core.mjs';
 import { loadState, saveState, fotografia } from './store.mjs';
+import { armarSnapshot } from './snapshot.mjs';
+import { OPS_ESCRITURA, OPS_LECTURA } from './ops.mjs';
+import { VENTANA_MESES, VIAJES_PAGINA, BUSCA_LIMITE, ESTADOS_EN_CURSO, COLA_AUDITORIA, SOLO_RESUMEN, SOLO_HISTORICO, COND_VENTANA, condAntes, idAntes, COND_BUSCA, textoDe, likeDe, desdeVentana, argsDe, antesDe, limitePagina, enVentana, aplicarVentana, auditoriaDeViajes, fusionarAuditoria, filtroVisible, filtrosGrafica, contarVisibles } from './read.mjs';
 
-export const OPS_ESCRITURA = ['crearViaje', 'editarViaje', 'iniciar', 'finalizar', 'torreMoverEstado', 'torreEditarHorarios', 'enviarLiquidacion', 'aprobar', 'devolver', 'aprobarShipmentDuplicado', 'prepararFactura', 'ocGenerar', 'ocRegistrarPdf', 'ocEnviar', 'ocResponder', 'ocAnular','ocCorregir','agrRegistrarPdf','agrAdjuntarEvidencia', 'agrRechazarCliente','confirmarCliente', 'actualizarFactura',  'enviarFactura', 'emitirFactura',
-  'registrarCobro', 'corregirFactura', 'anularAgrupacion', 'registrarImportes', 'registrarPago', 'anularPago', 'crearOrdenPago', 'adjuntarDocumentoOrden', 'registrarTransferencia', 'anularOrdenPago', 'crearTarifa', 'editarTarifa', 'cambiarEstadoTarifa', 'aplicarTarifa', 'aplicarTarifasPendientes',
-  'solicitarRuta', 'registrarRuta', 'validarRuta', 'rechazarRuta', 'aprobarRutaComercial', 'aprobarRutaTransporte', 'marcarNotificacion', 'setPermiso', 'setAcceso', 'guardarUsuario', 'guardarCliente', 'guardarReglasTorre', 'activarUsuario', 'cambiarClave', 'guardarCatalogo', 'guardarPiloto', 'cambiarEstadoPiloto', 'crearReporteAyuda', 'cambiarEstadoReporteAyuda'];
-export const OPS_LECTURA = ['snapshot', 'verificarAuditoria', 'mantenimientos', 'gastos', 'resumenHistorico', 'viajesAnteriores', 'buscarViajes'];
 const MAX_ARGS = 300 * 1024;
 const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
 
@@ -17,104 +16,6 @@ const falla = (code, message, extra = {}) => ({ ok: false, code, message, ...ext
                           VENTANA_MESES de los cerrados y los Facturados pendientes de pago al proveedor.
      · viajesAnteriores → páginas del histórico, a pedido.
      · resumenHistorico → totales de TODO el histórico, calculados por el mismo motor sobre los viajes visibles. */
-const VENTANA_MESES = 3;
-const VIAJES_PAGINA = 400;
-const BUSCA_LIMITE = 60;
-const ESTADOS_EN_CURSO = ['PLANIFICADO', 'EN_RUTA', 'ENTREGADO', 'LIQUIDADO', 'RECHAZADO', 'ACEPTADO'];
-const COLA_AUDITORIA = 4000;                 /* eventos recientes que se leen por lectura (la tabla crece sin límite) */
-const SOLO_RESUMEN = ['perfiles', 'permisos', 'acceso_cliente', 'clientes', 'viajes', 'agrupaciones', 'pagos'];
-const SOLO_HISTORICO = ['perfiles', 'permisos', 'acceso_cliente', 'clientes', 'viajes', 'liquidaciones', 'evidencias'];
-/* Condiciones SQL de la ventana y de la página de histórico. Son un superconjunto deliberado de la regla final,
-   que se aplica en memoria (enVentana): así el SQL no repite el criterio completo y no hay dos reglas que se separen. */
-const COND_VENTANA = `(v.estado = any($1::text[]) or coalesce(v.fecha_plan,'') >= $2 or (v.estado = 'FACTURADO' and exists (select 1 from master.viajes_tarifa tv where tv.viaje_id = v.id and tv.tarifa_opl > 0)))`;
-/* Página del histórico por clave (fecha plan + id): así ninguna página repite ni se salta viajes,
-   ni siquiera cuando muchos comparten la misma fecha (los que no tienen fecha van al final). */
-const condAntes = (conId) => `(coalesce(v.fecha_plan,'') < $1${conId ? ` or (coalesce(v.fecha_plan,'') = $1 and v.id < $2)` : ''}) and not (v.estado = any($${conId ? 3 : 2}::text[]))`;
-const idAntes = a => { const v = String(argsDe(a).antesId || '').trim(); return /^[A-Za-z0-9._-]{1,40}$/.test(v) ? v : ''; };
-/* Búsqueda en TODO el histórico (no solo en la ventana cargada): por n.º de viaje, No. de transporte,
-   No. de viaje interno, producto, unidad, placa del arrastre, proveedor (OPL), proyecto o factura. */
-const COND_BUSCA = `(v.id ilike $1 or coalesce(v.shipment,'') ilike $1 or coalesce(v.no_viaje,'') ilike $1 or coalesce(v.producto,'') ilike $1 or coalesce(v.unidad_id,'') ilike $1 or coalesce(v.placa_arrastre,'') ilike $1 or coalesce(v.opl,'') ilike $1 or coalesce(v.proyecto_cat,'') ilike $1 or coalesce(v.numero_factura,'') ilike $1)`;
-const textoDe = a => String(argsDe(a).texto || '').trim().slice(0, 60);
-const likeDe = t => '%' + t.replace(/[\\%_]/g, m => '\\' + m) + '%';
-const desdeVentana = () => { const d = new Date(); d.setMonth(d.getMonth() - VENTANA_MESES); return d.toISOString().slice(0, 10); };
-/* Los argumentos llegan como lista: se toma el primer objeto (si lo hay). */
-const argsDe = a => Array.isArray(a)
-  ? (a[0] && typeof a[0] === 'object' && !Array.isArray(a[0]) ? a[0] : {})
-  : (a && typeof a === 'object' ? a : {});
-const antesDe = a => /^\d{4}-\d{2}-\d{2}$/.test(String(argsDe(a).antesDe || '')) ? String(argsDe(a).antesDe) : desdeVentana();
-const limitePagina = a => Math.min(Math.max(Number(argsDe(a).limite) || VIAJES_PAGINA, 1), 1000);
-
-/* Regla exacta de la ventana (el SQL de arriba trae un superconjunto): lo que falta cerrar siempre, lo reciente
-   por fecha y lo Facturado que todavía no tiene orden de pago (pendiente de pagar al proveedor). */
-function enVentana(t, desde, enOrden) {
-  if (ESTADOS_EN_CURSO.includes(t.estado)) return true;
-  const f = String(t.fechaPlan || '').slice(0, 10);
-  if (f && f >= desde) return true;
-  return t.estado === 'FACTURADO' && Number(t.tarifaOpl) > 0 && !enOrden.has(t.id);
-}
-function aplicarVentana(E) {
-  const DB = E.getDB(), enOrden = new Set();
-  for (const o of DB.ordenesPago) if (o.estado === 'ACTIVA') for (const id of o.viajeIds) enOrden.add(id);
-  const desde = desdeVentana();
-  DB.trips = DB.trips.filter(t => enVentana(t, desde, enOrden));
-  return { desde, meses: VENTANA_MESES };
-}
-/* La bitácora de los viajes que sí se envían se lee aparte (no se carga la tabla completa). */
-async function auditoriaDeViajes(q, ids) {
-  if (!ids.length) return [];
-  const { rows } = await q('select id,entidad,viaje_id,accion,campo,anterior,nuevo,por_id,por,rol,en,motivo,ref,prev,hash,extra from master.auditoria where viaje_id = any($1::text[])', [ids]);
-  return rows.map(r => Object.assign({
-    id: r.id, entidad: r.entidad, viajeId: r.viaje_id, accion: r.accion, campo: r.campo, anterior: r.anterior, nuevo: r.nuevo,
-    porId: r.por_id, por: r.por, rol: r.rol, en: r.en instanceof Date ? r.en.toISOString() : r.en, motivo: r.motivo, ref: r.ref, prev: r.prev, hash: r.hash,
-  }, r.extra && typeof r.extra === 'object' ? r.extra : {}));
-}
-const fusionarAuditoria = (cola, viajes) => {
-  const m = new Map();
-  for (const e of cola) m.set(e.id, e);
-  for (const e of viajes) m.set(e.id, e);
-  return [...m.values()].sort((x, y) => x.id < y.id ? -1 : 1);
-};
-/* Cuántos viajes ve este usuario en TODA la base (para poder decir «N de M» en la pantalla). */
-/* Condición SQL con la MISMA visibilidad que el motor: los clientes y proyectos del perfil, más lo que ve un
-   perfil comercial (viajes ya aceptados/facturados/cobrados). Devuelve null si el perfil no ve ningún viaje.
-   La usan el conteo de «Cargados N de M» y el resumen por mes de la gráfica: así no hace falta cargar y recorrer
-   los 7.000 viajes para contestar esas dos cosas. */
-function filtroVisible(A, db, E) {
-  const cli = [...new Set(db.acceso.filter(a => a.userId === A.id).map(a => a.cliente))];
-  const proy = [...new Set((A.proyectos || []).filter(Boolean))];
-  const partes = [], params = [];
-  if (cli.length) {
-    params.push(cli);
-    let c = `v.cliente_id = any($${params.length}::text[])`;
-    if (proy.length) { params.push(proy); c += ` and v.proyecto_cat = any($${params.length}::text[])`; }
-    partes.push('(' + c + ')');
-  }
-  if (E.hasPerm(A, 'comercial_ver')) partes.push(`v.estado = any(array['ACEPTADO','FACTURADO','COBRADO'])`);
-  return partes.length ? { sql: partes.join(' or '), params } : null;
-}
-/* Filtros de la pantalla de Finanzas (cliente, proyecto, proveedor y fechas plan) traducidos a SQL: la gráfica
-   por mes se calcula en la base, así que el filtro tiene que viajar hasta la consulta. */
-function filtrosGrafica(f) {
-  const sql = [], params = [];
-  const t = v => (v == null ? '' : String(v).trim());
-  const add = (col, val) => { params.push(val); sql.push(`${col} = $${params.length}`); };
-  if (t(f.desde)) { params.push(t(f.desde)); sql.push(`v.fecha_plan >= $${params.length}`); }
-  if (t(f.hasta)) { params.push(t(f.hasta)); sql.push(`v.fecha_plan <= $${params.length}`); }
-  if (t(f.cliente)) add('v.cliente_id', t(f.cliente));
-  if (t(f.proyecto)) add('v.proyecto_cat', t(f.proyecto));
-  if (t(f.proveedor)) add('v.opl', t(f.proveedor));
-  return { sql, params };
-}
-/* Cuántos viajes abarca la base para este perfil (el «M» de «Cargados N de M»). Antes se contaba evaluando la
-   función de RLS viaje por viaje: 2,7 s de promedio con 7.000 viajes y creciendo. */
-async function contarVisibles(q, A, db, E) {
-  if (E.hasPerm(A, 'viajes_ver_todos')) { const { rows } = await q('select count(*)::int n from master.viajes'); return rows[0] ? rows[0].n : 0; }
-  const f = filtroVisible(A, db, E);
-  if (!f) return 0;
-  const { rows } = await q(`select count(*)::int n from master.viajes v where ${f.sql}`, f.params);
-  return rows[0] ? rows[0].n : 0;
-}
-
 function rutasDeArchivos(args) {
   const out = [];
   const visita = v => { if (v && typeof v === 'object') { if (typeof v.path === 'string') out.push(v.path); Object.values(v).forEach(visita); } };
@@ -291,78 +192,4 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
     if (authCreado && deps.borrarUsuarioAuth) { try { await deps.borrarUsuarioAuth(authCreado); } catch (_) { /* cuenta huérfana: revisar en Auth */ } }
     return falla('ERROR_SERVIDOR', 'El servidor no pudo completar la operación; no se guardó nada.', { detalle: String(e && e.message || e).slice(0, 300) });
   }
-}
-
-/* ---------- Foto de datos que ve ESTE usuario (misma autorización del motor + enlaces firmados de las evidencias) ---------- */
-async function armarSnapshot(E, uid, deps, ventana) {
-  const DB = E.getDB(), A = DB.usuarios.find(u => u.id === uid), has = p => E.hasPerm(A, p), API = E.API;
-  const seguro = (f, d) => { try { return f(); } catch (e) { return d; } };
-  const trips = seguro(() => API.listarViajes(uid), []);
-  const vis = new Set(trips.map(t => t.id));
-  const puedeLiq = has('liq_ver') || has('liq_enviar');
-  const liquidaciones = [], evidencias = [], audit = new Map();
-  if (puedeLiq) {
-    /* Agrupar las liquidaciones por viaje UNA sola vez. Antes se llamaba API.liquidaciones(uid,t.id) por cada viaje,
-       y cada llamada hacía un find lineal sobre los viajes y un filter lineal → O(viajes²). Con miles de viajes eso
-       revienta el límite de CPU de la Edge Function (error 546). */
-    const liqPorViaje = new Map();
-    for (const l of DB.liquidaciones) { let a = liqPorViaje.get(l.viajeId); if (!a) { a = []; liqPorViaje.set(l.viajeId, a); } a.push(l); }
-    for (const t of trips) for (const l of (liqPorViaje.get(t.id) || [])) { const { evidencia, ...r } = l; liquidaciones.push(r); }
-  }
-  const evs = puedeLiq ? DB.evidencias.filter(e => vis.has(e.viajeId)) : [];
-  const agr = (has('comercial_ver') || has('finanzas_ver')) ? seguro(() => API.agrupaciones(uid), []) : [];
-  const puedeOrd = has('finanzas_ver') || has('comercial_ver') || has('pagos_registrar');
-  const ord = puedeOrd ? seguro(() => API.ordenesPago(uid), []) : [];
-  const ordPaths = [];
-  ord.forEach(o => { const em = o.emision && o.emision.documento, tr = o.transferencia;
-    if (em && em.path) ordPaths.push(em.path);
-    if (tr && tr.evidencia && tr.evidencia.path) ordPaths.push(tr.evidencia.path);
-    if (tr && tr.factura && tr.factura.path) ordPaths.push(tr.factura.path); });
-  /* Órdenes de compra: PDF por versiones y evidencias de la respuesta del cliente, siempre en el bucket privado (URL firmada de 1 h). */
-  const ocs = has('oc_ver') ? seguro(() => API.ordenesCompra(uid), []) : [];
-  const ocPaths = [];
-  ocs.forEach(o => { (o.documentos || []).forEach(d => d.path && ocPaths.push(d.path)); ((o.respuesta && o.respuesta.evidencias) || []).forEach(e => e.path && ocPaths.push(e.path)); });
-  /* Agrupaciones de cobro: PDF interno/cliente por versiones, evidencias de autorización y comprobantes de cobro, todo privado. */
-  const agrPaths = [];
-  agr.forEach(g => { (g.pdfs || []).forEach(p => p.path && agrPaths.push(p.path)); (g.evidenciasAutorizacion || []).forEach(e => e.path && agrPaths.push(e.path)); (g.rechazos || []).forEach(e => e.path && agrPaths.push(e.path)); (g.cobros || []).forEach(c => c.archivoPath && agrPaths.push(c.archivoPath)); });
-  const paths = [...evs.map(e => e.path), ...agr.map(g => g.emision && g.emision.archivoPath), ...agrPaths, ...ordPaths, ...ocPaths].filter(Boolean).slice(-600);
-  const urls = paths.length ? await deps.firmar(paths) : new Map();
-  evs.forEach(e => evidencias.push({ id: e.id, viajeId: e.viajeId, liqId: e.liqId, dataUrl: urls.get(e.path) || '', path: '', porId: e.porId, por: e.por, en: e.en }));
-  const agrupaciones = agr.map(g => {
-    const x = g.emision && g.emision.archivoPath ? { ...g, emision: { ...g.emision, archivo: urls.get(g.emision.archivoPath) || '', archivoPath: '' } } : { ...g };
-    if (g.pdfs) x.pdfs = g.pdfs.map(p => ({ ...p, url: p.path ? (urls.get(p.path) || '') : '' }));
-    if (g.evidenciasAutorizacion) x.evidenciasAutorizacion = g.evidenciasAutorizacion.map(e => ({ ...e, url: e.path ? (urls.get(e.path) || '') : '' }));
-    if (g.rechazos) x.rechazos = g.rechazos.map(e => ({ ...e, url: e.path ? (urls.get(e.path) || '') : '' }));
-    if (g.cobros) x.cobros = g.cobros.map(c => c.archivoPath ? { ...c, url: urls.get(c.archivoPath) || '' } : c);
-    return x;
-  });
-  if (has('auditoria_ver')) DB.audit.slice(-2000).forEach(e => audit.set(e.id, e));
-  else {
-    if (has('comercial_ver')) DB.audit.filter(e => e.entidad === 'AGRUPACION').forEach(e => audit.set(e.id, e));
-    /* Un solo recorrido de la auditoría para TODOS los viajes (antes: API.historial por viaje → O(viajes²)). */
-    const histPorViaje = API.historiales(uid, !has('historial_ver') && has('viajes_editar_tiempos'));
-    for (const t of trips) for (const e of (histPorViaje.get(t.id) || [])) audit.set(e.id, e);
-  }
-  const fiscal = has('clientes_gestionar') || has('comercial_ver') || has('finanzas_ver') || has('tablero_ver');
-  const clientes = DB.clientes.map(c => fiscal ? c : { ...c, nit: '', direccionFiscal: '', correoFacturacion: '', contacto: '', telefono: '', creditoDias: '', observaciones: '' });
-  const admin = has('usuarios_gestionar');
-  const usuarios = DB.usuarios.map(u => admin ? { ...u, clave: '' } : { id: u.id, usuario: u.usuario, nombre: u.nombre, rol: u.rol, activo: u.activo, proyectos: u.proyectos, clave: '' });
-  return {
-    yo: uid, ventana: ventana || null, usuarios, acceso: DB.acceso, permisos: DB.permisos, clientes, trips, liquidaciones, evidencias, agrupaciones,
-    audit: [...audit.values()].sort((a, b) => a.id < b.id ? -1 : 1),
-    pagos: has('finanzas_ver') ? DB.pagos : [],
-    ordenesCompra: ocs.map(o => ({ ...o,
-      documentos: (o.documentos || []).map(d => ({ ...d, url: d.path ? (urls.get(d.path) || '') : '' })),
-      respuesta: o.respuesta ? { ...o.respuesta, evidencias: (o.respuesta.evidencias || []).map(e => ({ ...e, url: e.path ? (urls.get(e.path) || '') : '' })) } : o.respuesta })),
-    ordenesPago: ord.map(o => { const c = JSON.parse(JSON.stringify(o));
-      if (c.emision && c.emision.documento) c.emision.documentoUrl = urls.get(c.emision.documento.path) || '';
-      if (c.transferencia) { if (c.transferencia.evidencia) c.transferencia.evidenciaUrl = urls.get(c.transferencia.evidencia.path) || ''; if (c.transferencia.factura) c.transferencia.facturaUrl = urls.get(c.transferencia.factura.path) || ''; }
-      return c; }), rutas: has('rutas_ver') ? seguro(() => API.rutas(uid), []) : [],
-    tarifas: has('tarifas_ver') ? seguro(() => API.tarifas(uid), []) : [],
-    mem: has('tarifas_ver') ? seguro(() => API.mem(uid), []) : [],
-    reportesAyuda: seguro(() => API.reportesAyuda(uid), []),
-    notificaciones: DB.notificaciones.filter(n => A.rol === 'ADMIN' || n.destinatarios.includes(A.rol) || (n.usuarios || []).includes(A.id)),
-    config: DB.config, catalogos: { pilotos: E.PILOTOS, flota: E.FLOTA, destinos: E.DESTINOS,
-      listas: { tipoUnidad: E.CAT.tipoUnidad, opl: E.CAT.opl, tipoCarga: E.CAT.tipoCarga, tipoViaje: E.CAT.tipoViaje, arrastre: E.CAT.arrastre, tipoLicencia: E.CAT.tipoLicencia } }
-  };
 }

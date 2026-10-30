@@ -315,7 +315,7 @@ function gastoSet(clave,valor){
   if(campo==='concepto'&&esGastoOtro(valor)!==eraOtro){if(!esGastoOtro(valor))l[i].detalle='';render();}   /* «Otros» muestra u oculta «Especifique el gasto»; con otro concepto la explicación se descarta */
 }
 
-function fieldsHTML(M,groups,dis){
+function formCtx(M,groups,dis){
   const has=g=>groups.includes(g),d=dis?'disabled':'',ready=!!M.proyecto;
   const lab=(k,l,req,sc)=>`<label for="m_${k}">${l}${req?' <span class="mute">*</span>':''}${sc?' '+src(sc):''}</label>`;
   const txt=(k,l,o={})=>`<div class="fgroup">${lab(k,l,o.req,o.src)}<input type="${o.type||'text'}" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${o.ro?'readonly':''} ${o.num?'inputmode="decimal" min="0"':''} ${d}>${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;
@@ -323,8 +323,12 @@ function fieldsHTML(M,groups,dis){
     return `<div class="fgroup">${lab(k,l,o.req,o.src)}<select id="m_${k}" data-m="${k}" ${d||o.dis?'disabled':''}><option value="">${o.ph||'Selecciona'}</option>${op.map(x=>`<option value="${esc(x.id)}" ${x.id===M[k]?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select>${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;};
   const fcombo=(k,l,opts,val,o={})=>`<div class="fgroup">${lab(k,l,o.req,o.src)}${(d||o.dis)?`<div class="cb"><button type="button" class="cb-btn" disabled><span>${esc(o.ph||'Selecciona')}</span><span class="cb-c">▾</span></button></div>`:comboHTML('m:'+k,val,opts,o.ph||'Selecciona')}${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;
   const pr=PROYECTOS.find(p=>p.id===M.proyecto);
+  return {has,d,ready,lab,txt,sel,fcombo,pr};
+}
+function clienteFieldsHTML(M,c){
+  const {has,d,ready,txt,sel,pr}=c;
   let h='';
-  if(has('cliente')){
+if(has('cliente')){
     const clis=clientesAsig(S.user),locked=S.edit||clis.length===1;
     const cli=locked?`<div class="locked">${icon('lock',16)}<span class="pchip sm">${esc(pr?pr.nombre:'—')}</span><span>${esc(pr?pr.cliente:'')}</span><span class="mute" style="margin-left:auto;font-size:12.5px">${S.edit?'no editable':(esEnc()?'':'según tu perfil')}</span></div>`
       :`<select id="m_proyecto" data-m="proyecto" ${d}><option value="">Selecciona el cliente</option>${PROYECTOS.filter(p=>clis.includes(p.id)&&p.activo!==false).map(p=>`<option value="${p.id}" ${p.id===M.proyecto?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>`;
@@ -342,12 +346,22 @@ function fieldsHTML(M,groups,dis){
       <div class="row2">${sel('tipoCarga','Tipo de carga',CAT.tipoCarga,{src:'CATALOGO'})}${txt('noCarga','Cantidad de carga',{type:'number',num:1,hint:'Cantidad, según el tipo de carga'})}</div>
       <div class="row2">${txt('producto','Producto')}</div></div>`;
   }
-  if(has('plan')){
+    return h;
+}
+function planFieldsHTML(M,c){
+  const {has,d}=c;
+  let h='';
+if(has('plan')){
     h+=`<div class="card fsec"><h3>Fecha plan</h3>
       <div class="row2"><div class="fgroup"><label for="m_fechaPlanD">Fecha plan <span class="mute">*</span></label><input type="date" id="m_fechaPlanD" data-m="fechaPlanD" value="${esc(M.fechaPlanD)}" ${d}><span class="hint">Hoy por defecto; puedes cambiarla</span></div>
       <div class="fgroup"><label for="m_fechaPlanT">Hora plan <span class="mute">*</span></label><input type="time" id="m_fechaPlanT" data-m="fechaPlanT" value="${esc(M.fechaPlanT)}" ${d}></div></div></div>`;
   }
-  if(has('unidad')&&esAdm()){
+    return h;
+}
+function unidadFieldsHTML(M,c){
+  const {has,d,ready,txt,sel,fcombo}=c;
+  let h='';
+if(has('unidad')&&esAdm()){
     const falla=catalogoFalla(),plSel=M.placaSel||((PILOTOS.find(p=>p.id===M.pilotoId)||{}).unidad||'');
     const placas=(ready&&!falla)?placasDe(M.proyecto):[],actual=(plSel&&!placas.some(x=>x.unidad===plSel))?FLOTA.find(x=>x.unidad===plSel):null;
     const opts=placas.concat(actual?[actual]:[]).map(f=>({id:f.unidad,nombre:etiquetaPlaca(f)}));
@@ -372,7 +386,12 @@ function fieldsHTML(M,groups,dis){
       ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}
       <div class="row2">${txt('noViaje','No. de viaje',{ro:true,hint:'Se calcula con los viajes de la unidad seleccionada.'})}</div></div>`;
   }
-  if(has('ruta')&&!usaCombo()){
+    return h;
+}
+function rutaFieldsHTML(M,c){
+  const {has,d,ready,txt,sel,fcombo}=c;
+  let h='';
+if(has('ruta')&&!usaCombo()){
     const rs=(ready&&M.proyectoCat)?API.rutasParaViaje(S.user.id,M.proyecto,M.proyectoCat):[];
     const pend=M.rutaId==='NO_ASIGNADA',R=(!pend&&M.rutaId)?DB.rutas.find(x=>x.id===M.rutaId):null;
     const opts=rs.map(r=>({id:r.id,nombre:`${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`})).concat(S.edit||!hp('rutas_solicitar')?[]:[{id:'NO_ASIGNADA',nombre:'NUEVA RUTA · requiere validación, tarifa y doble aprobación'}]);
@@ -408,19 +427,38 @@ function fieldsHTML(M,groups,dis){
       ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
       ${od}</div>`;
   }
-  if(has('tiempos')){
+    return h;
+}
+function tiemposFieldsHTML(M,c){
+  const {has,d}=c;
+  let h='';
+if(has('tiempos')){
     h+=`<div class="card fsec"><h3>Horarios del viaje</h3><div class="lead">Llena cada hora cuando ocurra: toca “Ahora” o escríbela. Puedes dejarlas vacías al registrar el viaje y completarlas después. Los tiempos de abajo se calculan solos.</div>
       <div class="tgrid">${CAMPOS_TIEMPO.map(([k,l])=>`<div class="fgroup"><label for="m_${k}">${lblT(l)}</label><div class="trow"><input type="datetime-local" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${d}><button type="button" class="btn sm" data-act="ahora" data-k="${k}" ${d}>Ahora</button><button type="button" class="btn ghost sm" data-act="limpiar" data-k="${k}" aria-label="Borrar ${lblT(l)}" ${d}>×</button></div></div>`).join('')}</div>
       <h3 style="margin-top:8px;font-size:14px">Tiempos calculados</h3>${dursHTML(M)}</div>`;
     if(M.desvio&&!S.edit)h+=`<div class="card fsec"><h3>Horarios de descarga del desvío</h3><div class="lead">Solo las horas de la descarga en el destino del desvío. Son aparte de los horarios del viaje y no los reemplazan. Puedes dejarlas vacías y completarlas después.</div>
       <div class="tgrid">${CAMPOS_TIEMPO_DESVIO.map(([k,l])=>`<div class="fgroup"><label for="m_${k}">${lblT(l)}</label><div class="trow"><input type="datetime-local" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${d}><button type="button" class="btn sm" data-act="ahora" data-k="${k}" ${d}>Ahora</button><button type="button" class="btn ghost sm" data-act="limpiar" data-k="${k}" aria-label="Borrar ${lblT(l)}" ${d}>×</button></div></div>`).join('')}</div></div>`;
   }
-  if(has('otros')){
+    return h;
+}
+function gastosFieldsHTML(M,c){
+  const {has,txt,d}=c;
+  let h='';
+if(has('otros')){
     h+=`<div class="card fsec"><h3>Retorno y viáticos</h3><div class="row2">${txt('noDocRetorno','No. doc retorno')}${txt('qViaticos','Q viáticos',{type:'number',num:1,hint:'Monto en quetzales'})}</div>${gastosFormHTML(M,d)}</div>`;
   }
+    return h;
+}
+function fieldsHTML(M,groups,dis){
+  const c=formCtx(M,groups,dis);let h='';
+  if(c.has('cliente'))h+=clienteFieldsHTML(M,c);
+  if(c.has('plan'))h+=planFieldsHTML(M,c);
+  if(c.has('unidad'))h+=unidadFieldsHTML(M,c);
+  if(c.has('ruta'))h+=rutaFieldsHTML(M,c);
+  if(c.has('tiempos'))h+=tiemposFieldsHTML(M,c);
+  if(c.has('otros'))h+=gastosFieldsHTML(M,c);
   return h;
 }
-
 VIEWS.nuevo=()=>{
   if(!S.form)S.form=initForm();
   const f=S.form,dis=!!f.savedId,Pl=PILOTOS.find(p=>p.id===f.pilotoId);

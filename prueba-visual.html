@@ -28,6 +28,12 @@
 <script src="js/catalogos.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/engine.js"></script>
+<script src="js/engine/api-sesion.js"></script>
+<script src="js/engine/api-snapshot.js"></script>
+<script src="js/engine/api-viajes.js"></script>
+<script src="js/engine/api-comercial.js"></script>
+<script src="js/engine/api-finanzas.js"></script>
+<script src="js/engine/api-admin.js"></script>
 <script>/* revisión visual: nunca instalar ni registrar el service worker (evita ver archivos viejos en caché) */try{if(navigator.serviceWorker){navigator.serviceWorker.register=function(){return Promise.resolve();};if(/^https?:$/.test(location.protocol))navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister();});}).catch(function(){});}}catch(e){}</script>
 <script src="js/pwa.js"></script>
 <script src="js/backend.js"></script>

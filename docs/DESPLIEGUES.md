@@ -180,3 +180,11 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - El No. de viaje ya no cuenta todo el histórico: cuenta los viajes de la unidad **en la fecha planificada** y suma el que se está registrando.
 - Se recalcula al cambiar la unidad o la fecha; el servidor vuelve a asignarlo al crear el viaje.
 - **front/SW v1.3.10**; API actualizado.
+
+## 2026-10-30 · Refactor modular del motor, formulario y API
+- `fieldsHTML()` dividido en `formCtx`, `clienteFieldsHTML`, `planFieldsHTML`, `unidadFieldsHTML`, `rutaFieldsHTML`, `tiemposFieldsHTML` y `gastosFieldsHTML`.
+- `js/engine.js` conserva la base y delega los 90 métodos de `API` en `js/engine/api-sesion.js`, `api-snapshot.js`, `api-viajes.js`, `api-comercial.js`, `api-finanzas.js` y `api-admin.js`.
+- El handler del API se separó en `snapshot.mjs` (lectura/snapshot), `read.mjs` (ventana y conteos) y `ops.mjs` (registro de operaciones).
+- Se agregó `npm run check:core` y el workflow `.github/workflows/check-core.yml` para detectar desalineación entre `js/engine.js` y `core.mjs`.
+- Grafo Graphify regenerado con PostgreSQL: 1,742 nodos, 2,582 relaciones y 428 nodos/629 relaciones del esquema real.
+- **front/SW v1.4.0**.

@@ -1,0 +1,14 @@
+name: check-core
+on:
+  push:
+  pull_request:
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verificar que core.mjs coincide con el motor
+        run: npm run check:core
