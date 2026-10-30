@@ -153,3 +153,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Las pestañas de liquidación reutilizan la tabla y las acciones de aprobar/devolver/liquidar; las demás usan la tabla operativa.
 - Inicio muestra un solo acceso y el filtro de cliente/proyecto/fechas se comparte en toda la pantalla.
 - **front/SW v1.3.5**. Sin cambios de API.
+
+## 2026-10-30 · Evidencia de OC y evitar cargas después de confirmar
+
+- Antes de subir la evidencia, el formulario consulta el estado actual de la agrupación. Si la OC ya está registrada, muestra el mensaje correcto y no intenta subir el archivo (Storage rechaza adjuntos posteriores a la confirmación).
+- Se evita abrir «Registrar OC» sobre una agrupación ya confirmada.
+- **front/SW v1.3.6**. Sin cambios de API.

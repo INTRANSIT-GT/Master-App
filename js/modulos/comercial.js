@@ -456,6 +456,7 @@ Object.assign(ACT,{
   },
   async agrConfirmarOpen(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id)||{};
+    if(g.confirmacion){toast(`La OC de ${d.id} ya está registrada (${g.confirmacion.ot||g.confirmacion.referencia||'—'}).`, 'err');return;}
     const cli=(g.pdfs||[]).filter(p=>p.tipo==='CLIENTE'),ult=cli[cli.length-1];
     const yaEv=!!ult&&(g.evidenciasAutorizacion||[]).some(e=>e.pdfVersion===ult.version);
     formM({title:`Registrar OC del cliente · ${d.id}`,
@@ -465,7 +466,12 @@ Object.assign(ACT,{
   },
   async agrConfirmarOk(d){
     const m=S.modal.data;
-    const g=DB.agrupaciones.find(x=>x.id===d.id)||{};
+    /* La ventana puede haberse quedado abierta antes de que otra persona registrara la OC.
+       Antes de subir nada, se consulta el estado actual: Storage bloquea archivos posteriores a la OC. */
+    let fresh=null;try{fresh=API.agrupaciones(S.user.id).find(x=>x.id===d.id)||null;}catch(e){}
+    if(fresh&&fresh.confirmacion){S.modal.err=`La OC de ${d.id} ya está registrada (${fresh.confirmacion.ot||fresh.confirmacion.referencia||'—'}); no se puede adjuntar otra evidencia después de registrada.`;render();return;}
+    if(fresh&&(fresh.estado!=='ACTIVA'||fresh.fase!=='PREPARADA')){S.modal.err='La agrupación ya no está en preparación: no se puede registrar una nueva OC. Actualiza la lista.';render();return;}
+    const g=fresh||DB.agrupaciones.find(x=>x.id===d.id)||{};
     const cli=(g.pdfs||[]).filter(p=>p.tipo==='CLIENTE'),ult=cli[cli.length-1];
     const yaEv=!!ult&&(g.evidenciasAutorizacion||[]).some(e=>e.pdfVersion===ult.version);
     if(!m.archivo&&!yaEv){S.modal.err='Adjunta la evidencia de la OC para registrarla.';render();return;}
