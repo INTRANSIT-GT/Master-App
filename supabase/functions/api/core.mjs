@@ -570,7 +570,23 @@ function finCalc(trips,agrs,pagos,f){
 const pagadoFmt=n=>n;
 
 /* ---------- Ayudas de rutas, tarifas y avisos ---------- */
-const capDe=t=>(FLOTA.find(f=>f.unidad===t.unidadId)||{}).capacidad||'';
+/* La capacidad depende del equipo: si hay arrastre con capacidad registrada, manda el arrastre;
+   si no, la unidad. Un cabezal sin arrastre no tiene capacidad propia. */
+const esEquipoArrastre=f=>!!f&&(/^RAS/i.test(String(f.tipo||''))||/^TC/i.test(String(f.placa||''))||/^TC/i.test(String(f.unidad||'')));
+function capacidadEquipo(unidadId,placaArrastre){
+  const arrTxt=String(placaArrastre==null?'':placaArrastre).trim();
+  const U=FLOTA.find(f=>f.unidad===unidadId||f.placa===unidadId)||null;
+  if(arrTxt){
+    const match=FLOTA.filter(f=>String(f.placa||'').trim()===arrTxt||String(f.unidad||'').trim()===arrTxt);
+    const A=match.find(esEquipoArrastre)||match[0]||null;
+    if(A&&A.capacidad)return {capacidad:A.capacidad,fuente:'ARRASTRE',equipo:A.placa||A.unidad||arrTxt};
+    if(U&&!esEquipoArrastre(U)&&!/^cabezal$/i.test(String(U.tipo||'')))return {capacidad:U.capacidad||'',fuente:'UNIDAD',equipo:U.placa||U.unidad||''};
+    return {capacidad:'',fuente:'SIN_DATO',equipo:arrTxt};
+  }
+  if(U&&/^cabezal$/i.test(String(U.tipo||'')))return {capacidad:'',fuente:'SIN_DATO',equipo:U.placa||U.unidad||''};
+  return {capacidad:U?U.capacidad||'':'',fuente:U?'UNIDAD':'SIN_DATO',equipo:U?U.placa||U.unidad||'':''};
+}
+const capDe=t=>capacidadEquipo(t.unidadId,t.placaArrastre).capacidad;
 const capsCat=()=>[...new Set(FLOTA.map(f=>f.capacidad))].sort((a,b)=>parseFloat(a)-parseFloat(b));
 /* El origen y el destino ya son el texto que se ve: se devuelve tal cual. */
 const nombreOrigen=v=>String(v==null?'':v);
@@ -628,7 +644,7 @@ function textoLugar(v,campo){
 }
 function capacidadRuta(v){
   const c=String(v==null?'':v).trim();
-  if(!c)deny('Selecciona la capacidad de la unidad para esta ruta.','VALIDACION');
+  if(!c)deny('Selecciona la capacidad de la unidad o del equipo de arrastre.','VALIDACION');
   if(!capsCat().includes(c))deny('Capacidad no válida (catálogo de la flota).','VALIDACION');
   return c;
 }
@@ -1177,7 +1193,7 @@ Object.assign(API,{
     keys.forEach(k=>{if(k==='rutaId'||k==='rutaRef'||k==='sinRuta'||k==='desvio'||k==='desvioDestino'||k==='rutaCapacidad'||k==='rutaKm'||v[k]===''||v[k]==null)return;const m=valKey(cliente,k,v[k]);if(m)deny(m,'VALIDACION');});
     let ruta=null,pend=v.rutaId==='NO_ASIGNADA',capPend='',kmPend=null;
     if(sinRuta){if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para registrar un viaje SIN RUTA selecciona el proyecto.','VALIDACION');}
-    else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');capPend=capacidadRuta(v.rutaCapacidad);kmPend=kmRuta(v.rutaKm);}
+    else if(pend){need(A,'rutas_solicitar','solicitar rutas nuevas');if(!v.proyectoCat||!proyectosDe(cliente).includes(v.proyectoCat))deny('Para solicitar una ruta nueva selecciona el proyecto.','VALIDACION');if(String(v.rutaRef||'').length<3)deny('Para una ruta no activa escribe la referencia (qué ruta se necesita): se envía a validación.','VALIDACION');if(v.rutaRef.length>80)deny('La referencia de la ruta admite máximo 80 caracteres.','VALIDACION');capPend=capacidadRuta(v.rutaCapacidad);kmPend=kmRuta(v.rutaKm);const capEquipo=capacidadEquipo(v.unidadId||(P0&&P0.unidad),v.placaArrastre);if(!capEquipo.capacidad)deny('No se pudo determinar la capacidad del equipo. Revisa la unidad y, si es cabezal, su equipo de arrastre.','VALIDACION');if(String(capEquipo.capacidad)!==String(capPend))deny(`La capacidad de la ruta debe ser la del ${capEquipo.fuente==='ARRASTRE'?'equipo de arrastre':'unidad'} (${capEquipo.capacidad}), no ${capPend}.`,'VALIDACION');}
     else {ruta=DB.rutas.find(r=>r.id===v.rutaId);if(!ruta||ruta.cliente!==cliente)deny('La ruta no corresponde al cliente elegido.','VALIDACION');v.proyectoCat=ruta.proyecto;}
     delete v.rutaCapacidad;delete v.rutaKm;
     const clave=pend?'ref:'+v.rutaRef.toLowerCase():v.rutaId;

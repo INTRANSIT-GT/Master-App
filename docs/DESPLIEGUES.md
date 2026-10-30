@@ -182,6 +182,15 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - **front/SW v1.3.10**; API actualizado.
 
 
+
+## 2026-10-30 · Capacidad según el equipo (arrastre o unidad)
+- La capacidad de una ruta o viaje se calcula desde el **equipo de arrastre** cuando tiene capacidad registrada; si no hay arrastre, desde la **unidad** (furgón/camión).
+- Un **cabezal sin arrastre** no tiene capacidad propia: la solicitud de ruta se rechaza hasta registrar/elegir el arrastre correcto.
+- En el formulario de viaje, al elegir placa y arrastre, la capacidad se actualiza automáticamente y el campo de la nueva ruta es de solo lectura.
+- La tarifa y los cálculos usan la misma regla (`capacidadEquipo`).
+- **API desplegada**; **front/SW v1.4.4**.
+- **Verificado:** un cabezal sin arrastre fue rechazado al solicitar una ruta nueva.
+
 ## 2026-10-30 · Capacidad de unidad y KM en la solicitud de ruta
 - La solicitud de ruta nueva (desde Rutas y desde «NUEVA RUTA» en el viaje) pide **capacidad de la unidad** y **KM de la ruta**.
 - Los datos se guardan en `rutas`, se muestran en el catálogo y se envían a Comercial para la tarifa.

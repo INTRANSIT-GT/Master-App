@@ -110,7 +110,7 @@ function aplicarCampo(M,k,v){
   if(k==='proyectoCat')limpiaRuta();
   if(k==='rutaGrupo'){
     M.rutaO='';M.rutaD='';if(v)M.sinRuta=false;
-    if(v==='NO_ASIGNADA'){M.rutaId='NO_ASIGNADA';M.rutaCapacidad='';M.rutaKm='';}
+    if(v==='NO_ASIGNADA'){M.rutaId='NO_ASIGNADA';M.rutaCapacidad='';M.rutaKm='';actualizarCapacidadRuta(M);}
     else{M.rutaRef='';M.rutaCapacidad='';M.rutaKm='';const g=rutasGrupos(M).find(x=>x.key===v);if(g){if(M.proyecto!==g.cliente){M.proyecto=g.cliente;M.pilotoId='';M.placaSel='';M.desvioDestino='';}M.proyectoCat=g.proyecto;}resolverRuta(M);}   /* cliente y proyecto salen de la ruta elegida */
   }
   if(k==='rutaO'||k==='rutaD')resolverRuta(M);
@@ -125,9 +125,10 @@ function aplicarCampo(M,k,v){
     }
     /* El arrastre se propone con el último que usó esa unidad. */
     const ua=ultimoArrastreDeUnidad(v);if(ua)M.placaArrastre=ua;
-    if(M.rutaId==='NO_ASIGNADA'){const U=FLOTA.find(x=>x.unidad===v);if(U&&U.capacidad)M.rutaCapacidad=U.capacidad;}  /* la capacidad de la unidad solicitada */
+    actualizarCapacidadRuta(M);  /* arrastre con capacidad manda; si no, la unidad */
     M.noViaje=siguienteNoViaje(v,M.fechaPlanD);       /* consecutivo de la unidad en el día */
   }
+  if(k==='placaArrastre'||k==='placaArrastreOtro')actualizarCapacidadRuta(M);
   if(k==='fechaPlanD')M.noViaje=siguienteNoViaje(M.placaSel,v);   /* al cambiar la fecha cambia el consecutivo del día */
   if(k==='pilotoId'&&v){const P=PILOTOS.find(p=>p.id===v);if(P&&P.unidad)M.placaSel=P.unidad;M.noViaje=siguienteNoViaje(M.placaSel,M.fechaPlanD);}   /* la placa arranca con la del piloto; se puede cambiar, siempre del mismo cliente */
   if(k==='pilotoAlt')M.pilotoId=v;                                                                              /* solo si la placa tiene más de un piloto asignado */
@@ -182,13 +183,23 @@ function pilotosElegibles(cliente,unidad){
 /* Equipo de arrastre que no está en la lista: se escribe la placa a mano. */
 const ARRASTRE_OTRO='__OTRO__';
 const arrastreFinal=M=>String(M.placaArrastre===ARRASTRE_OTRO?(M.placaArrastreOtro||''):(M.placaArrastre||'')).trim();
+/* La capacidad que corresponde al equipo elegido: arrastre si tiene capacidad; si no, unidad.
+   Un cabezal sin arrastre queda sin capacidad (la unidad no la define). */
+function capacidadRutaModelo(M){
+  if(!M)return {capacidad:'',fuente:'SIN_DATO',equipo:''};
+  return capacidadEquipo(M.placaSel,arrastreFinal(M));
+}
+function actualizarCapacidadRuta(M){
+  if(!M||M.rutaId!=='NO_ASIGNADA')return;
+  M.rutaCapacidad=capacidadRutaModelo(M).capacidad||'';
+}
 const esPilotoDeUnidad=(pilotoId,unidad)=>{const P=PILOTOS.find(p=>p.id===pilotoId);return !!(P&&unidad&&String(P.unidad||'')===unidad);};
 /* Equipos de arrastre (placas de remolque) disponibles: la lista del sistema (Catálogos), las placas de
    flota que parecen arrastre (empiezan con TC) y las que ya se usaron en viajes. */
 function arrastresDisponibles(){
   const set=new Set();
   (CAT.arrastre||[]).forEach(v=>{const s=String(v==null?'':v).trim();if(s)set.add(s);});
-  FLOTA.forEach(f=>{const p=String(f.placa||'').trim();if(/^TC/i.test(p))set.add(p);});
+  FLOTA.forEach(f=>{const p=String(f.placa||f.unidad||'').trim();if(p&&(/^RAS/i.test(String(f.tipo||''))||/^TC/i.test(p)))set.add(p);});
   DB.trips.forEach(t=>{const p=String(t.placaArrastre||'').trim();if(p)set.add(p);});
   return [...set].sort((a,b)=>a.localeCompare(b,'es'));
 }
@@ -211,9 +222,10 @@ function autoPlaca(M,plSel,ps){
   const aviso=!ps.length?`<div class="auto" style="border-color:var(--fix);background:var(--fix-bg);margin-bottom:10px"><div class="ah" style="color:var(--fix)">${icon('alert',18)} Esta placa no tiene un piloto asignado para este cliente</div><div>El viaje necesita un piloto. Pide a administración que asigne la unidad ${esc(U.unidad)} a un piloto en la lista de pilotos.</div></div>`:'';
   const fuera=!!P&&!esPilotoDeUnidad(M.pilotoId,U.unidad);
   const avisoNota=fuera?`<div class="auto" id="notaPilotoUnidad" style="border-color:var(--fix);background:var(--fix-bg);margin-bottom:10px"><div class="ah" style="color:var(--fix)">${icon('alert',18)} ${esc(NOTA_PILOTO)}</div><div>${esc(P.nombre)} no está asignado a la unidad ${esc(U.placa||U.unidad)}; se puede usar en este viaje y la nota queda guardada en el viaje.</div></div>`:'';
+  const C=capacidadEquipo(U.unidad,arrastreFinal(M));
   return aviso+avisoNota+`<div class="auto ${S.flash?'flash':''}"><div class="ah">${icon('check',18)} Datos cargados automáticamente</div><div class="cells">
     <div class="cell"><small>Placa ${src('FLOTA')}</small><b>${esc(U.placa)}</b></div>
-    <div class="cell"><small>Capacidad ${src('FLOTA')}</small><b>${esc(U.capacidad)}</b></div>
+    <div class="cell"><small>${C.fuente==='ARRASTRE'?'Capacidad del arrastre':'Capacidad de la unidad'} ${src('FLOTA')}</small><b>${C.capacidad?esc(C.capacidad):'<span class="warnl">Sin registrar</span>'}</b></div>
     <div class="cell"><small>${fuera?'Piloto del viaje':'Piloto asignado'} ${src('PILOTOS')}</small><b>${P?esc(P.nombre):'<span class="mute">por definir</span>'}</b></div></div></div>`;
 }
 /* ---- Rutas · catálogo desplegable (cada ruta una vez) con origen/destino ---- */
@@ -253,10 +265,10 @@ function autoCard(M){
   let h;
   if(!P)h=`<div class="auto empty2">Elige un piloto: se carga su placa y su capacidad. Puedes cambiarle la placa dentro del mismo cliente.</div>`;
   else if(!U)h=`<div class="auto" style="border-color:var(--fix);background:var(--fix-bg)"><div class="ah" style="color:var(--fix)">${icon('alert',18)} La placa elegida no está en la flota</div><div>Elige otra placa de este cliente o pide a administración que revise la asignación.</div></div>`;
-  else h=`<div class="auto ${S.flash?'flash':''}"><div class="ah">${icon('check',18)} Datos cargados automáticamente · no hay que escribirlos</div><div class="cells">
+  else {const C=capacidadEquipo(U.unidad,arrastreFinal(M));h=`<div class="auto ${S.flash?'flash':''}"><div class="ah">${icon('check',18)} Datos cargados automáticamente · no hay que escribirlos</div><div class="cells">
     <div class="cell"><small>Placa ${src('FLOTA')}</small><b>${esc(U.placa)}</b></div>
-    <div class="cell"><small>Capacidad ${src('FLOTA')}</small><b>${esc(U.capacidad)}</b></div>
-    <div class="cell"><small>Piloto ${src('PILOTOS')}</small><b>${esc(P.nombre)}</b></div></div></div>`;
+    <div class="cell"><small>${C.fuente==='ARRASTRE'?'Capacidad del arrastre':'Capacidad de la unidad'} ${src('FLOTA')}</small><b>${C.capacidad?esc(C.capacidad):'<span class="warnl">Sin registrar</span>'}</b></div>
+    <div class="cell"><small>Piloto ${src('PILOTOS')}</small><b>${esc(P.nombre)}</b></div></div></div>`;}
   if(h&&U&&P&&!esPilotoDeUnidad(M.pilotoId,U.unidad))h=`<div class="auto" id="notaPilotoUnidad" style="border-color:var(--fix);background:var(--fix-bg);margin-bottom:10px"><div class="ah" style="color:var(--fix)">${icon('alert',18)} ${esc(NOTA_PILOTO)}</div><div>${esc(P.nombre)} no está asignado a la unidad ${esc(U.placa||U.unidad)}; se puede usar en este viaje y la nota queda guardada en el viaje.</div></div>`+h;
   S.flash=false;return h;
 }
@@ -400,7 +412,7 @@ if(has('ruta')&&!usaCombo()){
       ${sel('rutaId','Ruta',opts,{req:1,src:'RUTAS',dis:!ready||!M.proyectoCat,ph:(ready&&M.proyectoCat)?'Selecciona la ruta':'Primero elige el cliente y el proyecto',hint:(ready&&M.proyectoCat)?rs.length+' rutas asignadas de '+esc(M.proyectoCat):''})}
       ${sinRutaHTML(M,d)}
       ${desvioHTML(M,d)}
-      ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="row2">${sel('rutaCapacidad','Capacidad de la unidad',capsCat().map(c=>({id:c,nombre:c})),{req:1,src:'FLOTA',ph:'Selecciona la capacidad',hint:'Capacidad de la unidad que operará esta ruta.'})}${txt('rutaKm','KM de la ruta',{req:1,type:'number',num:1,hint:'Kilómetros totales de ida y vuelta, según la ruta solicitada.'})}</div><div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
+      ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="row2">${(()=>{const C=capacidadRutaModelo(M),lbl=C.fuente==='ARRASTRE'?'Capacidad del equipo de arrastre':'Capacidad de la unidad',hint=C.fuente==='ARRASTRE'?`Tomada del equipo de arrastre ${C.equipo}.`:(C.fuente==='SIN_DATO'?'No hay capacidad determinada: si es cabezal, elige su equipo de arrastre.':'Tomada de la unidad seleccionada.');return txt('rutaCapacidad',lbl,{ro:true,hint});})()}${txt('rutaKm','KM de la ruta',{req:1,type:'number',num:1,hint:'Kilómetros totales de ida y vuelta, según la ruta solicitada.'})}</div><div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
       <div class="${R?'auto'+(S.flash?' flash':''):'auto empty2'}">${R?`<div class="ah">${icon('check',18)} Origen y destino tomados de la ruta · no se escriben a mano</div><div class="cells"><div class="cell"><small>Código ${src('RUTAS')}</small><b>${esc(R.codigo)}</b></div><div class="cell"><small>Origen ${src('RUTAS')}</small><b>${esc(nombreOrigen(R.origen))}</b></div><div class="cell"><small>Destino ${src('RUTAS')}</small><b>${esc(nombreDestino(R.destino))}</b></div>${R.capacidad?`<div class="cell"><small>Capacidad</small><b>${esc(R.capacidad)}</b></div>`:''}${R.km!=null&&R.km!==''?`<div class="cell"><small>KM</small><b>${fmtKmRuta(R)}</b></div>`:''}</div>`:(pend?'Origen y destino: pendientes de asignar.':'Elige la ruta: el origen y el destino se completan solos.')}</div></div>`;
   }
   if(has('ruta')&&usaCombo()){
@@ -425,7 +437,7 @@ if(has('ruta')&&!usaCombo()){
       ${sinRutas?`<div class="alertbox info" style="margin-bottom:10px">${elegido?`No hay rutas activas para ${esc(M.proyectoCat)}.${puedeNuevaAqui?' Puedes solicitar una nueva con la opción «NUEVA RUTA».':' Pide a Comercial que active una ruta para este proyecto.'}`:'No hay rutas activas disponibles para tu usuario. Pide a Comercial que active una ruta, o elige primero el cliente y el proyecto para solicitar una nueva.'}${esAdm()?REINTENTAR:''}</div>`:''}
       ${sinRutaHTML(M,d)}
       ${desvioHTML(M,d)}
-      ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="row2">${sel('rutaCapacidad','Capacidad de la unidad',capsCat().map(c=>({id:c,nombre:c})),{req:1,src:'FLOTA',ph:'Selecciona la capacidad',hint:'Capacidad de la unidad que operará esta ruta.'})}${txt('rutaKm','KM de la ruta',{req:1,type:'number',num:1,hint:'Kilómetros totales de ida y vuelta, según la ruta solicitada.'})}</div><div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
+      ${pend?`${txt('rutaRef','Referencia de la ruta pendiente',{req:1,hint:'Describe qué ruta necesitas. No se inventa origen ni destino: Comercial y Gerencia la revisan y la asignan.'})}<div class="row2">${(()=>{const C=capacidadRutaModelo(M),lbl=C.fuente==='ARRASTRE'?'Capacidad del equipo de arrastre':'Capacidad de la unidad',hint=C.fuente==='ARRASTRE'?`Tomada del equipo de arrastre ${C.equipo}.`:(C.fuente==='SIN_DATO'?'No hay capacidad determinada: si es cabezal, elige su equipo de arrastre.':'Tomada de la unidad seleccionada.');return txt('rutaCapacidad',lbl,{ro:true,hint});})()}${txt('rutaKm','KM de la ruta',{req:1,type:'number',num:1,hint:'Kilómetros totales de ida y vuelta, según la ruta solicitada.'})}</div><div class="alertbox info" style="margin-bottom:10px"><b>Ruta NO ASIGNADA:</b> el viaje se guarda, se avisa a Comercial y Gerencia (dentro de la aplicación) y no recibe tarifa automática hasta que la ruta se valide.</div>`:''}
       ${od}</div>`;
   }
     return h;
@@ -635,20 +647,20 @@ Object.assign(ACT,{
   async rutaSolicitarOpen(){
     const oc=optsClientes(),c0=oc.length===1?oc[0].id:'',p0=c0&&optsProyectos({cliente:c0}).length===1?optsProyectos({cliente:c0})[0].id:'';
     formM({title:'Solicitar ruta nueva',text:'La ruta quedará NO ASIGNADA hasta que Comercial o Gerencia la revisen. No se inventa un código, un origen ni un destino: escribe lo que conoces.',
-      fields:[{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},{k:'nombre',label:'Nombre o referencia de la ruta',req:1},{k:'capacidad',label:'Capacidad de la unidad',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad',hint:'Capacidad de la unidad que operará esta ruta.'},{k:'km',label:'KM de la ruta',type:'number',req:1,hint:'Kilómetros totales de la ruta.'},{k:'origenProp',label:'Origen propuesto (si lo conoces)'},{k:'destinoProp',label:'Destino propuesto (si lo conoces)'}],
+      fields:[{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},{k:'nombre',label:'Nombre o referencia de la ruta',req:1},{k:'capacidad',label:'Capacidad de la unidad o del arrastre',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad',hint:'Si la ruta usará arrastre, elige la capacidad del arrastre; si es un furgón, la de la unidad.'},{k:'km',label:'KM de la ruta',type:'number',req:1,hint:'Kilómetros totales de la ruta.'},{k:'origenProp',label:'Origen propuesto (si lo conoces)'},{k:'destinoProp',label:'Destino propuesto (si lo conoces)'}],
       data:{cliente:c0,proyecto:p0,nombre:'',capacidad:'',km:'',origenProp:'',destinoProp:''},rerender:['cliente'],ok:'ENVIAR SOLICITUD',act:'rutaSolicitarSave'});
   },
   async rutaSolicitarSave(){const m=S.modal.data;const r=await run(()=>API.solicitarRuta(S.user.id,m),x=>`Ruta solicitada (${x.id}): queda NO ASIGNADA. Se avisó a Comercial y Gerencia dentro de la aplicación.`,true);if(r.ok)afterWrite();},
   async rutaRegistrarOpen(){
     formM({title:'Registrar ruta validada',text:'Se agrega directamente al catálogo como ASIGNADA. El <b>código se asigna solo</b> con la sigla del cliente y un correlativo (por ejemplo COL-001).',
-      fields:[{k:'nombre',label:'Nombre de la ruta',req:1},{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},{k:'origen',label:'Origen',req:1,datalist:d=>sugerenciasOrigen(d.cliente),ph:'Escribe el origen (o elige uno ya usado)'},{k:'destino',label:'Destino',req:1,datalist:d=>sugerenciasDestino(d.cliente),ph:'Escribe el destino (o elige uno ya usado)'},{k:'capacidad',label:'Capacidad de la unidad',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad',hint:'Capacidad de la unidad que operará esta ruta.'},{k:'km',label:'KM de la ruta',type:'number',req:1,hint:'Kilómetros totales de la ruta.'}],
+      fields:[{k:'nombre',label:'Nombre de la ruta',req:1},{k:'cliente',label:'Cliente',type:'select',req:1,optsFn:()=>optsClientes(),ph:'Selecciona el cliente'},{k:'proyecto',label:'Proyecto',type:'select',req:1,optsFn:optsProyectos,ph:'Primero elige el cliente'},{k:'origen',label:'Origen',req:1,datalist:d=>sugerenciasOrigen(d.cliente),ph:'Escribe el origen (o elige uno ya usado)'},{k:'destino',label:'Destino',req:1,datalist:d=>sugerenciasDestino(d.cliente),ph:'Escribe el destino (o elige uno ya usado)'},{k:'capacidad',label:'Capacidad de la unidad o del arrastre',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad',hint:'Si la ruta usará arrastre, elige la capacidad del arrastre; si es un furgón, la de la unidad.'},{k:'km',label:'KM de la ruta',type:'number',req:1,hint:'Kilómetros totales de la ruta.'}],
       data:{nombre:'',cliente:'',proyecto:'',origen:'',destino:'',capacidad:'',km:''},rerender:['cliente'],ok:'REGISTRAR RUTA',act:'rutaRegistrarSave'});
   },
   async rutaRegistrarSave(){const m=S.modal.data;const r=await run(()=>API.registrarRuta(S.user.id,m),x=>`Ruta ${x.codigo} registrada.`,true);if(r.ok)afterWrite();},
   async rutaValidarOpen(d){
     const r=DB.rutas.find(x=>x.id===d.id);if(!r)return;
     formM({title:`Validar y asignar · ${r.nombre}`,text:`${esc((PROYECTOS.find(p=>p.id===r.cliente)||{}).cliente)} · ${esc(r.proyecto)}. Solicitada por ${esc(r.solicitadaPor)}.<br>Origen propuesto: <b>${esc(r.origenProp||'no indicado')}</b> · Destino propuesto: <b>${esc(r.destinoProp||'no indicado')}</b>. Al asignarla se completan el origen y el destino de los viajes que la usan. El <b>código se asigna solo</b> (sigla del cliente y correlativo).`,
-      fields:[{k:'origen',label:'Origen',req:1,datalist:()=>sugerenciasOrigen(r.cliente),ph:'Escribe el origen'},{k:'destino',label:'Destino',req:1,datalist:()=>sugerenciasDestino(r.cliente),ph:'Escribe el destino'},{k:'capacidad',label:'Capacidad de la unidad',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad',hint:'Dato operativo de la solicitud.'},{k:'km',label:'KM de la ruta',type:'number',req:1,hint:'Dato operativo de la solicitud.'}],
+      fields:[{k:'origen',label:'Origen',req:1,datalist:()=>sugerenciasOrigen(r.cliente),ph:'Escribe el origen'},{k:'destino',label:'Destino',req:1,datalist:()=>sugerenciasDestino(r.cliente),ph:'Escribe el destino'},{k:'capacidad',label:'Capacidad de la unidad o del arrastre',type:'select',req:1,optsFn:()=>capsCat().map(c=>({id:c,nombre:c})),ph:'Selecciona la capacidad',hint:'Dato operativo: arrastre si lo usa; si no, unidad.'},{k:'km',label:'KM de la ruta',type:'number',req:1,hint:'Dato operativo de la solicitud.'}],
       data:{origen:r.origenProp||'',destino:r.destinoProp||'',capacidad:r.capacidad||'',km:r.km==null?'':r.km},ok:'VALIDAR Y ASIGNAR',okCls:'ok',act:'rutaValidarOk',id:r.id});
   },
   async rutaValidarOk(d){const m=S.modal.data;const r=await run(()=>API.validarRuta(S.user.id,d.id,m),x=>`Ruta ${x.codigo} asignada: los viajes asociados ya tienen origen y destino.`,true);if(r.ok)afterWrite();},

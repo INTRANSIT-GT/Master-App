@@ -410,7 +410,23 @@ function finCalc(trips,agrs,pagos,f){
 const pagadoFmt=n=>n;
 
 /* ---------- Ayudas de rutas, tarifas y avisos ---------- */
-const capDe=t=>(FLOTA.find(f=>f.unidad===t.unidadId)||{}).capacidad||'';
+/* La capacidad depende del equipo: si hay arrastre con capacidad registrada, manda el arrastre;
+   si no, la unidad. Un cabezal sin arrastre no tiene capacidad propia. */
+const esEquipoArrastre=f=>!!f&&(/^RAS/i.test(String(f.tipo||''))||/^TC/i.test(String(f.placa||''))||/^TC/i.test(String(f.unidad||'')));
+function capacidadEquipo(unidadId,placaArrastre){
+  const arrTxt=String(placaArrastre==null?'':placaArrastre).trim();
+  const U=FLOTA.find(f=>f.unidad===unidadId||f.placa===unidadId)||null;
+  if(arrTxt){
+    const match=FLOTA.filter(f=>String(f.placa||'').trim()===arrTxt||String(f.unidad||'').trim()===arrTxt);
+    const A=match.find(esEquipoArrastre)||match[0]||null;
+    if(A&&A.capacidad)return {capacidad:A.capacidad,fuente:'ARRASTRE',equipo:A.placa||A.unidad||arrTxt};
+    if(U&&!esEquipoArrastre(U)&&!/^cabezal$/i.test(String(U.tipo||'')))return {capacidad:U.capacidad||'',fuente:'UNIDAD',equipo:U.placa||U.unidad||''};
+    return {capacidad:'',fuente:'SIN_DATO',equipo:arrTxt};
+  }
+  if(U&&/^cabezal$/i.test(String(U.tipo||'')))return {capacidad:'',fuente:'SIN_DATO',equipo:U.placa||U.unidad||''};
+  return {capacidad:U?U.capacidad||'':'',fuente:U?'UNIDAD':'SIN_DATO',equipo:U?U.placa||U.unidad||'':''};
+}
+const capDe=t=>capacidadEquipo(t.unidadId,t.placaArrastre).capacidad;
 const capsCat=()=>[...new Set(FLOTA.map(f=>f.capacidad))].sort((a,b)=>parseFloat(a)-parseFloat(b));
 /* El origen y el destino ya son el texto que se ve: se devuelve tal cual. */
 const nombreOrigen=v=>String(v==null?'':v);
@@ -468,7 +484,7 @@ function textoLugar(v,campo){
 }
 function capacidadRuta(v){
   const c=String(v==null?'':v).trim();
-  if(!c)deny('Selecciona la capacidad de la unidad para esta ruta.','VALIDACION');
+  if(!c)deny('Selecciona la capacidad de la unidad o del equipo de arrastre.','VALIDACION');
   if(!capsCat().includes(c))deny('Capacidad no válida (catálogo de la flota).','VALIDACION');
   return c;
 }
