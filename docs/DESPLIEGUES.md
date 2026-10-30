@@ -236,3 +236,8 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - **Limitación de Fleetio:** la API no expone `service_entries` ni `expense_entries` por equipo (`/equipment/{id}/service_entries` responde 404). Los mantenimientos y gastos siguen llegando por `vehicle_id`; el vehículo vinculado del equipo es el que permite relacionarlos.
 - **sync-flota y API desplegadas.** **Front/SW v1.5.0**.
 - **Verificado:** sincronización con 49 vehículos, 96 equipos, 98 mantenimientos y 1,864 gastos; una tarifa con capacidad `24` fue aceptada.
+## 2026-10-30 · Equipos de arrastre solo lectura desde Fleetio
+- Catálogos → **Equipos de arrastre** ya no muestra la lista editable de `catalogos.arrastre`: se alimenta de los **Tools/Equipment sincronizados de Fleetio** (`FLOTA` con `extra.esEquipo=true`).
+- Se quitó el botón **Editar** de esa lista y el servidor rechaza `guardarCatalogo` para `arrastre`; la fuente de verdad es Fleetio.
+- La lista de arrastres del formulario de viaje usa únicamente esos equipos de Fleetio; los códigos históricos que no estén en Fleetio no se ofrecen para viajes nuevos (si un viaje antiguo los tiene, se conserva su valor al editar).
+- **Front/SW v1.5.1; API desplegada.**

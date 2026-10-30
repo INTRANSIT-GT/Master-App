@@ -195,19 +195,19 @@ function actualizarCapacidadRuta(M){
   M.rutaCapacidad=capacidadRutaModelo(M).capacidad||'';
 }
 const esPilotoDeUnidad=(pilotoId,unidad)=>{const P=PILOTOS.find(p=>p.id===pilotoId);return !!(P&&unidad&&String(P.unidad||'')===unidad);};
-/* Equipos de arrastre (placas de remolque) disponibles: la lista del sistema (Catálogos), las placas de
-   flota que parecen arrastre (empiezan con TC) y las que ya se usaron en viajes. */
+/* Equipos de arrastre disponibles: SOLO los Tools/Equipment sincronizados desde Fleetio.
+   El catálogo editable de Catálogos ya no alimenta esta lista. */
+const esEquipoFleetio=f=>{let x=f&&f.extra;if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x={};}}return !!(x&&typeof x==='object'&&x.esEquipo===true);};
 function arrastresDisponibles(){
   const set=new Set();
-  (CAT.arrastre||[]).forEach(v=>{const s=String(v==null?'':v).trim();if(s)set.add(s);});
-  FLOTA.forEach(f=>{const p=String(f.placa||f.unidad||'').trim();if(p&&esEquipoArrastre(f))set.add(p);});
-  DB.trips.forEach(t=>{const p=String(t.placaArrastre||'').trim();if(p)set.add(p);});
+  FLOTA.forEach(f=>{if(esEquipoFleetio(f)){const p=String(f.placa||f.unidad||'').trim();if(p)set.add(p);}});
   return [...set].sort((a,b)=>a.localeCompare(b,'es'));
 }
 /* Último arrastre que usó esa unidad: se propone al registrar el viaje. */
 function ultimoArrastreDeUnidad(unidad){
   if(!unidad)return '';
-  const usados=DB.trips.filter(t=>t.unidadId===unidad&&String(t.placaArrastre||'').trim())
+  const flota=arrastresDisponibles();
+  const usados=DB.trips.filter(t=>t.unidadId===unidad&&flota.includes(String(t.placaArrastre||'').trim()))
     .sort((a,b)=>String(b.fechaPlan||'').localeCompare(String(a.fechaPlan||'')));
   return usados.length?String(usados[0].placaArrastre).trim():'';
 }

@@ -86,7 +86,7 @@ const PERMS=[
 ];
 const PERM_KEYS=PERMS.map(p=>p[0]);
 /* Listas del sistema: viven en master.catalogos (Supabase) y se editan desde la pantalla Catálogos. */
-const LISTAS_SISTEMA=['tipoUnidad','opl','tipoCarga','tipoViaje','arrastre','tipoLicencia'];
+const LISTAS_SISTEMA=['tipoUnidad','opl','tipoCarga','tipoViaje','tipoLicencia'];   /* arrastre viene de Fleetio y es solo lectura. */
 const LISTAS_ETIQUETA={tipoUnidad:'Tipo de unidad',opl:'OPL · Transportistas',tipoCarga:'Tipo de carga',tipoViaje:'Tipo de viaje',arrastre:'Equipos de arrastre (placas)',tipoLicencia:'Tipo de licencia'};
 /* Orígenes y destinos: se escriben en la ruta y quedan ligados a su cliente por la propia ruta.
    No hay catálogo; aquí solo se juntan los que ya se usaron para ofrecerlos como sugerencia. */
