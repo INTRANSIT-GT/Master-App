@@ -176,8 +176,7 @@ function inicioAcciones(u,ts){
   const filtro=!hp('viajes_ver_todos')&&cls.length?`<div class="projline" style="margin-bottom:10px">${comboHTML('inicioProy',S.inicioProy||'',[{id:'',nombre:'Todos mis proyectos'},...cls.map(p=>({id:p.id,nombre:p.nombre+' · '+p.cliente}))],'Buscar proyecto')}<span class="mute">Solo ves la información de tu proyecto</span></div>`:'';
   const b=[],ok=v=>!INICIO_COMPLETO.includes(u.rol)||allowed(v);
   if(hp('viajes_crear')&&ok('nuevo'))b.push(`<button class="bigbtn main1" data-act="nav" data-v="nuevo"><span class="ico">${icon('plus',24)}</span><span><b>NUEVO VIAJE</b><br><span class="h">Registrar un viaje</span></span></button>`);
-  if(hp('viajes_ver')&&ok('viajes'))b.push(`<button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta</span></span></button>`);
-  if(hp('liq_ver')&&ok('liquidaciones'))b.push(`<button class="bigbtn" data-act="nav" data-v="liquidaciones"><span class="ico">${icon('receipt',24)}</span><span><b>LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>`);
+  if(hp('viajes_ver')&&ok('viajes'))b.push(`<button class="bigbtn" data-act="nav" data-v="viajes"><span class="ico">${icon('truck',24)}</span><span><b>VIAJES Y LIQUIDACIONES</b><br><span class="h">${cnt(ts,t=>t.estado==='PLANIFICADO')} planificados · ${cnt(ts,t=>t.estado==='EN_RUTA')} en ruta · ${cnt(ts,t=>t.estado==='ENTREGADO')} por liquidar · ${fix} rechazados</span></span></button>`);
   return `${filtro}${b.length?`<div class="bigbtns">${b.join('')}</div>`:''}`;
 }
 function inicioResto(ts){
@@ -705,7 +704,7 @@ function headerHTML(){
   const u=S.user;
   const botonMenu=(esMovil()&&navItems().length>=2)?`<button class="navbtn" data-act="navToggle" aria-label="Abrir menú" aria-expanded="${S.nav?'true':'false'}">${icon('menu',22)}</button>`:'';
   return `<header class="top">${botonMenu}<div class="brand"><span class="isotile"><img src="${ISOLOGO}" alt="In Transit"></span><span>Control de viajes<small>In Transit · innovative outsourcing</small></span></div><span class="spacer"></span>${(BACKEND.modo==='demo'&&!SIN_DEMO)?'<span class="demotag" title="Los datos son de demostración y viven solo en este navegador">Modo demostración</span>':''}
-    <button class="bell" data-act="refrescarBase" ${S.refrescando?'disabled aria-busy="true"':''} aria-label="Actualizar datos desde Supabase" title="${S.refrescando?'Actualizando…':'Actualizar datos desde Supabase'}">${icon('refresh',20)}</button>
+    <button class="bell refreshbtn" data-act="refrescarBase" ${S.refrescando?'disabled aria-busy="true"':''} aria-label="Actualizar datos desde Supabase" title="${S.refrescando?'Actualizando…':'Actualizar datos desde Supabase'}">${icon('refresh',18)}<span class="refreshlbl">${S.refrescando?'Actualizando…':'Actualizar'}</span></button>
     <button class="bell" data-act="notifOpen" aria-label="Notificaciones${notifData().filter(n=>!n.leida).length?' ('+notifData().filter(n=>!n.leida).length+' sin leer)':''}">${icon('bell',20)}${notifData().filter(n=>!n.leida).length?`<span class="bcount">${notifData().filter(n=>!n.leida).length}</span>`:''}</button>
     <button class="userchip" data-act="menu" aria-haspopup="menu" aria-label="Menú de usuario"><span class="avatar">${initials(u.nombre)}</span><span class="t"><b>${esc(u.nombre)}</b><span>${esc(rolL(u.rol))}${cliLista(u)}</span></span></button></header>`;
 }
@@ -724,7 +723,7 @@ function aplicarTema(){
    de sus pantallas, aunque sea una sola. ----
    v: pantalla existente · l: etiqueta si difiere de la habitual · k: clave propia cuando dos opciones abren la misma pantalla · tab: pestaña con la que abre */
 const ADM_MODULOS=[
-  {t:'VIAJES',    items:[{v:'nuevo'},{v:'liquidaciones'},{v:'todos'},{v:'viajes',l:'Viajes por estado'}]},
+  {t:'VIAJES',    items:[{v:'nuevo'},{v:'todos'},{v:'viajes',l:'Viajes y liquidaciones'}]},
   {t:'TORRE',     items:[{v:'torre',k:'torre',l:'Viajes',tab:['torre','curso']},{v:'torre',k:'horarios',l:'Horarios y fechas',ic:'clock',tab:['torre','todos']},{v:'torre',k:'general',l:'Vista general',ic:'list',tab:['torre','todos']}]},
   {t:'COMERCIAL', items:[{v:'analista'},{v:'factcom'},{v:'proyectos'},{v:'tarifas'},{v:'finanzas'},{v:'catalogos'}]},
   {t:'OPL',       items:[{v:'opl',l:'Proveedores'}]},

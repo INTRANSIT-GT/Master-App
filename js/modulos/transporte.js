@@ -3,40 +3,34 @@
    Registrar/editar viajes, enviarlos a ruta, entregarlos, liquidar y gestionar rutas.
    ===================================================================== */
 
-/* ---- Viajes del encargado ---- */
+/* ---- Viajes del encargado: una sola pantalla con el flujo completo ----
+   Las pestañas siguen el orden real del viaje; las de liquidación reutilizan la tabla y las acciones
+   de aprobar/devolver, y las demás la tabla operativa de viajes. */
 const VT=[
   {k:'plan',l:'Planificados',f:t=>t.estado==='PLANIFICADO',d:'Viajes iniciales: requieren cliente y ruta; se completan antes de salir.'},
   {k:'ruta',l:'En ruta',f:t=>t.estado==='EN_RUTA',d:'Viajes en recorrido con los datos operativos completos.'},
-  {k:'liq',l:'Por liquidar',f:t=>['ENTREGADO','RECHAZADO'].includes(t.estado),d:'Entregados pendientes de evidencia, o rechazados que Operaciones debe corregir.'},
-  {k:'val',l:'Por validar',f:t=>t.estado==='LIQUIDADO',d:'Liquidaciones enviadas, pendientes de aceptación o devolución.'},
-  {k:'cierre',l:'Cerrados',f:t=>['LIQUIDADO','ACEPTADO','FACTURADO','COBRADO'].includes(t.estado),d:'Viajes en validación, facturación o cobro.'}
+  {k:'entregado',l:'Por liquidar',f:t=>t.estado==='ENTREGADO',d:'Viajes entregados que esperan la fotografía de liquidación.'},
+  {k:'liquidado',l:'Por validar',f:t=>t.estado==='LIQUIDADO',d:'Liquidaciones enviadas, pendientes de aceptación o devolución.'},
+  {k:'rechazado',l:'Rechazados',f:t=>t.estado==='RECHAZADO',d:'Rechazados con comentarios. Operaciones los corrige y vuelve a liquidar; se conserva cada rechazo.'},
+  {k:'aceptado',l:'Aceptados',f:t=>t.estado==='ACEPTADO',d:'Historial de viajes aceptados, listos para facturación.'},
+  {k:'facturado',l:'Facturados',f:t=>t.estado==='FACTURADO',d:'Viajes ya facturados al cliente, pendientes de cobro.'},
+  {k:'cobrado',l:'Cobrados',f:t=>t.estado==='COBRADO',d:'Viajes facturados y cobrados: cierre del ciclo.'},
+  {k:'todos',l:'Todos',f:()=>true,d:'Todos los viajes visibles para tu perfil.'}
 ];
-/* La revisión de liquidaciones (aprobar o devolver con comentario) vive en VIAJES → «Por validar».
-   En LIQUIDACIONES quedan solo las pestañas de trabajo: por liquidar, rechazados y aceptados. */
+const VT_LEGACY={liq:'entregado',val:'liquidado',cierre:'todos'};
 VIEWS.viajes=()=>{
-  const vt=VT.filter(t=>t.k!=='val'||hp('liq_ver'));
-  const ts=vis(),k0=S.tab.viajes||'plan',k=vt.some(x=>x.k===k0)?k0:vt[0].k,cur=vt.find(x=>x.k===k)||vt[0],list=ts.filter(cur.f);
-  if(k==='val')return `<div class="inner" style="max-width:1400px">${pageHead('Viajes',`${list.length} ${list.length===1?'liquidación':'liquidaciones'} por validar`)}${tabs('viajes',vt,k,ts)}<div class="tabdesc">${cur.d}</div>
-    <div class="lfilters"><input type="text" id="q" placeholder="Buscar por viaje, cliente, piloto o fecha (dd/mm/aaaa)" value="${esc(S.q)}" aria-label="Buscar">
+  const ts=vis(),k0=S.tab.viajes||'plan',k=VT.some(x=>x.k===k0)?k0:(VT_LEGACY[k0]||VT[0].k),cur=VT.find(x=>x.k===k)||VT[0],list=ts.filter(cur.f);
+  const sub=`${list.length} ${list.length===1?'viaje':'viajes'} en esta etapa. Flujo: Planificado → En ruta → Entregado → Liquidado → Aceptado / Rechazado → Facturado → Cobrado.`;
+  const filtros=`<div class="lfilters"><input type="text" id="q" placeholder="Buscar por viaje, cliente, piloto o fecha (dd/mm/aaaa)" value="${esc(S.q)}" aria-label="Buscar">
     <select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select>
     <select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
     <label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde)}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta)}"></label>
-    <button class="btn sm" data-act="limpiarFiltros">Limpiar filtros</button></div>
-    <div id="vb">${BODY.viajes()}</div></div>`;
-  return `<div class="inner" style="max-width:none">${pageHead('Viajes',`${list.length} ${list.length===1?'viaje':'viajes'} en esta pestaña`,hp('viajes_crear')?`<button class="btn primary" data-act="nav" data-v="nuevo">${icon('plus',18)} Nuevo viaje</button>`:'')}
-    ${tabs('viajes',vt,k,ts)}<div class="tabdesc">${cur.d}</div>
-    ${viajesTable(list)}</div>`;
+    <button class="btn sm" data-act="limpiarFiltros">Limpiar filtros</button></div>`;
+  const conLiquidacion=['entregado','liquidado','rechazado','aceptado'].includes(k);
+  const body=conLiquidacion?liqTable(liqFilter(list),k):viajesTable(liqFilter(list),'viajes');
+  return `<div class="inner" style="max-width:none">${pageHead('VIAJES',sub,hp('viajes_crear')?`<button class="btn primary" data-act="nav" data-v="nuevo">${icon('plus',18)} Nuevo viaje</button>`:'')}
+    ${tabs('viajes',VT,k,ts)}<div class="tabdesc">${cur.d}</div>${filtros}<div id="vb">${body}</div></div>`;
 };
-
-
-/* Cuerpo actualizable de la pestaña «Por validar» (para que el buscador filtre sin recargar la pantalla).
-   En las otras pestañas de Viajes no hay #vb, así que devolver '' no afecta a nada. */
-BODY.viajes=()=>{
-  const cur=VT.find(x=>x.k===(S.tab.viajes||'plan'));
-  if(!cur||cur.k!=='val')return '';
-  return liqTable(liqFilter(vis().filter(cur.f)),'rev');
-};
-
 const curModel=()=>S.edit?S.edit.data:S.form;
 function initForm(){
   const d=new Date();d.setMinutes(Math.ceil(d.getMinutes()/5)*5);
@@ -452,7 +446,7 @@ function liqFilter(list){
 }
 const LQ_COLS=[['id','ID viaje',t=>t.id],['cliente','Cliente',t=>J(t).cliente||''],['proyecto','Proyecto',t=>t.proyectoCat||''],['piloto','Piloto',t=>J(t).piloto||''],['fecha','Fecha del viaje',t=>t.fechaPlan||''],['estado','Estado',t=>ESTADOS[t.estado].l],['enviada','Enviada el',t=>t.enviadoEn||''],['revision','Revisión',t=>{const l=liqsOf(t).filter(x=>x.decision).pop();return l?l.revisionEn:'';}]];
 function liqTable(list,k){
-  const def=k==='apr'?{k:'revision',dir:-1}:{k:'fecha',dir:1},so=S.sortL||def;
+  const def=(k==='apr'||k==='aceptado')?{k:'revision',dir:-1}:{k:'fecha',dir:1},so=S.sortL||def;
   const col=LQ_COLS.find(c=>c[0]===so.k)||LQ_COLS[4];
   const rows=list.slice().sort((a,b)=>{const x=col[2](a),y=col[2](b);return (x<y?-1:x>y?1:0)*so.dir||a.id.localeCompare(b.id);});
   if(!rows.length)return empty('No hay liquidaciones con estos filtros','Cambia la búsqueda, el cliente, el proyecto o las fechas, o limpia los filtros.');
@@ -470,7 +464,9 @@ function liqTable(list,k){
 }
 function liqCurrent(){const L=liqTabs(),k=S.tab.liq&&L.find(x=>x.k===S.tab.liq)?S.tab.liq:L[0].k;return {L,k,cur:L.find(x=>x.k===k)};}
 BODY.liquidaciones=()=>{const {k,cur}=liqCurrent();return liqTable(liqFilter(vis().filter(cur.f)),k);};
-VIEWS.liquidaciones=()=>{
+VIEWS.liquidaciones=()=>VIEWS.viajes();
+/* Cuerpo histórico, ya no se usa en la navegación. */
+function liquidacionesVieja(){
   const ts=vis(),{L,k,cur}=liqCurrent();
   const sub=hp('liq_aprobar')?'Revisa la evidencia: aprueba o devuelve con un comentario obligatorio.':hp('liq_enviar')?'Sube la fotografía de liquidación de tus viajes finalizados.':'Vista de consulta de liquidaciones.';
   return `<div class="inner" style="max-width:1400px">${pageHead('LIQUIDACIONES',sub)}${tabs('liq',L,k,ts)}<div class="tabdesc">${cur.d}</div>

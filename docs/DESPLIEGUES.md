@@ -146,3 +146,10 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - El remoto fue reescrito con el commit «Torre control vista general» y eliminó cambios anteriores. Se restauraron: botón de actualización desde Supabase, conservación de scroll, bloqueo de fechas futuras, permiso de aplicación de tarifas para Asistente Comercial, retiro del módulo OC y link de contrato.
 - Se conservó la nueva vista general de Torre y su PDF.
 - **API v110**, **front/SW v1.3.3**.
+
+## 2026-10-29 · Unificar Viajes y Liquidaciones
+
+- Se retiró la entrada separada **Liquidaciones**; queda una sola pantalla **VIAJES Y LIQUIDACIONES** con pestañas por estado: Planificados, En ruta, Por liquidar, Por validar, Rechazados, Aceptados, Facturados, Cobrados y Todos.
+- Las pestañas de liquidación reutilizan la tabla y las acciones de aprobar/devolver/liquidar; las demás usan la tabla operativa.
+- Inicio muestra un solo acceso y el filtro de cliente/proyecto/fechas se comparte en toda la pantalla.
+- **front/SW v1.3.5**. Sin cambios de API.
