@@ -785,13 +785,19 @@ function validarTarifa(d,exceptId){
   if(dpo!=null)out.dieselPactadoOpl=r2(dpo);
   return out;
 }
-/* Campos obligatorios para ENVIAR una factura. Se usa en la interfaz (para señalar lo que falta) y de nuevo en el guardado. */
-function faltantesEnvio(cliente,ids,nf,ff,exceptId){
-  const f=[],num=String(nf||'').trim(),serie=String(arguments[5]||'').trim();
-  if(!serie)f.push({campo:'serieFactura',msg:'la serie de factura'});else valSerie(serie);
+/* Datos propios de la factura. La interfaz los valida al capturarlos; el servidor los vuelve a validar al enviar. */
+function faltantesFactura(nf,ff,exceptId,serie){
+  const f=[],num=String(nf||'').trim(),ser=String(serie||'').trim();
+  if(!ser)f.push({campo:'serieFactura',msg:'la serie de factura'});else valSerie(ser);
   if(!num)f.push({campo:'numeroFactura',msg:'el número de factura'});
   else if(DB.agrupaciones.some(a=>a.estado==='ACTIVA'&&a.id!==exceptId&&a.numeroFactura&&a.numeroFactura.toLowerCase()===num.toLowerCase()))f.push({campo:'numeroFactura',msg:'un número de factura que no esté repetido'});
   if(!ff)f.push({campo:'fechaFactura',msg:'la fecha de factura'});
+  return f;
+}
+/* Validación COMPLETA del envío. Vive también en el servidor: ruta, tarifa y aceptación
+   no dependen de lo que el navegador tenga cargado (Facturación no recibe el catálogo de rutas). */
+function faltantesEnvio(cliente,ids,nf,ff,exceptId,serie){
+  const f=faltantesFactura(nf,ff,exceptId,serie);
   if(!ids.length)f.push({campo:'viajes',msg:'al menos un viaje'});
   ids.forEach(id=>{
     const t=DB.trips.find(x=>x.id===id);

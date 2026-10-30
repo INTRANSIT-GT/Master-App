@@ -164,3 +164,8 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - El panel de la agrupación muestra **Datos de factura** directamente cuando la OC ya está registrada y el perfil tiene `facturas_emitir`.
 - Si el perfil no puede facturar, se indica que continúa Facturación.
 - **front/SW v1.3.7**.
+
+## 2026-10-30 · Validación de facturación sin rutas en el navegador
+- El modal **Datos de factura** valida solo serie, número y fecha; ya no muestra falsos “ruta activa” cuando Facturación no recibe el catálogo de rutas.
+- Ruta, tarifa y aceptación se validan al pulsar **Enviar a facturación**, en el servidor.
+- **front/SW v1.3.8**; motor del API regenerado.

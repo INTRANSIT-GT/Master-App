@@ -381,13 +381,14 @@ Object.assign(ACT,{
   async facturaPrep(d){const r=await run(()=>API.prepararFactura(S.user.id,{cliente:d.id,viajeIds:S.sel.slice()}),g=>`Agrupación ${g.id} creada. Genera el reporte para el cliente y registra la OC cuando te la envíe.`,true);if(r.ok){S.sel=[];afterWrite();}},
   async facturaEditar(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
-    formM({title:`Datos de factura · ${g.id}`,text:`${g.viajeIds.length} ${g.viajeIds.length===1?'viaje':'viajes'} · ${g.modalidad==='AGRUPADA'?'agrupados':'factura individual'} · OC ${esc((g.confirmacion&&(g.confirmacion.ot||g.confirmacion.referencia))||'—')}. Registra serie, número y fecha de la factura.`,
+    formM({title:`Datos de factura · ${g.id}`,text:`${g.viajeIds.length} ${g.viajeIds.length===1?'viaje':'viajes'} · ${g.modalidad==='AGRUPADA'?'agrupados':'factura individual'} · OC ${esc((g.confirmacion&&(g.confirmacion.ot||g.confirmacion.referencia))||'—')}. Registra serie, número y fecha. Al enviar a facturación se validarán la ruta activa, la tarifa y la aceptación de cada viaje.`,
       fields:[{k:'serieFactura',label:'Serie de factura',req:1},{k:'numeroFactura',label:'Número de factura',req:1},{k:'fechaFactura',label:'Fecha de la factura',type:'date',req:1}],
-      live:x=>faltantesEnvio(g.cliente,g.viajeIds,x.numeroFactura,x.fechaFactura,g.id,x.serieFactura),
-      buttons:[{label:'GUARDAR',act:'facturaEditarGuardar',cls:'primary'}],
+      live:x=>faltantesFactura(x.numeroFactura,x.fechaFactura,g.id,x.serieFactura),
+      liveRender:f=>f.length?`<div class="alertbox" role="alert" style="margin:10px 0"><b>Falta completar los datos de la factura:</b><ul style="margin:4px 0 0 18px;padding:0">${f.map(x=>`<li>${esc(x.msg)}</li>`).join('')}</ul></div>`:`<div class="alertbox okb" style="margin:10px 0"><b>Datos de factura completos.</b> Guarda y después pulsa <b>Enviar a facturación</b>; allí se validan ruta, tarifa y aceptación.</div>`,
+      buttons:[{label:'GUARDAR',act:'facturaEditarGuardar',cls:'primary',needsComplete:true}],
       id:g.id,data:{serieFactura:g.serieFactura||'',numeroFactura:g.numeroFactura||'',fechaFactura:g.fechaFactura||''}});
   },
-  async facturaEditarGuardar(d){const m=S.modal.data;const r=await run(()=>API.actualizarFactura(S.user.id,d.id,m),`Factura ${d.id} actualizada (sigue preparada).`,true);if(r.ok)afterWrite();},
+  async facturaEditarGuardar(d){const m=S.modal.data;const r=await run(()=>API.actualizarFactura(S.user.id,d.id,m),`Datos de factura de ${d.id} guardados. Ahora pulsa Enviar a facturación.`,true);if(r.ok)afterWrite();},
   async emitirOpen(d){
     const g=DB.agrupaciones.find(x=>x.id===d.id);if(!g)return;
     formM({title:`Registrar envío de la factura · ${g.numeroFactura}`,text:`Hazlo después de enviar la factura al cliente por correo. Se exige la captura o comprobante del envío y la referencia de la factura. Enviado a facturar: <b>${qfmt(g.importeEnviado)}</b>.`,

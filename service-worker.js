@@ -2,7 +2,7 @@
    NUNCA guarda datos operativos: las solicitudes a Supabase (otro origen) y cualquier petición que no sea
    un archivo estático de la lista van directo a la red. Sin conexión, la app abre pero avisa y no confirma operaciones.
    Para publicar una versión nueva, cambia VERSION. */
-const VERSION = 'v1.3.7';
+const VERSION = 'v1.3.8';
 const CACHE = 'intransit-interfaz-' + VERSION;
 const ESTATICOS = [
   './', './index.html', './offline.html', './manifest.json', './css/app.css',
