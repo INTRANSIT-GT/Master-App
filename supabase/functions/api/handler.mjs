@@ -165,12 +165,12 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
         if (ids.length) E.getDB().audit = fusionarAuditoria(E.getDB().audit, await auditoriaDeViajes(q, ids));
         const enBase = await contarVisibles(q, A, db, E);
         const snap = await armarSnapshot(E, actorId, deps, Object.assign(ventana, { viajes: ids.length, enBase }));
-        /* Conteo de TODO el histórico por unidad: el formulario calcula el No. de viaje sin depender de la
-           ventana de viajes cargada en pantalla. Solo se entrega a quien puede crear viajes. */
-        snap.conteosUnidad = {};
+        /* Conteo de TODO el histórico por unidad y día: el formulario calcula el No. de viaje del día
+           sin depender de la ventana de viajes cargada en pantalla. Solo se entrega a quien puede crear viajes. */
+        snap.conteosUnidadDia = {};
         if (E.hasPerm(A, 'viajes_crear')) {
-          const cu = (await q(`select unidad_id, count(*)::int as n from master.viajes where coalesce(unidad_id,'') <> '' group by unidad_id`)).rows;
-          snap.conteosUnidad = Object.fromEntries(cu.map(r => [String(r.unidad_id), Number(r.n)]));
+          const cu = (await q(`select unidad_id, left(fecha_plan,10) as dia, count(*)::int as n from master.viajes where coalesce(unidad_id,'') <> '' and coalesce(fecha_plan,'') <> '' group by unidad_id, left(fecha_plan,10)`)).rows;
+          snap.conteosUnidadDia = Object.fromEntries(cu.map(r => [String(r.unidad_id) + '|' + String(r.dia), Number(r.n)]));
         }
         return { resp: { ok: true, snapshot: snap }, commit: false };
       }

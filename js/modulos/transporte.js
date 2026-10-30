@@ -45,7 +45,7 @@ function toModel(t){
   ['proyectoCat','estado','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','placaArrastreOtro','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
   m.gastosAdicionales=Array.isArray(t.gastosAdicionales)?t.gastosAdicionales.map(x=>({concepto:x.concepto,importe:x.importe,detalle:x.detalle||''})):[];
   m.placaSel=t.unidadId||'';                      /* la unidad del viaje se edita como «placa» */
-  if(!m.noViaje)m.noViaje=siguienteNoViaje(m.placaSel);   /* viajes viejos sin consecutivo: se muestra el calculado */
+  if(!m.noViaje)m.noViaje=siguienteNoViaje(m.placaSel,m.fechaPlanD);   /* viajes viejos sin consecutivo: se muestra el calculado */
   return m;
 }
 
@@ -94,13 +94,14 @@ function estadoRuta(M){
   return {grupos,g,os,o,ds,d,combo};
 }
 function resolverRuta(M){const e=estadoRuta(M);M.rutaId=e.combo?e.combo.id:'';}
-/* Consecutivo por unidad: cuenta TODO el histórico que entrega el servidor (DB.conteosUnidad).
-   Si no está disponible (demostración), usa lo cargado en pantalla. */
-function siguienteNoViaje(unidad){
-  if(!unidad)return '';
-  const n=Number((DB.conteosUnidad||{})[unidad]);
+/* Consecutivo por unidad y DÍA: incluye el viaje que se está registrando (conteo + 1).
+   Usa los conteos de todo el histórico del servidor y, si no están, lo cargado en pantalla. */
+function siguienteNoViaje(unidad,fecha){
+  const dia=String(fecha||'').slice(0,10);
+  if(!unidad||!dia)return '';
+  const n=Number((DB.conteosUnidadDia||{})[unidad+'|'+dia]);
   if(Number.isFinite(n))return String(n+1);
-  return String(DB.trips.filter(t=>t.unidadId===unidad).length+1);
+  return String(DB.trips.filter(t=>t.unidadId===unidad&&String(t.fechaPlan||'').slice(0,10)===dia).length+1);
 }
 function aplicarCampo(M,k,v){
   M[k]=v;if('err' in M)M.err='';
@@ -124,9 +125,10 @@ function aplicarCampo(M,k,v){
     }
     /* El arrastre se propone con el último que usó esa unidad. */
     const ua=ultimoArrastreDeUnidad(v);if(ua)M.placaArrastre=ua;
-    M.noViaje=siguienteNoViaje(v);                    /* consecutivo de la unidad elegida */
+    M.noViaje=siguienteNoViaje(v,M.fechaPlanD);       /* consecutivo de la unidad en el día */
   }
-  if(k==='pilotoId'&&v){const P=PILOTOS.find(p=>p.id===v);if(P&&P.unidad)M.placaSel=P.unidad;M.noViaje=siguienteNoViaje(M.placaSel);}   /* la placa arranca con la del piloto; se puede cambiar, siempre del mismo cliente */
+  if(k==='fechaPlanD')M.noViaje=siguienteNoViaje(M.placaSel,v);   /* al cambiar la fecha cambia el consecutivo del día */
+  if(k==='pilotoId'&&v){const P=PILOTOS.find(p=>p.id===v);if(P&&P.unidad)M.placaSel=P.unidad;M.noViaje=siguienteNoViaje(M.placaSel,M.fechaPlanD);}   /* la placa arranca con la del piloto; se puede cambiar, siempre del mismo cliente */
   if(k==='pilotoAlt')M.pilotoId=v;                                                                              /* solo si la placa tiene más de un piloto asignado */
   if(k==='pilotoId'&&v)S.flash=true;
 }

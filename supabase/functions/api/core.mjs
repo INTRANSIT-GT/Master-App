@@ -263,7 +263,7 @@ Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo 
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos','Gastos adicionales'];
 
 /* ---------- Base de datos ---------- */
-const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],pilotos:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],ordenesCompra:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},conteosUnidad:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1,pil:0,oc:1}});
+const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],pilotos:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],ordenesCompra:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},conteosUnidadDia:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1,pil:0,oc:1}});
 /* ---------- Pilotos: documentos y vigencia (licencia, salud, penales, policíacos) ---------- */
 const DOC_PILOTO=[['licenciaVence','Licencia'],['saludVence','Tarjeta de salud'],['penalesVence','Antecedentes penales'],['policiacosVence','Antecedentes policíacos']];
 const DOC_DIAS_AVISO=30;
@@ -1156,7 +1156,8 @@ const API={
     if(!t.unidadId)t.unidadId=P?P.unidad:'';            /* si no se eligió placa, se usa la unidad del piloto */
     /* El No. de viaje es un consecutivo POR UNIDAD, calculado en el servidor con todo el histórico.
        No se acepta un valor manual: así no se duplica ni se reinicia al cambiar de equipo. */
-    t.noViaje=t.unidadId?String(DB.trips.filter(x=>x.unidadId===t.unidadId).length+1):'';
+    const diaPlan=String(v.fechaPlan||'').slice(0,10);
+    t.noViaje=(t.unidadId&&diaPlan)?String(DB.trips.filter(x=>x.unidadId===t.unidadId&&String(x.fechaPlan||'').slice(0,10)===diaPlan).length+1):'';
     t.notaPiloto=notaPilotoDe(t);                        /* constancia si el piloto no es el asignado a la unidad */
     if(sinRuta){t.sinRuta=true;t.sinRutaPor=A.nombre;t.sinRutaEn=t.creadoEn;}
     if(desvio){t.desvio=true;t.desvioDestino=dvDestino;t.desvioPor=A.nombre;t.desvioEn=t.creadoEn;Object.assign(t,dvT);}

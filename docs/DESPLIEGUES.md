@@ -175,3 +175,8 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - **No. de viaje** movido a Unidad, después de la placa de arrastre; se calcula como consecutivo de todos los viajes de la unidad.
 - El servidor asigna el consecutivo al crear el viaje; el formulario lo muestra al elegir la unidad.
 - **front/SW v1.3.9**; API actualizado.
+
+## 2026-10-30 · No. de viaje por unidad y día
+- El No. de viaje ya no cuenta todo el histórico: cuenta los viajes de la unidad **en la fecha planificada** y suma el que se está registrando.
+- Se recalcula al cambiar la unidad o la fecha; el servidor vuelve a asignarlo al crear el viaje.
+- **front/SW v1.3.10**; API actualizado.

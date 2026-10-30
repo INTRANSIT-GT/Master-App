@@ -1093,6 +1093,8 @@ app.addEventListener('change',async e=>{
     const M=curModel();if(!M)return;
     if(usaCombo()){aplicarCampo(M,t.dataset.m,t.value);if(t.tagName==='SELECT'||t.type==='datetime-local')render();return;}
     const k=t.dataset.m;M[k]=t.value;if('err' in M)M.err='';
+    /* En formularios sin combo, el No. de viaje también sigue a la unidad y a la fecha. */
+    if(!S.edit&&(k==='placaSel'||k==='pilotoId'||k==='fechaPlanD'))M.noViaje=siguienteNoViaje(M.placaSel,M.fechaPlanD);
     if(k==='rutaId'&&t.value)M.sinRuta=false;
     if(k==='proyecto'){M.desvioDestinoId='';M.proyectoCat='';M.pilotoId='';M.rutaId='';M.rutaRef='';const pc=PROYECTOS_X[M.proyecto];if(pc&&pc.length===1)M.proyectoCat=pc[0];}
     if(k==='proyectoCat'){M.rutaId='';M.rutaRef='';}
