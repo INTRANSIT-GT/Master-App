@@ -19,6 +19,7 @@ Object.assign(API,{
     const op=String(d.origenProp||'').trim(),dp=String(d.destinoProp||'').trim();if(op.length>80||dp.length>80)deny('Origen y destino: máximo 80 caracteres.','VALIDACION');
     if(DB.rutas.some(r=>!['RECHAZADA'].includes(r.estado)&&r.cliente===cliente&&r.proyecto===proy&&r.nombre.toLowerCase()===nombre.toLowerCase()))deny('Ya hay una ruta pendiente con esa referencia en este proyecto.','DUPLICADO');
     const capacidad=capacidadRuta(d&&d.capacidad), km=kmRuta(d&&d.km);
+    if((d&&d.unidadRef)||(d&&d.arrastreRef)){const C=capacidadEquipo(d.unidadRef||'',d.arrastreRef||'');if(!C.capacidad)deny('No se pudo determinar la capacidad del equipo seleccionado.','VALIDACION');if(String(C.capacidad)!==String(capacidad))deny(`La capacidad debe ser la del ${C.fuente==='ARRASTRE'?'equipo de arrastre':'unidad'} (${C.capacidad}).`,'VALIDACION');}
     return crearRutaPendiente(A,{cliente,proyecto:proy,nombre,origenProp:op,destinoProp:dp,capacidad,km,fuente:'SOLICITUD'});
   });},
   registrarRuta(uid,d){return exec(uid,'registrarRuta','',A=>{

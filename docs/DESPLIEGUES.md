@@ -187,8 +187,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - La capacidad de una ruta o viaje se calcula desde el **equipo de arrastre** cuando tiene capacidad registrada; si no hay arrastre, desde la **unidad** (furgón/camión).
 - Un **cabezal sin arrastre** no tiene capacidad propia: la solicitud de ruta se rechaza hasta registrar/elegir el arrastre correcto.
 - En el formulario de viaje, al elegir placa y arrastre, la capacidad se actualiza automáticamente y el campo de la nueva ruta es de solo lectura.
+- En **Rutas → Solicitar ruta nueva** se pueden indicar la unidad y el arrastre de referencia; la capacidad se calcula igual y se valida en el servidor.
 - La tarifa y los cálculos usan la misma regla (`capacidadEquipo`).
-- **API desplegada**; **front/SW v1.4.4**.
+- **API desplegada**; **front/SW v1.4.5**.
 - **Verificado:** un cabezal sin arrastre fue rechazado al solicitar una ruta nueva.
 
 ## 2026-10-30 · Capacidad de unidad y KM en la solicitud de ruta
