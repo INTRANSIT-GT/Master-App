@@ -151,8 +151,22 @@ export async function loadState(q, opts = {}) {
   (await q('select clave, valor from master.config')).rows.forEach(r => { db.config[r.clave] = typeof r.valor === 'string' ? JSON.parse(r.valor) : r.valor; });
   const catalogos = {};
   for (const c of CATALOGOS) {
-    const rows = await leerTabla(q, c.tabla, c.cols, false, c.cols[0][1]);
-    catalogos[c.lista] = rows.map(r => Object.fromEntries(c.cols.map(([f, col, t]) => [f, dec(t, r[col])])));
+    /* Incluye `extra`: la flota sincronizada desde Fleetio guarda ahí tipoEquipo/esEquipo/capMedida.
+       Sin esta columna, el frontend recibe las unidades pero no sabe cuáles son equipos de arrastre. */
+    const rows = await leerTabla(q, c.tabla, c.cols, true, c.cols[0][1]);
+    catalogos[c.lista] = rows.map(r => {
+      const o = Object.fromEntries(c.cols.map(([f, col, t]) => [f, dec(t, r[col])]));
+      if (r.extra != null) {
+        let x = r.extra;
+        for (let i = 0; i < 4; i++) {
+          if (Array.isArray(x)) { x = x.length ? x[x.length - 1] : {}; continue; }
+          if (typeof x === 'string') { try { x = JSON.parse(x); } catch { x = {}; } continue; }
+          break;
+        }
+        o.extra = x && typeof x === 'object' && !Array.isArray(x) ? x : {};
+      }
+      return o;
+    });
   }
   /* Listas del sistema (tipo de unidad, OPL, tipo de carga, tipo de viaje, orígenes). */
   catalogos.listas = {};

@@ -246,3 +246,8 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Se cambió el upsert del sync a `extra=excluded.extra` y se hizo el lector tolerante a arreglos anidados/strings en `ui.js`, `engine.js` y `transporte.js`.
 - Se ejecutó el sync: **49 vehículos, 96 equipos, 98 mantenimientos, 1,864 gastos**; los equipos vuelven a aparecer en el formulario de viaje y en Catálogos, sin botón Editar.
 - **Front/SW v1.5.2; API y sync desplegados.**
+### Corrección 2026-10-30 · el snapshot de flota no incluía `extra`
+- `store.mjs` cargaba `CATALOGOS.flota` con `extra=false`; el frontend recibía las unidades, pero sin `esEquipo`, `tipoEquipo` ni capacidad de Fleetio. Por eso el selector de arrastres quedaba vacío aunque la sincronización tuviera 96 equipos.
+- Ahora el catálogo lee `extra`, lo parsea (objeto/string/arreglo) y lo entrega como `f.extra` en cada fila del snapshot.
+- **Verificado contra el snapshot real:** 310 filas de flota, **96 con `extra.esEquipo === true`**.
+- **Front/SW v1.5.3; API desplegada.**
