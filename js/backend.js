@@ -65,7 +65,7 @@ if(!API.resumenHistorico)API.resumenHistorico=async(uid,o)=>API.resumenFinancier
     const previo=DB;
     const db=blankDB();
     ['usuarios','acceso','permisos','clientes','liquidaciones','evidencias','agrupaciones','audit','pagos','ordenesPago','ordenesCompra','rutas','tarifas','mem','notificaciones','reportesAyuda'].forEach(k=>{db[k]=sn[k]||[];});
-    db.trips=sn.trips||[];db.config=sn.config||{};
+    db.trips=sn.trips||[];db.config=sn.config||{};db.conteosUnidad=sn.conteosUnidad||{};
     /* Ventana de viajes que llegó del servidor (null en demostración): la pantalla la muestra y ofrece cargar más. */
     db.ventana=sn.ventana||null;
     conservarViejos(db,previo);

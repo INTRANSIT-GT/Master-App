@@ -169,3 +169,9 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - El modal **Datos de factura** valida solo serie, número y fecha; ya no muestra falsos “ruta activa” cuando Facturación no recibe el catálogo de rutas.
 - Ruta, tarifa y aceptación se validan al pulsar **Enviar a facturación**, en el servidor.
 - **front/SW v1.3.8**; motor del API regenerado.
+
+## 2026-10-30 · Formulario de viaje: orden y No. de viaje automático
+- Cliente y datos del viaje reordenados: Proyecto/No. de Transporte, OPL/Tipo de viaje, Tipo de carga/Cantidad, Producto.
+- **No. de viaje** movido a Unidad, después de la placa de arrastre; se calcula como consecutivo de todos los viajes de la unidad.
+- El servidor asigna el consecutivo al crear el viaje; el formulario lo muestra al elegir la unidad.
+- **front/SW v1.3.9**; API actualizado.

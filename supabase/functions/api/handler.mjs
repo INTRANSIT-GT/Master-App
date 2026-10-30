@@ -164,7 +164,15 @@ export async function ejecutar(deps, actorId, { op, args } = {}) {
         const ids = E.getDB().trips.map(t => t.id);
         if (ids.length) E.getDB().audit = fusionarAuditoria(E.getDB().audit, await auditoriaDeViajes(q, ids));
         const enBase = await contarVisibles(q, A, db, E);
-        return { resp: { ok: true, snapshot: await armarSnapshot(E, actorId, deps, Object.assign(ventana, { viajes: ids.length, enBase })) }, commit: false };
+        const snap = await armarSnapshot(E, actorId, deps, Object.assign(ventana, { viajes: ids.length, enBase }));
+        /* Conteo de TODO el histórico por unidad: el formulario calcula el No. de viaje sin depender de la
+           ventana de viajes cargada en pantalla. Solo se entrega a quien puede crear viajes. */
+        snap.conteosUnidad = {};
+        if (E.hasPerm(A, 'viajes_crear')) {
+          const cu = (await q(`select unidad_id, count(*)::int as n from master.viajes where coalesce(unidad_id,'') <> '' group by unidad_id`)).rows;
+          snap.conteosUnidad = Object.fromEntries(cu.map(r => [String(r.unidad_id), Number(r.n)]));
+        }
+        return { resp: { ok: true, snapshot: snap }, commit: false };
       }
       /* Totales de TODO el histórico (no de la ventana que se ve en pantalla): los calcula el mismo motor sobre
          los viajes que este usuario puede ver. Respuesta pequeña y no se guarda nada. */

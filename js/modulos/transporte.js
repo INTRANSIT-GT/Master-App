@@ -45,6 +45,7 @@ function toModel(t){
   ['proyectoCat','estado','shipment','noViaje','opl','tipoViaje','tipoCarga','noCarga','producto','placaArrastre','placaArrastreOtro','pilotoId','rutaId','rutaRef','noDocRetorno','qViaticos',...TKEYS].forEach(k=>m[k]=t[k]==null?'':t[k]);
   m.gastosAdicionales=Array.isArray(t.gastosAdicionales)?t.gastosAdicionales.map(x=>({concepto:x.concepto,importe:x.importe,detalle:x.detalle||''})):[];
   m.placaSel=t.unidadId||'';                      /* la unidad del viaje se edita como «placa» */
+  if(!m.noViaje)m.noViaje=siguienteNoViaje(m.placaSel);   /* viajes viejos sin consecutivo: se muestra el calculado */
   return m;
 }
 
@@ -93,10 +94,18 @@ function estadoRuta(M){
   return {grupos,g,os,o,ds,d,combo};
 }
 function resolverRuta(M){const e=estadoRuta(M);M.rutaId=e.combo?e.combo.id:'';}
+/* Consecutivo por unidad: cuenta TODO el histórico que entrega el servidor (DB.conteosUnidad).
+   Si no está disponible (demostración), usa lo cargado en pantalla. */
+function siguienteNoViaje(unidad){
+  if(!unidad)return '';
+  const n=Number((DB.conteosUnidad||{})[unidad]);
+  if(Number.isFinite(n))return String(n+1);
+  return String(DB.trips.filter(t=>t.unidadId===unidad).length+1);
+}
 function aplicarCampo(M,k,v){
   M[k]=v;if('err' in M)M.err='';
   const limpiaRuta=()=>{M.rutaId='';M.rutaRef='';M.rutaGrupo='';M.rutaO='';M.rutaD='';};
-  if(k==='proyecto'){M.desvioDestino='';M.proyectoCat='';M.pilotoId='';M.placaSel='';limpiaRuta();const pc=M.proyecto?proyectosAsig(S.user,M.proyecto):[];if(pc.length===1)M.proyectoCat=pc[0];}
+  if(k==='proyecto'){M.desvioDestino='';M.proyectoCat='';M.pilotoId='';M.placaSel='';M.noViaje='';limpiaRuta();const pc=M.proyecto?proyectosAsig(S.user,M.proyecto):[];if(pc.length===1)M.proyectoCat=pc[0];}
   if(k==='proyectoCat')limpiaRuta();
   if(k==='rutaGrupo'){
     M.rutaO='';M.rutaD='';if(v)M.sinRuta=false;
@@ -115,8 +124,9 @@ function aplicarCampo(M,k,v){
     }
     /* El arrastre se propone con el último que usó esa unidad. */
     const ua=ultimoArrastreDeUnidad(v);if(ua)M.placaArrastre=ua;
+    M.noViaje=siguienteNoViaje(v);                    /* consecutivo de la unidad elegida */
   }
-  if(k==='pilotoId'&&v){const P=PILOTOS.find(p=>p.id===v);if(P&&P.unidad)M.placaSel=P.unidad;}   /* la placa arranca con la del piloto; se puede cambiar, siempre del mismo cliente */
+  if(k==='pilotoId'&&v){const P=PILOTOS.find(p=>p.id===v);if(P&&P.unidad)M.placaSel=P.unidad;M.noViaje=siguienteNoViaje(M.placaSel);}   /* la placa arranca con la del piloto; se puede cambiar, siempre del mismo cliente */
   if(k==='pilotoAlt')M.pilotoId=v;                                                                              /* solo si la placa tiene más de un piloto asignado */
   if(k==='pilotoId'&&v)S.flash=true;
 }
@@ -306,7 +316,7 @@ function gastoSet(clave,valor){
 function fieldsHTML(M,groups,dis){
   const has=g=>groups.includes(g),d=dis?'disabled':'',ready=!!M.proyecto;
   const lab=(k,l,req,sc)=>`<label for="m_${k}">${l}${req?' <span class="mute">*</span>':''}${sc?' '+src(sc):''}</label>`;
-  const txt=(k,l,o={})=>`<div class="fgroup">${lab(k,l,o.req,o.src)}<input type="${o.type||'text'}" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${o.num?'inputmode="decimal" min="0"':''} ${d}>${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;
+  const txt=(k,l,o={})=>`<div class="fgroup">${lab(k,l,o.req,o.src)}<input type="${o.type||'text'}" id="m_${k}" data-m="${k}" value="${esc(M[k])}" ${o.ro?'readonly':''} ${o.num?'inputmode="decimal" min="0"':''} ${d}>${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;
   const sel=(k,l,arr,o={})=>{const op=arr.map(x=>typeof x==='string'?{id:x,nombre:x}:x);
     return `<div class="fgroup">${lab(k,l,o.req,o.src)}<select id="m_${k}" data-m="${k}" ${d||o.dis?'disabled':''}><option value="">${o.ph||'Selecciona'}</option>${op.map(x=>`<option value="${esc(x.id)}" ${x.id===M[k]?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select>${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;};
   const fcombo=(k,l,opts,val,o={})=>`<div class="fgroup">${lab(k,l,o.req,o.src)}${(d||o.dis)?`<div class="cb"><button type="button" class="cb-btn" disabled><span>${esc(o.ph||'Selecciona')}</span><span class="cb-c">▾</span></button></div>`:comboHTML('m:'+k,val,opts,o.ph||'Selecciona')}${o.hint?`<span class="hint">${o.hint}</span>`:''}</div>`;
@@ -325,10 +335,9 @@ function fieldsHTML(M,groups,dis){
         return sel('proyectoCat','Proyecto',po.map(x=>({id:x,nombre:x})),{req:1,dis:!ready||!!falla||sin,ph:!ready?'Primero elige el cliente':(falla?'No disponible':(sin?'Sin proyectos disponibles':'Selecciona el proyecto')),
           hint:falla?esc(falla)+REINTENTAR:(sin?'Este cliente no tiene proyectos registrados o autorizados para tu usuario. Pide a la administradora que los agregue en Clientes.':'')});
       })():sel('proyectoCat','Proyecto',PROYECTOS_X[M.proyecto]||[],{req:1,src:'CATALOGO',dis:!ready,ph:ready?'Selecciona el proyecto':'Primero elige el cliente'})}${txt('shipment','No. de Transporte')}</div>
-      <div class="row2">${txt('noViaje','No. de viaje')}${sel('opl','OPL',CAT.opl,{src:'CATALOGO'})}</div>
+      <div class="row2">${sel('opl','OPL',CAT.opl,{src:'CATALOGO'})}${sel('tipoViaje','Tipo de viaje',CAT.tipoViaje,{src:'CATALOGO'})}</div>
       ${hp('viajes_editar_estado')&&S.edit?`<div class="row2">${sel('estado','Estado',Object.keys(ESTADOS).map(k=>({id:k,nombre:ESTADOS[k].l})))}</div>`:''}
-      <div class="row2">${sel('tipoViaje','Tipo de viaje',CAT.tipoViaje,{src:'CATALOGO'})}${sel('tipoCarga','Tipo de carga',CAT.tipoCarga,{src:'CATALOGO'})}</div>
-      <div class="row2">${txt('noCarga','Cantidad de carga',{type:'number',num:1,hint:'Cantidad, según el tipo de carga'})}</div>
+      <div class="row2">${sel('tipoCarga','Tipo de carga',CAT.tipoCarga,{src:'CATALOGO'})}${txt('noCarga','Cantidad de carga',{type:'number',num:1,hint:'Cantidad, según el tipo de carga'})}</div>
       <div class="row2">${txt('producto','Producto')}</div></div>`;
   }
   if(has('plan')){
@@ -346,7 +355,8 @@ function fieldsHTML(M,groups,dis){
       ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.activo!==false&&p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?(PILOTOS.some(p=>p.proyecto===M.proyecto)?'Selecciona un piloto':'Este cliente no tiene pilotos'):'Primero elige el cliente',hint:'Puedes elegir cualquier piloto del cliente; la placa se ajusta a su unidad y luego puedes cambiarla.'})}${docAviso(M.pilotoId)}
       ${fcombo('placaSel','Placa del equipo',opts,plSel,{req:1,src:'FLOTA',dis:!ready||!!falla||sinPlacas,ph:!ready?'Primero elige el cliente o la ruta':(falla?'No disponible':(sinPlacas?'Sin placas disponibles':'Selecciona o escribe la placa')),hint:sinPlacas?'Este cliente no tiene placas disponibles: ninguno de sus pilotos tiene una unidad asignada en la flota.':'Se propone la placa del piloto; si la cambias, el piloto se ajusta a esa unidad.'})}
       ${autoPlaca(M,plSel,ps)}
-      ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}</div>`;
+      ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}
+      <div class="row2">${txt('noViaje','No. de viaje',{ro:true,hint:'Se calcula con los viajes de la unidad seleccionada.'})}</div></div>`;
   }
   if(has('unidad')&&!esAdm()){
     const falla=catalogoFalla(),plSel=M.placaSel||((PILOTOS.find(p=>p.id===M.pilotoId)||{}).unidad||'');
@@ -357,7 +367,8 @@ function fieldsHTML(M,groups,dis){
       ${fcombo('placaSel','Placa del equipo',opts,plSel,{req:1,src:'FLOTA',dis:!ready||!!falla||sinPlacas,ph:!ready?'Primero elige el cliente':(falla?'No disponible':(sinPlacas?'Sin placas disponibles':'Selecciona la placa')),hint:sinPlacas?'Este cliente no tiene placas disponibles: ninguno de sus pilotos tiene una unidad asignada en la flota.':'Puedes cambiar la placa (unidad) del piloto: siempre dentro de este cliente. El cliente no se cambia.'})}
       ${sel('pilotoId','Piloto',PILOTOS.filter(p=>p.activo!==false&&p.proyecto===M.proyecto).map(p=>({id:p.id,nombre:p.nombre})),{req:1,src:'PILOTOS',dis:!ready,ph:ready?'Selecciona un piloto':'Primero elige el cliente'})}${docAviso(M.pilotoId)}
       ${autoCard(M)}
-      ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}</div>`;
+      ${arrastreCampo(M,plSel,arrastresDisponibles(),fcombo)}
+      <div class="row2">${txt('noViaje','No. de viaje',{ro:true,hint:'Se calcula con los viajes de la unidad seleccionada.'})}</div></div>`;
   }
   if(has('ruta')&&!usaCombo()){
     const rs=(ready&&M.proyectoCat)?API.rutasParaViaje(S.user.id,M.proyecto,M.proyectoCat):[];
