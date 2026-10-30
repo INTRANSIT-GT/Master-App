@@ -35,5 +35,5 @@ const PWA={prompt:null,instalada:false,
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();PWA.prompt=e;if(typeof render==='function'&&typeof S!=='undefined')render();});
 window.addEventListener('appinstalled',()=>{PWA.instalada=true;PWA.prompt=null;if(typeof render==='function')render();});
 if(PWA.soporta()&&location.protocol!=='file:'){
-  window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(()=>{});});
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});});
 }
