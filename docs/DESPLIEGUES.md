@@ -186,5 +186,5 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - `js/engine.js` conserva la base; `js/engine/permisos.js` contiene permisos, roles, secciones y campos base; los 90 métodos de `API` viven en `js/engine/api-sesion.js`, `api-snapshot.js`, `api-viajes.js`, `api-comercial.js`, `api-finanzas.js` y `api-admin.js`.
 - El handler del API se separó en `snapshot.mjs` (lectura/snapshot), `read.mjs` (ventana y conteos) y `ops.mjs` (registro de operaciones).
 - Se agregó `npm run check:core` y el workflow `.github/workflows/check-core.yml` para detectar desalineación entre `js/engine.js` y `core.mjs`.
-- Grafo Graphify regenerado con PostgreSQL: 1,742 nodos, 2,582 relaciones y 428 nodos/629 relaciones del esquema real.
+- Grafo Graphify regenerado con PostgreSQL: 1,743 nodos, 2,580 relaciones y 428 nodos/629 relaciones del esquema real.
 - **front/SW v1.4.0**.
