@@ -89,7 +89,7 @@ await click([...d.querySelectorAll('[data-act="rsPer"]')].find(b => b.dataset.v 
 { const sw = J('rsDatos().serie'); const k = x => (sw.find(p => p.k === x) || {}).viajes;
 T('C7 «Semana» (lunes a domingo): 28/12/2031 va en la del 22/12; 29/12/2031 y 04/01/2032 en la del 29/12', k('2031-12-22') >= 1 && k('2031-12-29') === 2 && !sw.some(p => p.k === '2032-01-04') && cab('rsTCli').includes('Sem. 29/12/2031'), sw); }
 await click([...d.querySelectorAll('[data-act="rsPer"]')].find(b => b.dataset.v === 'mes'));
-T('C8 Gráficos de viajes por cliente y por período', d.querySelectorAll('#rsCli .rs-hb').length === refCli.length && d.querySelectorAll('#rsCli svg rect').length === meses.length);
+T('C8 Sin las gráficas «Viajes por cliente» y «Viajes por mes» (retiradas)', !d.querySelector('#rsCli .rs-hb') && !d.querySelector('#rsCli svg') && !/Viajes por cliente|Viajes por mes/.test(txt(d.querySelector('#rsCli'))) && !!d.querySelector('#rsTCli'));
 
 /* ---------- Por unidad ---------- */
 const tu = cuerpo('rsTUni');
@@ -99,7 +99,8 @@ T('U2 Un renglón por placa + cliente + proyecto con sus viajes reales', tu.leng
 const porPlaca = Object.entries(R.ts.filter(t => t.placa).reduce((m, t) => (m[t.placa] = (m[t.placa] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]);
 T('U3 Las unidades con más actividad aparecen primero (total de la placa)', tu[0][0] === porPlaca[0][0] && Number(tu[0][5]) === porPlaca[0][1] && tu.map(r => Number(r[5])).every((v, i, a) => !i || a[i - 1] >= v), tu.map(r => r[0] + ':' + r[5]));
 T('U4 Fila Total de unidades: viajes con unidad y número de unidades', Number(pie('rsTUni')[2]) === R.ts.filter(t => t.placa).length && pie('rsTUni')[1].startsWith(String(R.kpi.unidades)), pie('rsTUni'));
-T('U5 Gráfico «Unidades con más viajes»', d.querySelectorAll('#rsUniT .rs-hb').length === porPlaca.length);
+T('U5 Sin la gráfica «Unidades con más viajes» (retirada); la tabla por unidad sigue', !d.querySelector('#rsUniT .rs-hb') && !/Unidades con más viajes/.test(txt(d.querySelector('#rsUniT'))) && !!d.querySelector('#rsTUni'));
+T('U6 Ninguna gráfica de barras ni SVG queda en toda la sección', !d.querySelector('#main .rs-hbars, #main .rs-graf, #main .rs-dos') && ![...d.querySelectorAll('#main .rs-sec svg')].some(x => x.getAttribute('role') === 'img'));
 
 /* ---------- Por proyecto ---------- */
 const tp = cuerpo('rsTPro');
@@ -161,7 +162,7 @@ T('F9 Los filtros del Resumen no alteran los de «Pendientes de gestión»', ev(
 /* ---------- Diseño tipo hoja de cálculo ---------- */
 const css = leer('css/app.css');
 T('V1 Encabezados fijos (th sticky) y totales fijos al pie dentro de un contenedor con desplazamiento', /table\.xl th\{position:sticky;top:0/.test(css) && /table\.rs-tb tfoot td\{position:sticky;bottom:0/.test(css) && /\.rs-wrap\{max-height/.test(css));
-T('V2 Adaptable a móvil (media query del Resumen)', /@media \(max-width:820px\)\{\.rs-dos/.test(css));
+T('V2 Adaptable a móvil (media query del Resumen) y sin estilos de gráficas sobrantes', /@media \(max-width:820px\)\{\.rs-kpis/.test(css) && !/\.rs-dos|\.rs-graf|\.rs-hbars/.test(css));
 
 T('Z1 El PDF del cliente (expAgrPdf) sigue existiendo', ev('typeof expAgrPdf') === 'function');
 T('Z2 Sin errores de JavaScript al final', N.errs.length === 0, N.errs);

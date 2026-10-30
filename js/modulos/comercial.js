@@ -613,20 +613,6 @@ function rsOrdena(lista,tb,defCol){
 }
 const rsNum=v=>`<td class="rs-n">${v}</td>`;
 function rsTh(tb,c,l,num){const o=(S.rsOrd||{})[tb]||{};return `<th class="${num?'rs-n':''}" aria-sort="${o.col===c?(o.dir==='asc'?'ascending':'descending'):'none'}"><button class="rs-ord" data-act="rsOrden" data-tb="${tb}" data-c="${esc(c)}" title="Ordenar por ${esc(l)}">${esc(l)}<span class="rs-flecha">${o.col===c?(o.dir==='asc'?'▲':'▼'):'↕'}</span></button></th>`;}
-/* Barras horizontales en HTML/SVG, sin librerías externas. */
-function rsBarrasH(lista,etq,tit,max){
-  if(!lista.length)return '';const top=lista.slice(0,max||10),m=Math.max(1,...top.map(r=>r.viajes));
-  return `<div class="rs-graf"><div class="rs-gt">${esc(tit)}</div><div class="rs-hbars" role="img" aria-label="${esc(tit)}">${top.map(r=>`<div class="rs-hb"><span class="rs-hl" title="${esc(r[etq])}">${esc(r[etq])}</span><span class="rs-ht"><i style="width:${(r.viajes/m*100).toFixed(1)}%"></i></span><b>${r.viajes}</b></div>`).join('')}</div>${lista.length>top.length?`<div class="mute" style="font-size:12px;margin-top:6px">Se muestran los ${top.length} con más viajes de ${lista.length}.</div>`:''}</div>`;
-}
-function rsColumnas(serie,etq){
-  if(!serie.length)return '';
-  const m=Math.max(1,...serie.map(s=>s.viajes)),ancho=Math.max(34,Math.min(80,760/serie.length)),W=Math.max(760,serie.length*ancho),H=220,PB=34,PT=18,b=ancho*0.62;
-  let s=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(etq)}" style="display:block;max-width:none">`;
-  serie.forEach((p,i)=>{const x=i*ancho+ancho/2,h=(H-PT-PB)*(p.viajes/m),y=H-PB-h;
-    s+=`<rect x="${(x-b/2).toFixed(1)}" y="${y.toFixed(1)}" width="${b.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="var(--brand)"><title>${esc(p.l)}: ${p.viajes} viaje(s)</title></rect>`;
-    s+=`<text x="${x.toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" font-size="12" fill="currentColor">${p.viajes}</text><text x="${x.toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">${esc(p.l)}</text>`;});
-  return `<div class="rs-graf"><div class="rs-gt">${esc(etq)}</div><div class="rs-scroll">${s}</svg></div></div>`;
-}
 const rsSelBtn=(t,k,l)=>`<button class="linkbtn" data-act="rsVer" data-t="${t}" data-k="${esc(k)}" title="Ver sus viajes en el detalle">${esc(l)}</button>`;
 function rsTablaClientes(d){
   const per=d.periodos,{filas}=rsOrdena(d.clientes,'cli','viajes'),sel=S.rsSel&&S.rsSel.t==='cli'?S.rsSel.k:null;
@@ -698,11 +684,10 @@ function resumenHTML(){
   const kp=(n,l)=>`<div class="kpi"><span class="n">${n}</span><span class="l">${l}</span></div>`;
   const sec=(l,id,body)=>`<div class="card rs-sec" id="${id}" style="margin-top:14px"><h3>${l}</h3>${body}</div>`;
   const perBtn=(v,l)=>`<button class="chip" data-act="rsPer" data-v="${v}" aria-pressed="${g===v}">${l}</button>`;
-  const gl=g==='dia'?'por día':g==='semana'?'por semana':'por mes';
   return `<div class="rs-fijo">${filtros}</div>${nota}
   <div class="grid g4 rs-kpis" style="margin-bottom:6px">${kp(d.kpi.viajes,'Total de viajes')}${kp(d.kpi.clientes,'Clientes atendidos')}${kp(d.kpi.unidades,'Unidades utilizadas')}${kp(d.kpi.proyectos,'Proyectos atendidos')}</div>
-  ${sec('Resumen por cliente','rsCli',`<div class="chips" role="group" aria-label="Columnas de período" style="margin:0 0 10px"><span class="mute" style="font-size:13px;align-self:center">Viajes por período:</span>${perBtn('dia','Día')}${perBtn('semana','Semana')}${perBtn('mes','Mes')}</div>${rsTablaClientes(d)}<div class="rs-dos" style="margin-top:14px">${rsBarrasH(d.clientes,'cliente','Viajes por cliente',10)}${rsColumnas(d.serie,'Viajes '+gl)}</div>`)}
-  ${sec('Resumen por unidad','rsUniT',`${rsTablaUnidades(d)}<div style="margin-top:14px">${rsBarrasH(d.porPlaca,'placa','Unidades con más viajes',10)}</div>`)}
+  ${sec('Resumen por cliente','rsCli',`<div class="chips" role="group" aria-label="Columnas de período" style="margin:0 0 10px"><span class="mute" style="font-size:13px;align-self:center">Viajes por período:</span>${perBtn('dia','Día')}${perBtn('semana','Semana')}${perBtn('mes','Mes')}</div>${rsTablaClientes(d)}`)}
+  ${sec('Resumen por unidad','rsUniT',`${rsTablaUnidades(d)}`)}
   ${sec('Resumen por proyecto','rsPro',rsTablaProyectos(d))}
   ${rsDetalle(d)}`;
 }
