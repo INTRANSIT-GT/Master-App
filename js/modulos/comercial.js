@@ -329,8 +329,8 @@ function comView(modo){
   const canAct=hp('comercial_agrupar');
   const T={bandeja:{k:'bandeja',l:'Pendientes de gestión'},
     fact:{k:'fact',l:modo==='analista'?'Agrupaciones':modo==='factcom'?'Por facturar y facturadas':'Facturas'},
-    hist:{k:'hist',l:'Facturación'},historial:{k:'historial',l:'Historiales'},reg:{k:'reg',l:'Registros anteriores'}};
-  const orden=modo==='analista'?['bandeja','fact','historial','reg']:modo==='factcom'?['fact','hist','historial','reg']:['bandeja','fact','hist','historial','reg'];
+    hist:{k:'hist',l:'Facturación'},historial:{k:'historial',l:'Historiales'},reg:{k:'reg',l:'Registros anteriores'},resumen:{k:'resumen',l:'Resumen'}};
+  const orden=modo==='analista'?['bandeja','fact','historial','reg','resumen']:modo==='factcom'?['fact','hist','historial','reg']:['bandeja','fact','hist','historial','reg'];
   const tabsV=orden.map(x=>T[x]);
   const k=tabsV.some(t=>t.k===S.tab[TK])?S.tab[TK]:(modo==='factcom'?'fact':'bandeja');
   const acts=canAct||hp('facturas_emitir')||hp('comercial_corregir')||hp('comercial_anular')||hp('cobros_registrar')||hp('comercial_ot');
@@ -340,6 +340,8 @@ function comView(modo){
     body=`<div class="row2" style="margin:0 0 12px;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr 1fr"><input type="text" id="q" placeholder="Buscar viaje, piloto, placa, destino, factura…" value="${esc(S.q)}" aria-label="Buscar"><select data-flt="fCli" aria-label="Cliente"><option value="">Todos los clientes</option>${PROYECTOS.map(p=>`<option value="${p.id}" ${S.fCli===p.id?'selected':''}>${esc(p.cliente)}</option>`).join('')}</select><select data-flt="fPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${CAT.proyectos.map(p=>`<option ${S.fPcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select><select data-flt="fCom" aria-label="Estado comercial"><option value="PEND" ${S.fCom==='PEND'?'selected':''}>Pendientes de gestión</option><option value="REG" ${S.fCom==='REG'?'selected':''}>Ya enviados a facturar</option><option value="" ${S.fCom===''?'selected':''}>Todos</option></select><label class="dlab">Desde <input type="date" data-flt="fDesde" value="${esc(S.fDesde||'')}"></label><label class="dlab">Hasta <input type="date" data-flt="fHasta" value="${esc(S.fHasta||'')}"></label></div><div id="vb">${BODY.comercial()}</div>`;
   }else if(k==='fact'){
     body=factTabHTML(ags,acts,modo);
+  }else if(k==='resumen'){
+    body=resumenHTML();
   }else if(k==='historial'){
     body=historialesHTML();
   }else if(k==='hist'){
@@ -553,4 +555,163 @@ Object.assign(ACT,{
     }
     const r=await run(()=>API.guardarCliente(S.user.id,Object.assign({},m,{existente:!!d.id})),id=>d.id?`Cliente ${id} actualizado.`:`Cliente ${id} creado: ya aparece en los selectores.`,true);if(r.ok)afterWrite();else if(esAdm()&&S.modal&&S.modal.err){S.modal.err=S.modal.err.replace(/El cliente "[^"]*" del catálogo ya está registrado\./,'Ya existe un cliente con ese nombre.');render();}},
   async clienteEstado(d){const c=DB.clientes.find(x=>x.id===d.id);if(!c)return;await run(()=>API.guardarCliente(S.user.id,Object.assign({},c,{existente:true,activo:c.activo===false})),`Cliente ${c.id} ${c.activo===false?'activado':'desactivado'}.`);render();}
+});
+
+/* =====================================================================
+   ASISTENTE COMERCIAL · RESUMEN (reporte tipo hoja de cálculo, solo consulta, sin descargas)
+   Fuente: comTrips() = los MISMOS viajes que el Asistente Comercial ya consulta en su módulo
+   (viajes visibles para su perfil con liquidación aprobada: Aceptado, Facturado o Cobrado).
+   No crea tablas, registros ni archivos: solo cuenta y agrupa lo que ya está cargado. No toca el PDF del cliente.
+   ===================================================================== */
+/* Mismo nombre de cliente que muestran las tablas y el filtro de «Pendientes de gestión» (PROYECTOS.cliente). */
+const rsCliId=id=>(PROYECTOS.find(p=>p.id===id)||{}).cliente||cliNombre(id)||id||'';
+const rsCliN=t=>rsCliId(t.proyecto);
+const rsUniK=t=>{const f=J(t).f||{};return String(f.placa||f.unidad||t.unidadId||'').trim();};
+const rsUniTipo=t=>(J(t).f||{}).tipo||'';
+const rsRuta=t=>{const r=DB.rutas.find(x=>x.id===t.rutaId);return r?rutaEtiqueta(r):(t.sinRuta?'Sin ruta':'');};
+const rsOrig=t=>J(t).origen||(t.origen?nombreOrigen(t.origen):'');
+const rsDest=t=>J(t).destino||(t.destino?nombreDestino(t.destino):'');
+const rsLunes=d=>{const x=new Date(d+'T12:00:00');const w=(x.getDay()+6)%7;x.setDate(x.getDate()-w);return x.toISOString().slice(0,10);};
+const RS_MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const rsPerK=(d,g)=>!d?'':g==='dia'?d:g==='semana'?rsLunes(d):d.slice(0,7);
+const rsPerL=(k,g)=>!k?'Sin fecha':g==='mes'?RS_MES[Number(k.slice(5,7))-1]+' '+k.slice(0,4):g==='semana'?'Sem. '+fmtDate(k):fmtDate(k);
+/* Filtros propios de esta pestaña (no alteran los de «Pendientes de gestión»). */
+function rsFiltros(){return {desde:S.rsDesde||'',hasta:S.rsHasta||'',cli:S.rsCli||'',pcat:S.rsPcat||'',uni:S.rsUni||''};}
+function rsAplica(base,f){
+  return base.filter(t=>(!f.cli||t.proyecto===f.cli)&&(!f.pcat||t.proyectoCat===f.pcat)&&(!f.uni||rsUniK(t)===f.uni)&&(!f.desde||planD(t)>=f.desde)&&(!f.hasta||planD(t)<=f.hasta));
+}
+/* Todos los números de la pantalla salen de esta función: tarjetas, tablas, gráficos y detalle usan la misma lista. */
+function rsDatos(f,g){
+  f=f||rsFiltros();g=g||S.rsPer||'mes';
+  const viajes=rsAplica(comTrips(),f).slice().sort((a,b)=>planD(a).localeCompare(planD(b))||a.id.localeCompare(b.id));
+  const periodos=[...new Set(viajes.map(t=>rsPerK(planD(t),g)))].sort();
+  const C={},U={},UP={},P={};
+  viajes.forEach(t=>{
+    const ck=t.proyecto,uk=rsUniK(t),pk=t.proyecto+'|'+(t.proyectoCat||''),per=rsPerK(planD(t),g);
+    const c=C[ck]||(C[ck]={k:ck,cliente:rsCliN(t),viajes:0,uni:new Set(),pro:new Set(),per:{}});c.viajes++;if(uk)c.uni.add(uk);if(t.proyectoCat)c.pro.add(t.proyectoCat);c.per[per]=(c.per[per]||0)+1;
+    if(uk){const u=U[uk]||(U[uk]={k:uk,placa:uk,tipo:rsUniTipo(t),viajes:0});u.viajes++;
+      const upk=uk+'|'+pk,x=UP[upk]||(UP[upk]={k:upk,placa:uk,tipo:rsUniTipo(t),cliente:rsCliN(t),proyecto:t.proyectoCat||'',viajes:0});x.viajes++;}
+    const p=P[pk]||(P[pk]={k:pk,cliente:rsCliN(t),proyecto:t.proyectoCat||'',viajes:0,uni:new Set()});p.viajes++;if(uk)p.uni.add(uk);
+  });
+  const clientes=Object.values(C).map(c=>Object.assign({k:c.k,cliente:c.cliente,viajes:c.viajes,proyectos:c.pro.size,unidades:c.uni.size},Object.fromEntries(periodos.map(p=>['p:'+p,c.per[p]||0]))));
+  const porPlaca=Object.values(U);
+  const unidades=Object.values(UP).map(x=>Object.assign({},x,{totalPlaca:U[x.placa].viajes}));
+  const proyectos=Object.values(P).map(p=>({k:p.k,cliente:p.cliente,proyecto:p.proyecto,viajes:p.viajes,unidades:p.uni.size}));
+  const desc=(a,b)=>b.viajes-a.viajes;
+  clientes.sort((a,b)=>desc(a,b)||a.cliente.localeCompare(b.cliente));porPlaca.sort((a,b)=>desc(a,b)||a.placa.localeCompare(b.placa));
+  unidades.sort((a,b)=>b.totalPlaca-a.totalPlaca||a.placa.localeCompare(b.placa)||desc(a,b));proyectos.sort((a,b)=>desc(a,b)||a.cliente.localeCompare(b.cliente)||a.proyecto.localeCompare(b.proyecto));
+  const serie=periodos.map(k=>({k,l:rsPerL(k,g),viajes:viajes.filter(t=>rsPerK(planD(t),g)===k).length}));
+  return {f,g,viajes,periodos,clientes,porPlaca,unidades,proyectos,serie,sinUnidad:viajes.filter(t=>!rsUniK(t)).length,
+    kpi:{viajes:viajes.length,clientes:clientes.length,unidades:porPlaca.length,proyectos:proyectos.filter(p=>p.proyecto).length}};
+}
+/* ---- Tablas tipo hoja de cálculo: encabezado fijo, orden por columna y fila de totales ---- */
+function rsOrdena(lista,tb,defCol){
+  const o=(S.rsOrd||{})[tb]||{col:defCol,dir:defCol?'desc':'asc'};
+  if(!o.col)return {o,filas:lista};
+  const dir=o.dir==='asc'?1:-1;
+  return {o,filas:lista.slice().sort((a,b)=>{const x=a[o.col],y=b[o.col];const c=(typeof x==='number'&&typeof y==='number')?x-y:String(x==null?'':x).localeCompare(String(y==null?'':y),'es',{numeric:true});return c*dir;})};
+}
+const rsNum=v=>`<td class="rs-n">${v}</td>`;
+function rsTh(tb,c,l,num){const o=(S.rsOrd||{})[tb]||{};return `<th class="${num?'rs-n':''}" aria-sort="${o.col===c?(o.dir==='asc'?'ascending':'descending'):'none'}"><button class="rs-ord" data-act="rsOrden" data-tb="${tb}" data-c="${esc(c)}" title="Ordenar por ${esc(l)}">${esc(l)}<span class="rs-flecha">${o.col===c?(o.dir==='asc'?'▲':'▼'):'↕'}</span></button></th>`;}
+/* Barras horizontales en HTML/SVG, sin librerías externas. */
+function rsBarrasH(lista,etq,tit,max){
+  if(!lista.length)return '';const top=lista.slice(0,max||10),m=Math.max(1,...top.map(r=>r.viajes));
+  return `<div class="rs-graf"><div class="rs-gt">${esc(tit)}</div><div class="rs-hbars" role="img" aria-label="${esc(tit)}">${top.map(r=>`<div class="rs-hb"><span class="rs-hl" title="${esc(r[etq])}">${esc(r[etq])}</span><span class="rs-ht"><i style="width:${(r.viajes/m*100).toFixed(1)}%"></i></span><b>${r.viajes}</b></div>`).join('')}</div>${lista.length>top.length?`<div class="mute" style="font-size:12px;margin-top:6px">Se muestran los ${top.length} con más viajes de ${lista.length}.</div>`:''}</div>`;
+}
+function rsColumnas(serie,etq){
+  if(!serie.length)return '';
+  const m=Math.max(1,...serie.map(s=>s.viajes)),ancho=Math.max(34,Math.min(80,760/serie.length)),W=Math.max(760,serie.length*ancho),H=220,PB=34,PT=18,b=ancho*0.62;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(etq)}" style="display:block;max-width:none">`;
+  serie.forEach((p,i)=>{const x=i*ancho+ancho/2,h=(H-PT-PB)*(p.viajes/m),y=H-PB-h;
+    s+=`<rect x="${(x-b/2).toFixed(1)}" y="${y.toFixed(1)}" width="${b.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="var(--brand)"><title>${esc(p.l)}: ${p.viajes} viaje(s)</title></rect>`;
+    s+=`<text x="${x.toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" font-size="12" fill="currentColor">${p.viajes}</text><text x="${x.toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">${esc(p.l)}</text>`;});
+  return `<div class="rs-graf"><div class="rs-gt">${esc(etq)}</div><div class="rs-scroll">${s}</svg></div></div>`;
+}
+const rsSelBtn=(t,k,l)=>`<button class="linkbtn" data-act="rsVer" data-t="${t}" data-k="${esc(k)}" title="Ver sus viajes en el detalle">${esc(l)}</button>`;
+function rsTablaClientes(d){
+  const per=d.periodos,{filas}=rsOrdena(d.clientes,'cli','viajes'),sel=S.rsSel&&S.rsSel.t==='cli'?S.rsSel.k:null;
+  const tot=k=>d.clientes.reduce((s,r)=>s+(r[k]||0),0);
+  return `<div class="xlwrap rs-wrap"><table class="xl rs-tb" id="rsTCli" style="min-width:${560+per.length*92}px"><thead><tr>${rsTh('cli','cliente','Cliente')}${rsTh('cli','viajes','Viajes',1)}${rsTh('cli','proyectos','Proyectos',1)}${rsTh('cli','unidades','Unidades',1)}${per.map(p=>rsTh('cli','p:'+p,rsPerL(p,d.g),1)).join('')}</tr></thead><tbody>
+    ${filas.map(r=>`<tr class="${sel===r.k?'sel':''}"><td>${rsSelBtn('cli',r.k,r.cliente)}</td>${rsNum(r.viajes)}${rsNum(r.proyectos)}${rsNum(r.unidades)}${per.map(p=>rsNum(r['p:'+p]||'<span class="mute">0</span>')).join('')}</tr>`).join('')}
+  </tbody><tfoot><tr><td>Total</td>${rsNum(d.kpi.viajes)}${rsNum(d.kpi.proyectos)}${rsNum(d.kpi.unidades)}${per.map(p=>rsNum(tot('p:'+p))).join('')}</tr></tfoot></table></div>
+  <div class="mute rs-nota">En la fila Total, proyectos y unidades son <b>distintos</b> (una unidad que atendió a dos clientes cuenta una vez).</div>`;
+}
+function rsTablaUnidades(d){
+  if(!d.unidades.length)return '<div class="mute">Los viajes filtrados no tienen unidad registrada.</div>';
+  const {filas}=rsOrdena(d.unidades,'uni',null),sel=S.rsSel&&S.rsSel.t==='uni'?S.rsSel.k:null,m=Math.max(1,...d.porPlaca.map(u=>u.viajes));
+  return `<div class="xlwrap rs-wrap"><table class="xl rs-tb" id="rsTUni" style="min-width:720px"><thead><tr>${rsTh('uni','placa','Placa')}${rsTh('uni','tipo','Tipo de unidad')}${rsTh('uni','cliente','Cliente')}${rsTh('uni','proyecto','Proyecto')}${rsTh('uni','viajes','Viajes',1)}${rsTh('uni','totalPlaca','Total de la placa',1)}<th style="min-width:130px">Actividad</th></tr></thead><tbody>
+    ${filas.map(r=>`<tr class="${sel===r.placa?'sel':''}"><td>${rsSelBtn('uni',r.placa,r.placa)}</td><td>${esc(r.tipo||'—')}</td><td>${esc(r.cliente)}</td><td>${r.proyecto?rsSelBtn('pro',r.k.split('|').slice(1).join('|'),r.proyecto):'<span class="mute">—</span>'}</td>${rsNum(r.viajes)}${rsNum(r.totalPlaca)}<td><span class="rs-ht" title="${r.totalPlaca} viaje(s) de la placa"><i style="width:${(r.totalPlaca/m*100).toFixed(1)}%"></i></span></td></tr>`).join('')}
+  </tbody><tfoot><tr><td>Total</td><td colspan="3">${d.kpi.unidades} ${d.kpi.unidades===1?'unidad':'unidades'}</td>${rsNum(d.unidades.reduce((s,r)=>s+r.viajes,0))}<td></td><td></td></tr></tfoot></table></div>
+  ${d.sinUnidad?`<div class="mute rs-nota">${d.sinUnidad} viaje(s) sin unidad registrada no aparecen en esta tabla.</div>`:''}`;
+}
+function rsTablaProyectos(d){
+  const {filas}=rsOrdena(d.proyectos,'pro','viajes'),sel=S.rsSel&&S.rsSel.t==='pro'?S.rsSel.k:null;
+  return `<div class="xlwrap rs-wrap"><table class="xl rs-tb" id="rsTPro" style="min-width:520px"><thead><tr>${rsTh('pro','cliente','Cliente')}${rsTh('pro','proyecto','Proyecto')}${rsTh('pro','viajes','Viajes',1)}${rsTh('pro','unidades','Unidades utilizadas',1)}</tr></thead><tbody>
+    ${filas.map(r=>`<tr class="${sel===r.k?'sel':''}"><td>${esc(r.cliente)}</td><td>${rsSelBtn('pro',r.k,r.proyecto||'(sin proyecto)')}</td>${rsNum(r.viajes)}${rsNum(r.unidades)}</tr>`).join('')}
+  </tbody><tfoot><tr><td>Total</td><td>${d.kpi.proyectos} ${d.kpi.proyectos===1?'proyecto':'proyectos'}</td>${rsNum(d.kpi.viajes)}${rsNum(d.kpi.unidades)}</tr></tfoot></table></div>`;
+}
+/* ---- Detalle operativo: los registros que forman los indicadores (con selección, búsqueda y orden) ---- */
+const RS_DET=[['fecha','Fecha'],['cliente','Cliente'],['proyecto','Proyecto'],['id','ID viaje'],['noViaje','No. viaje'],['tango','Tango'],['opl','OPL'],['placa','Placa'],['tipo','Tipo de unidad'],['piloto','Piloto'],['origen','Origen'],['destino','Destino'],['ruta','Ruta'],...CAMPOS_TIEMPO.map(([k,l])=>[k,l]),['estado','Estado']];
+const rsFila=t=>{const j=J(t);return Object.assign({t,id:t.id,fecha:t.fechaPlan||'',cliente:rsCliN(t),proyecto:t.proyectoCat||'',noViaje:t.noViaje||'',tango:j.f.tango||'',opl:t.opl||'',placa:j.f.placa||'',tipo:j.f.tipo||'',piloto:j.piloto||'',origen:rsOrig(t),destino:rsDest(t),ruta:rsRuta(t),estado:(ESTADOS[t.estado]||{}).l||t.estado},Object.fromEntries(CAMPOS_TIEMPO.map(([k])=>[k,t[k]||''])));};
+function rsSelFn(s){return !s?null:s.t==='cli'?(t=>t.proyecto===s.k):s.t==='uni'?(t=>rsUniK(t)===s.k):(t=>t.proyecto+'|'+(t.proyectoCat||'')===s.k);}
+function rsSelNom(s){return s.t==='cli'?'Cliente '+rsCliId(s.k):s.t==='uni'?'Placa '+s.k:'Proyecto '+(s.k.split('|')[1]||'(sin proyecto)')+' · '+rsCliId(s.k.split('|')[0]);}
+function rsDetFilas(d){
+  const fn=rsSelFn(S.rsSel),q=String(S.rsQ||'').trim().toLowerCase();
+  let fs=d.viajes.filter(t=>!fn||fn(t)).map(rsFila);
+  if(q)fs=fs.filter(r=>RS_DET.some(([k])=>String(k==='fecha'||TKEYS.includes(k)?fmtL(r[k]):r[k]).toLowerCase().includes(q)));
+  return rsOrdena(fs,'det',null).filas;
+}
+function rsDetalleBody(d){
+  const fs=rsDetFilas(d),pg=paginar('rsDet',fs);
+  const cel=(r,k)=>k==='id'?`<button class="linkbtn" data-act="detalle" data-id="${esc(r.id)}">#${esc(r.id)}</button>`:k==='estado'?badge(r.t.estado):(k==='fecha'||TKEYS.includes(k))?(r[k]?fmtL(r[k]):'<span class="mute">—</span>'):(r[k]?esc(r[k]):'<span class="mute">—</span>');
+  if(!fs.length)return empty('Ningún registro coincide','Cambia la búsqueda o quita la selección.');
+  return `<div class="xlwrap rs-wrap"><table class="xl rs-tb rs-det" id="rsTDet" style="min-width:${1900+CAMPOS_TIEMPO.length*120}px"><thead><tr>${RS_DET.map(([k,l])=>rsTh('det',k,l)).join('')}</tr></thead><tbody>
+    ${pg.filas.map(r=>`<tr>${RS_DET.map(([k])=>`<td>${cel(r,k)}</td>`).join('')}</tr>`).join('')}
+  </tbody><tfoot><tr><td colspan="${RS_DET.length}">Total: ${fs.length} ${fs.length===1?'registro':'registros'}${fs.length!==d.viajes.length?` de ${d.viajes.length} del período filtrado`:''}</td></tr></tfoot></table></div>${paginador('rsDet',pg)}`;
+}
+function rsDetalle(d){
+  const s=S.rsSel;
+  return `<div class="card rs-sec" id="rsDetalle" style="margin-top:14px"><div class="exportbar"><h3 style="margin:0">Detalle operativo</h3></div>
+    <div class="rs-detbar"><input type="search" id="rsQ" value="${esc(S.rsQ||'')}" placeholder="Buscar en el detalle: viaje, piloto, placa, Tango, OPL, ruta…" aria-label="Buscar en el detalle">
+    ${s?`<span class="rs-selchip">Mostrando: <b>${esc(rsSelNom(s))}</b> <button class="linkbtn" data-act="rsVer" data-t="" data-k="">Ver todos</button></span>`:'<span class="mute" style="font-size:13px">Pulsa un cliente, una placa o un proyecto de las tablas para ver solo sus viajes.</span>'}</div>
+    <div id="rsDetBody">${rsDetalleBody(d)}</div></div>`;
+}
+function resumenHTML(){
+  const base=comTrips(),g=S.rsPer||'mes';
+  /* Las listas de proyecto y unidad dependen del cliente elegido; si una selección ya no aplica, se quita para no dejar un filtro invisible. */
+  const cliOpts=[...new Map(base.map(t=>[t.proyecto,rsCliN(t)])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+  if(S.rsCli&&!cliOpts.some(([k])=>k===S.rsCli))S.rsCli='';
+  const proOpts=[...new Set(base.filter(t=>!S.rsCli||t.proyecto===S.rsCli).map(t=>t.proyectoCat).filter(Boolean))].sort();
+  if(S.rsPcat&&!proOpts.includes(S.rsPcat))S.rsPcat='';
+  const uniOpts=[...new Set(base.filter(t=>(!S.rsCli||t.proyecto===S.rsCli)&&(!S.rsPcat||t.proyectoCat===S.rsPcat)).map(rsUniK).filter(Boolean))].sort();
+  if(S.rsUni&&!uniOpts.includes(S.rsUni))S.rsUni='';
+  const d=rsDatos(),f=d.f;
+  if(S.rsSel&&!d.viajes.some(rsSelFn(S.rsSel)))S.rsSel=null;
+  const hay=f.desde||f.hasta||f.cli||f.pcat||f.uni;
+  const filtros=`<div class="lfilters rs-filtros"><label class="dlab">Fecha inicial <input type="date" data-flt="rsDesde" value="${esc(f.desde)}" aria-label="Fecha inicial del viaje"></label><label class="dlab">Fecha final <input type="date" data-flt="rsHasta" value="${esc(f.hasta)}" aria-label="Fecha final del viaje"></label>
+    <select data-flt="rsCli" aria-label="Cliente"><option value="">Todos los clientes</option>${cliOpts.map(([k,n])=>`<option value="${esc(k)}" ${f.cli===k?'selected':''}>${esc(n)}</option>`).join('')}</select>
+    <select data-flt="rsPcat" aria-label="Proyecto"><option value="">Todos los proyectos</option>${proOpts.map(p=>`<option ${f.pcat===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
+    <select data-flt="rsUni" aria-label="Unidad"><option value="">Todas las unidades</option>${uniOpts.map(u=>`<option ${f.uni===u?'selected':''}>${esc(u)}</option>`).join('')}</select>
+    <button class="btn sm" data-act="rsLimpiar" ${hay?'':'disabled'}>Limpiar filtros</button></div>`;
+  const nota=`<div class="mute rs-nota" style="margin:-4px 0 12px">Se cuentan los viajes que ve este módulo: con la liquidación aprobada (Aceptado, Facturado o Cobrado), por la fecha del viaje (fecha plan) y dentro de los datos cargados en la aplicación.${d.sinUnidad?` ${d.sinUnidad} viaje(s) no tienen unidad registrada y no suman en «Unidades».`:''}</div>`;
+  if(!d.viajes.length)return filtros+nota+empty(hay?'Ningún viaje coincide con los filtros':'Aún no hay viajes con la liquidación aprobada',hay?'Cambia o limpia los filtros.':'Cuando un viaje tenga la liquidación aprobada aparecerá aquí.');
+  const kp=(n,l)=>`<div class="kpi"><span class="n">${n}</span><span class="l">${l}</span></div>`;
+  const sec=(l,id,body)=>`<div class="card rs-sec" id="${id}" style="margin-top:14px"><h3>${l}</h3>${body}</div>`;
+  const perBtn=(v,l)=>`<button class="chip" data-act="rsPer" data-v="${v}" aria-pressed="${g===v}">${l}</button>`;
+  const gl=g==='dia'?'por día':g==='semana'?'por semana':'por mes';
+  return `<div class="rs-fijo">${filtros}</div>${nota}
+  <div class="grid g4 rs-kpis" style="margin-bottom:6px">${kp(d.kpi.viajes,'Total de viajes')}${kp(d.kpi.clientes,'Clientes atendidos')}${kp(d.kpi.unidades,'Unidades utilizadas')}${kp(d.kpi.proyectos,'Proyectos atendidos')}</div>
+  ${sec('Resumen por cliente','rsCli',`<div class="chips" role="group" aria-label="Columnas de período" style="margin:0 0 10px"><span class="mute" style="font-size:13px;align-self:center">Viajes por período:</span>${perBtn('dia','Día')}${perBtn('semana','Semana')}${perBtn('mes','Mes')}</div>${rsTablaClientes(d)}<div class="rs-dos" style="margin-top:14px">${rsBarrasH(d.clientes,'cliente','Viajes por cliente',10)}${rsColumnas(d.serie,'Viajes '+gl)}</div>`)}
+  ${sec('Resumen por unidad','rsUniT',`${rsTablaUnidades(d)}<div style="margin-top:14px">${rsBarrasH(d.porPlaca,'placa','Unidades con más viajes',10)}</div>`)}
+  ${sec('Resumen por proyecto','rsPro',rsTablaProyectos(d))}
+  ${rsDetalle(d)}`;
+}
+/* Búsqueda del detalle: se actualiza solo la tabla, así el cursor no sale del cuadro de búsqueda. */
+document.addEventListener('input',e=>{const el=e.target;if(!el||el.id!=='rsQ')return;S.rsQ=el.value;if(S.pag)S.pag.rsDet=1;const b=document.getElementById('rsDetBody');if(b)b.innerHTML=rsDetalleBody(rsDatos());});
+/* ---- Acciones del Resumen ---- */
+Object.assign(ACT,{
+  async rsOrden(d){S.rsOrd=S.rsOrd||{};const o=S.rsOrd[d.tb];S.rsOrd[d.tb]={col:d.c,dir:o&&o.col===d.c&&o.dir==='desc'?'asc':'desc'};render();},
+  async rsVer(d){S.rsSel=d.t?{t:d.t,k:d.k}:null;if(S.pag)S.pag.rsDet=1;render();if(d.t){const el=document.getElementById('rsDetalle');if(el&&el.scrollIntoView)el.scrollIntoView({behavior:'smooth',block:'start'});}},
+  async rsPer(d){S.rsPer=d.v;S.rsOrd=Object.assign({},S.rsOrd,{cli:null});render();},
+  async rsLimpiar(){S.rsDesde='';S.rsHasta='';S.rsCli='';S.rsPcat='';S.rsUni='';S.rsSel=null;S.rsQ='';if(S.pag)S.pag.rsDet=1;render();}
 });
