@@ -18,7 +18,12 @@
     "test:demo": "node tests/exportar.test.mjs",
     "test:liquidacion": "node tests/liquidacion.test.mjs",
     "test:guias": "node tests/guias.test.mjs",
-    "preparar:manuales": "node scripts/preparar-manuales.mjs"
+    "preparar:manuales": "node scripts/preparar-manuales.mjs",
+    "graph:build": "python -m graphify extract . --code-only --force",
+    "graph:update": "python -m graphify update .",
+    "graph:report": "python -m graphify cluster-only .",
+    "graph:query": "python -m graphify query",
+    "graph:god": "python -m graphify god-nodes --top 20"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",

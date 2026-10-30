@@ -1,0 +1,17 @@
+# Graphify: solo código propio de la app (sin vendor, datos gigantes ni tests)
+graphify-out/
+.opencode/
+.claude/
+js/vendor/
+js/assets.js
+js/config.js
+js/config.example.js
+js/datos-prueba-visual.js
+js/demo-seed.js
+js/guias-data.js
+supabase/functions/api/guias.mjs
+tests/
+eos/
+plantillas/
+_rebuild/
+*.min.js

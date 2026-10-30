@@ -15,3 +15,6 @@ Claude outputs/
 
 # Archivos temporales del CLI de Supabase
 supabase/.temp/
+
+# Grafo generado por Graphify (se reconstruye con npm run graph:build)
+graphify-out/
