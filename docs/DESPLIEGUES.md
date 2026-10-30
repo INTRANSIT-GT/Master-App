@@ -159,3 +159,8 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - Antes de subir la evidencia, el formulario consulta el estado actual de la agrupación. Si la OC ya está registrada, muestra el mensaje correcto y no intenta subir el archivo (Storage rechaza adjuntos posteriores a la confirmación).
 - Se evita abrir «Registrar OC» sobre una agrupación ya confirmada.
 - **front/SW v1.3.6**. Sin cambios de API.
+ 
+## 2026-10-30 · Facturación después de la OC
+- El panel de la agrupación muestra **Datos de factura** directamente cuando la OC ya está registrada y el perfil tiene `facturas_emitir`.
+- Si el perfil no puede facturar, se indica que continúa Facturación.
+- **front/SW v1.3.7**.
