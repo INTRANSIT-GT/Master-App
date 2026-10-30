@@ -350,7 +350,7 @@ const impSql = (await q1("select count(*)::int n from viajes v where v.cliente_i
 T('106 El perfil limitado informa «en la base» solo sus viajes visibles', snImpR.ok && snImp.ventana && snImp.ventana.enBase === impSql, [snImp.ventana && snImp.ventana.enBase, impSql]);
 /* El código de la ruta lo asigna el sistema: el usuario no tiene que inventarlo al solicitar, validar ni registrar. */
 await db.exec(`insert into master.destinos(id,nombre,cliente_id) values ('D-C3','Colgate 3','COLGATE'),('D-C4','Colgate 4','COLGATE') on conflict do nothing`);
-const solR = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'CP → Bodega Central', capacidad: '10 Ton', km: 25 });
+const solR = await api('imp', 'solicitarRuta', { cliente: 'COLGATE', proyecto: 'COLGATE', nombre: 'CP → Bodega Central', capacidad: '10 Ton', km: 25, origenProp: 'CP', destinoProp: 'Bodega Central' });
 const valR = await api('gtr', 'validarRuta', solR.result.id, { origenId: 'CP', destinoId: 'D-C3', capacidad: '10 Ton', km: 25 });
 T('113 Al validar una ruta sin escribir código, el sistema lo asigna (sigla del cliente + correlativo)', valR.ok && /^COL-\d{3,4}$/.test(valR.result.codigo), [valR.ok, valR.code, valR.message, valR.result && valR.result.codigo]);
 const regR = await api('adm', 'registrarRuta', { nombre: 'CP → Colgate Sur', cliente: 'COLGATE', proyecto: 'COLGATE', origenId: 'CP', destinoId: 'D-C4' });

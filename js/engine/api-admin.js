@@ -16,10 +16,12 @@ Object.assign(API,{
     const proy=d.proyecto;if(!proyectosDe(cliente).includes(proy))deny('Selecciona un proyecto válido del cliente.','VALIDACION');
     if(!proyectosAsig(A,cliente).includes(proy))deny('Solo puedes solicitar rutas de tu proyecto asignado.');
     const nombre=String(d.nombre||'').trim();if(nombre.length<3||nombre.length>80)deny('Escribe el nombre o la referencia de la ruta (3 a 80 caracteres).','VALIDACION');
-    const op=String(d.origenProp||'').trim(),dp=String(d.destinoProp||'').trim();if(op.length>80||dp.length>80)deny('Origen y destino: máximo 80 caracteres.','VALIDACION');
+    const op=String(d.origenProp||'').trim(),dp=String(d.destinoProp||'').trim();
+    if(!op||!dp)deny('Escribe el origen y el destino de la ruta.','VALIDACION');
+    if(op.length>80||dp.length>80)deny('Origen y destino: máximo 80 caracteres.','VALIDACION');
     if(DB.rutas.some(r=>!['RECHAZADA'].includes(r.estado)&&r.cliente===cliente&&r.proyecto===proy&&r.nombre.toLowerCase()===nombre.toLowerCase()))deny('Ya hay una ruta pendiente con esa referencia en este proyecto.','DUPLICADO');
-    const capacidad=capacidadRuta(d&&d.capacidad), km=kmRuta(d&&d.km);
-    if((d&&d.unidadRef)||(d&&d.arrastreRef)){const C=capacidadEquipo(d.unidadRef||'',d.arrastreRef||'');if(!C.capacidad)deny('No se pudo determinar la capacidad del equipo seleccionado.','VALIDACION');if(String(C.capacidad)!==String(capacidad))deny(`La capacidad debe ser la del ${C.fuente==='ARRASTRE'?'equipo de arrastre':'unidad'} (${C.capacidad}).`,'VALIDACION');}
+    const capacidad=d&&d.capacidad?capacidadRuta(d.capacidad):'';   /* La capacidad se define en la tarifa, no en la ruta. */
+    const km=kmRuta(d&&d.km);
     return crearRutaPendiente(A,{cliente,proyecto:proy,nombre,origenProp:op,destinoProp:dp,capacidad,km,fuente:'SOLICITUD'});
   });},
   registrarRuta(uid,d){return exec(uid,'registrarRuta','',A=>{
@@ -34,7 +36,8 @@ Object.assign(API,{
     need(A,'rutas_validar','validar o asignar rutas');
     const r=DB.rutas.find(x=>x.id===id);if(!r)deny('La ruta no existe.','NO_EXISTE');
     if(r.estado!=='PENDIENTE')deny('Solo se validan rutas pendientes.','ESTADO_INVALIDO');
-    const capacidad=capacidadRuta((d&&d.capacidad)||r.capacidad), km=kmRuta((d&&d.km)||r.km);
+    const capacidad=(d&&d.capacidad!=null&&d.capacidad!=='')?capacidadRuta(d.capacidad):(r.capacidad||'');   /* La capacidad es de la tarifa. */
+    const km=kmRuta((d&&d.km)||r.km);
     const v=validarRutaDatos({codigo:d&&d.codigo,nombre:r.nombre,cliente:r.cliente,proyecto:r.proyecto,origen:d&&d.origen,destino:d&&d.destino,capacidad,km});
     r.codigo=v.codigo;r.origen=v.origen;r.destino=v.destino;r.capacidad=v.capacidad;r.km=v.km;r.estado='EN_TARIFACION';r.validadaPor=A.nombre;r.validadaEn=nowIso();
     auditAdd({entidad:'RUTA',accion:'Ruta validada',campo:'Estado',anterior:'Pendiente',nuevo:'En tarifación',por:A,ref:`${r.id} · ${r.codigo} · ${nombreOrigen(r.origen)} → ${nombreDestino(r.destino)}`});

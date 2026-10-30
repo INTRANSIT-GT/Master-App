@@ -1110,10 +1110,7 @@ app.addEventListener('change',async e=>{
     return;
   }
   if(t.dataset.mf&&S.modal){const k=t.dataset.mf;S.modal.data[k]=t.type==='checkbox'?t.checked:t.value;
-    if(k==='unidadRef'||k==='arrastreRef'){
-      const C=capacidadEquipo(S.modal.data.unidadRef||'',S.modal.data.arrastreRef||'');S.modal.data.capacidad=C.capacidad||'';render();return;
-    }
-    if(S.modal.rerender&&S.modal.rerender.includes(k)){if(k==='cliente'){S.modal.data.proyecto='';S.modal.data.rutaId='';S.modal.data.destino='';S.modal.data.origen='';if(S.modal.data.unidadRef!==undefined){S.modal.data.unidadRef='';S.modal.data.arrastreRef='';S.modal.data.capacidad='';}if(S.modal.data.desvioDestinoId)S.modal.data.desvioDestinoId='';}if(k==='proyecto')S.modal.data.rutaId='';render();return;}
+    if(S.modal.rerender&&S.modal.rerender.includes(k)){if(k==='cliente'){S.modal.data.proyecto='';S.modal.data.rutaId='';S.modal.data.destino='';S.modal.data.origen='';if(S.modal.data.desvioDestinoId)S.modal.data.desvioDestinoId='';}if(k==='proyecto')S.modal.data.rutaId='';render();return;}
     updateLive();return;}
   if(t.dataset.mfm&&S.modal){const k=t.dataset.mfm;
     if(t.tagName==='SELECT'&&t.multiple){S.modal.data[k]=Array.from(t.selectedOptions).map(o=>o.value);}

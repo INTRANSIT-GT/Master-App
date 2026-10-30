@@ -213,3 +213,10 @@ Sin datos de clientes, rutas privadas ni secretos: el repositorio es público.
 - **Comentario del usuario:** los viajes no duran más de 2 días en terminar y la mayoría dura un día; por eso también se alertan los viajes planificados y en ruta, no solo los entregados o rechazados.
 - Inicio muestra el cuadro **Viajes fuera de tiempo**; Viajes y liquidaciones agrega la pestaña **Fuera de tiempo**, ordena primero los más atrasados, marca la fila y muestra el atraso en el detalle.
 - **Front/SW v1.4.6**. Sin cambios de API ni de base de datos.
+## 2026-10-30 · Solicitud de ruta separada de la capacidad
+- La solicitud de ruta ya no pide **unidad de referencia**, **equipo de arrastre** ni una capacidad calculada: esos datos no definen la ruta y la capacidad es exclusiva de la **tarifa**.
+- **Origen y destino** son obligatorios y aparecen antes de los datos de kilometraje. La capacidad se elige al crear la tarifa; si la ruta no la trae, el campo queda vacío para seleccionarla.
+- La creación de la ruta pendiente desde un viaje tampoco exige capacidad: conserva la referencia y los KM.
+- **Dato de prueba:** se agregó `ARR-0029` a `master.flota` con capacidad temporal **40** y `tipo` RAS S. Reemplazar cuando se cargue la flota real.
+- **Migración aplicada:** `supabase/migrations/042_capacidad_arrastre_prueba.sql`. **API desplegada.** **Front/SW v1.4.7**.
+- **Verificado:** una solicitud con origen/destino y sin capacidad se crea con capacidad vacía; una solicitud sin origen se rechaza; la validación de ruta sin capacidad funciona.
