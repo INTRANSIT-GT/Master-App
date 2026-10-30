@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const raíz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const leer = f => fs.readFileSync(path.join(raíz, f), 'utf8');
 
-const MOTOR_FILES = ['js/engine.js', 'js/engine/api-sesion.js', 'js/engine/api-snapshot.js', 'js/engine/api-viajes.js', 'js/engine/api-comercial.js', 'js/engine/api-finanzas.js', 'js/engine/api-admin.js'];
+const MOTOR_FILES = ['js/engine/permisos.js', 'js/engine.js', 'js/engine/api-sesion.js', 'js/engine/api-snapshot.js', 'js/engine/api-viajes.js', 'js/engine/api-comercial.js', 'js/engine/api-finanzas.js', 'js/engine/api-admin.js'];
 const motor = MOTOR_FILES.map(leer).join(String.fromCharCode(10)).replace(/\/\*#BROWSER\*\/[\s\S]*?\/\*#END\*\//g, '');   // fuera lo exclusivo del navegador
 const utils = leer('js/utils.js').split('\n');
 const línea = prefijo => { const l = utils.find(x => x.startsWith(prefijo)); if (!l) throw new Error('No se encontró en utils.js: ' + prefijo); return l; };

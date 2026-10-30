@@ -31,59 +31,7 @@ const ORIGENES=[];
 function save(){return true;}            /* la persistencia la hace store.mjs dentro de una transacción */
 function rollback(){}
 
-/* =====================================================================
-   MOTOR DE DATOS Y REGLAS  ("capa confiable" del prototipo)
-   ---------------------------------------------------------------------
-   Toda escritura pasa por API.*: cada función comprueba la identidad del
-   actor, sus permisos, su alcance por cliente, la transición de estado y
-   los campos editables, y escribe una bitácora de solo-agregar con cadena
-   de huellas (hash). La interfaz NUNCA modifica los datos directamente.
-
-   LIMITACIÓN IMPORTANTE: en este archivo HTML esa "capa confiable" corre
-   en el navegador y los datos viven en localStorage. Eso sirve para probar
-   el flujo, pero NO es seguro para producción: quien abra las herramientas
-   del navegador puede alterar datos o llamar funciones. Para producción,
-   estas mismas reglas deben ejecutarse del lado del servidor
-   (Power Apps + Dataverse/SharePoint con roles, Power Automate, Apps Script
-   u otro backend con control de acceso real). Ver INFORME-master-app.md.
-   ===================================================================== */
-const DB_VERSION=8;
-/* Ganchos del entorno (el servidor los reemplaza): verificación de archivos en el almacenamiento protegido */
-const ENV={storageExists:()=>false,soloAlmacenamiento:false};   /* soloAlmacenamiento: el servidor no guarda archivos dentro de la base, solo rutas del bucket privado */
-let DB=null,PROYECTOS=[],PROYECTOS_X={},PREF={phone:false,arch:false,tema:''},CLOCK=null;
-class ApiError extends Error{constructor(code,msg){super(msg);this.code=code;this.name='ApiError';}}
-const nowIso=()=>CLOCK?CLOCK():new Date().toISOString();
-const nowLoc=()=>toLocal(new Date(nowIso()));
-const fnv=str=>{let h=0x811c9dc5;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193);}return (h>>>0).toString(16).padStart(8,'0');};
-
-/* Las listas del sistema y los catálogos (unidades, pilotos, destinos) vienen de Supabase:
-   ver master.catalogos y la tabla de cada catálogo. Aquí no se inventan datos. */
-
-/* ---------- Estados y transiciones ---------- */
-const ESTADOS={
-  PLANIFICADO:{l:'Planificado',c:'#8C9BAB'},
-  EN_RUTA:{l:'En ruta',c:'#0088FF'},
-  ENTREGADO:{l:'Entregado',c:'#00B8D9'},
-  LIQUIDADO:{l:'Liquidado',c:'#00875A'},
-  ACEPTADO:{l:'Aceptado',c:'#36B37E'},
-  RECHAZADO:{l:'Rechazado',c:'#FF5630'},
-  FACTURADO:{l:'Facturado',c:'#038F77'},
-  COBRADO:{l:'Cobrado',c:'#053B2C'}
-};
-/* Todo lo que ya terminó su recorrido */
-const FIN=['ENTREGADO','LIQUIDADO','ACEPTADO','RECHAZADO','FACTURADO','COBRADO'];
-const LIQ_APROBADA=['ACEPTADO','FACTURADO','COBRADO'];
-/* Aristas válidas del grafo de estados. moveEstado() es el ÚNICO lugar donde se asigna t.estado. */
-const EDGES={
-  PLANIFICADO:['EN_RUTA'],
-  EN_RUTA:['ENTREGADO'],
-  ENTREGADO:['LIQUIDADO'],
-  LIQUIDADO:['ACEPTADO','RECHAZADO'],
-  RECHAZADO:['LIQUIDADO'],
-  ACEPTADO:['FACTURADO'],
-  FACTURADO:['COBRADO','ACEPTADO']   /* COBRADO al cobrar; ACEPTADO solo al anular la factura (revierte la asignación) */
-};
-
+/* permisos.js · permisos, roles, navegación y campos base del motor. */
 /* ---------- Permisos ---------- */
 const PERMS=[
   ['viajes_ver','Ver viajes de sus clientes asignados','Viajes'],
@@ -261,6 +209,59 @@ const DATA_EDIT_STATES=['PLANIFICADO','EN_RUTA','ENTREGADO','RECHAZADO'];
 const ESTADOS_MANUALES=['EN_RUTA','ENTREGADO'];
 Object.assign(LBL,{shipment:'No. de Transporte',placaArrastre:'Placa del equipo de arrastre',rutaId:'Ruta',rutaRef:'Referencia de la ruta pendiente',origen:'Origen',destino:'Destino',unidadId:'Unidad',numeroFactura:'Número de factura',tarifaCliente:'Tarifa cliente',costoProveedor:'Costo proveedor',qViaticos:'Q viáticos',gastosAdicionales:'Gastos adicionales',noCarga:'Cantidad de carga'});
 const MONEY_LBL=['Tarifa cliente','Costo proveedor','Q viáticos','Gastos adicionales'];
+
+/* =====================================================================
+   MOTOR DE DATOS Y REGLAS  ("capa confiable" del prototipo)
+   ---------------------------------------------------------------------
+   Toda escritura pasa por API.*: cada función comprueba la identidad del
+   actor, sus permisos, su alcance por cliente, la transición de estado y
+   los campos editables, y escribe una bitácora de solo-agregar con cadena
+   de huellas (hash). La interfaz NUNCA modifica los datos directamente.
+
+   LIMITACIÓN IMPORTANTE: en este archivo HTML esa "capa confiable" corre
+   en el navegador y los datos viven en localStorage. Eso sirve para probar
+   el flujo, pero NO es seguro para producción: quien abra las herramientas
+   del navegador puede alterar datos o llamar funciones. Para producción,
+   estas mismas reglas deben ejecutarse del lado del servidor
+   (Power Apps + Dataverse/SharePoint con roles, Power Automate, Apps Script
+   u otro backend con control de acceso real). Ver INFORME-master-app.md.
+   ===================================================================== */
+const DB_VERSION=8;
+/* Ganchos del entorno (el servidor los reemplaza): verificación de archivos en el almacenamiento protegido */
+const ENV={storageExists:()=>false,soloAlmacenamiento:false};   /* soloAlmacenamiento: el servidor no guarda archivos dentro de la base, solo rutas del bucket privado */
+let DB=null,PROYECTOS=[],PROYECTOS_X={},PREF={phone:false,arch:false,tema:''},CLOCK=null;
+class ApiError extends Error{constructor(code,msg){super(msg);this.code=code;this.name='ApiError';}}
+const nowIso=()=>CLOCK?CLOCK():new Date().toISOString();
+const nowLoc=()=>toLocal(new Date(nowIso()));
+const fnv=str=>{let h=0x811c9dc5;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193);}return (h>>>0).toString(16).padStart(8,'0');};
+
+/* Las listas del sistema y los catálogos (unidades, pilotos, destinos) vienen de Supabase:
+   ver master.catalogos y la tabla de cada catálogo. Aquí no se inventan datos. */
+
+/* ---------- Estados y transiciones ---------- */
+const ESTADOS={
+  PLANIFICADO:{l:'Planificado',c:'#8C9BAB'},
+  EN_RUTA:{l:'En ruta',c:'#0088FF'},
+  ENTREGADO:{l:'Entregado',c:'#00B8D9'},
+  LIQUIDADO:{l:'Liquidado',c:'#00875A'},
+  ACEPTADO:{l:'Aceptado',c:'#36B37E'},
+  RECHAZADO:{l:'Rechazado',c:'#FF5630'},
+  FACTURADO:{l:'Facturado',c:'#038F77'},
+  COBRADO:{l:'Cobrado',c:'#053B2C'}
+};
+/* Todo lo que ya terminó su recorrido */
+const FIN=['ENTREGADO','LIQUIDADO','ACEPTADO','RECHAZADO','FACTURADO','COBRADO'];
+const LIQ_APROBADA=['ACEPTADO','FACTURADO','COBRADO'];
+/* Aristas válidas del grafo de estados. moveEstado() es el ÚNICO lugar donde se asigna t.estado. */
+const EDGES={
+  PLANIFICADO:['EN_RUTA'],
+  EN_RUTA:['ENTREGADO'],
+  ENTREGADO:['LIQUIDADO'],
+  LIQUIDADO:['ACEPTADO','RECHAZADO'],
+  RECHAZADO:['LIQUIDADO'],
+  ACEPTADO:['FACTURADO'],
+  FACTURADO:['COBRADO','ACEPTADO']   /* COBRADO al cobrar; ACEPTADO solo al anular la factura (revierte la asignación) */
+};
 
 /* ---------- Base de datos ---------- */
 const blankDB=()=>({v:DB_VERSION,usuarios:[],acceso:[],permisos:[],clientes:[],pilotos:[],trips:[],liquidaciones:[],evidencias:[],agrupaciones:[],audit:[],pagos:[],ordenesPago:[],ordenesCompra:[],rutas:[],tarifas:[],mem:[],notificaciones:[],reportesAyuda:[],config:{},catalogosListas:{},conteosUnidadDia:{},seq:{trip:112,liq:1,evi:1,agr:1,evt:1,usr:8,cob:1,pag:1,op:1,rut:1,tar:1,not:1,ayu:1,pil:0,oc:1}});
